@@ -1,6 +1,5 @@
 .build/
 SubForge.app/
 config.json
-test_audio.m4a
 *.xcuserstate
 .DS_Store
