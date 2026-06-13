@@ -1,0 +1,12 @@
+{
+  "cloudASR": {
+    "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+    "key": "",
+    "model": "FunAudioLLM/SenseVoiceSmall"
+  },
+  "cloudLLM": {
+    "url": "https://api.deepseek.com/v1/chat/completions",
+    "key": "",
+    "model": "deepseek-chat"
+  }
+}
