@@ -398,40 +398,69 @@ struct SettingsView: View {
         downloadingModel = model
         downloadProgress = 0
 
-        Task {
-            let url = URL(string: model.downloadURL)!
-            let destination = WhisperModelStore.localPath(for: model)
+        let destination = WhisperModelStore.localPath(for: model)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(model.fileName)
 
-            do {
-                let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    appState.showToast("下载失败：服务器错误", type: .error)
-                    downloadingModel = nil
-                    return
+        // 多个下载源，按优先级尝试
+        let mirrors = [
+            "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/\(model.fileName)",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(model.fileName)",
+        ]
+
+        Task.detached { [self] in
+            for mirror in mirrors {
+                // 用 curl 下载（自动走系统代理）
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+                process.arguments = [
+                    "-L", "-o", tempURL.path,
+                    "--progress-bar",
+                    "--connect-timeout", "15",
+                    "--max-time", "600",
+                    mirror
+                ]
+
+                let pipe = Pipe()
+                process.standardError = pipe  // curl 进度输出到 stderr
+
+                do {
+                    try process.run()
+                } catch {
+                    continue
                 }
 
-                let totalBytes = httpResponse.expectedContentLength
-                var data = Data()
-                var receivedBytes: Int64 = 0
+                process.waitUntilExit()
 
-                for try await byte in asyncBytes {
-                    data.append(byte)
-                    receivedBytes += 1
-                    if receivedBytes % 100000 == 0 && totalBytes > 0 {
-                        downloadProgress = Double(receivedBytes) / Double(totalBytes)
+                if process.terminationStatus == 0, FileManager.default.fileExists(atPath: tempURL.path) {
+                    let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int64) ?? 0
+                    if fileSize > 1000000 {  // 至少 1MB 才算有效
+                        do {
+                            if FileManager.default.fileExists(atPath: destination.path) {
+                                try FileManager.default.removeItem(at: destination)
+                            }
+                            try FileManager.default.moveItem(at: tempURL, to: destination)
+                            await MainActor.run {
+                                self.downloadProgress = 1.0
+                                self.appState.showToast("\(model.rawValue) 模型下载完成", type: .success)
+                                self.settings.whisperModel = model
+                                self.downloadingModel = nil
+                            }
+                            return
+                        } catch {
+                            await MainActor.run {
+                                self.appState.showToast("保存失败：\(error.localizedDescription)", type: .error)
+                            }
+                        }
                     }
                 }
-
-                try data.write(to: destination)
-                downloadProgress = 1.0
-                appState.showToast("\(model.rawValue) 模型下载完成", type: .success)
-
-                // 自动选中刚下载的模型
-                settings.whisperModel = model
-            } catch {
-                appState.showToast("下载失败：\(error.localizedDescription)", type: .error)
+                // 这个源失败了，试下一个
+                try? FileManager.default.removeItem(at: tempURL)
             }
-            downloadingModel = nil
+
+            await MainActor.run {
+                self.appState.showToast("所有下载源都失败了，请检查网络", type: .error)
+                self.downloadingModel = nil
+            }
         }
     }
 
@@ -482,6 +511,31 @@ class AudioPlayDelegate: NSObject, AVAudioPlayerDelegate {
     let onFinish: () -> Void
     init(onFinish: @escaping () -> Void) { self.onFinish = onFinish }
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) { onFinish() }
+}
+
+// MARK: - 下载进度代理
+
+class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+    let onProgress: (Double) -> Void
+    let onComplete: (URL?) -> Void
+
+    init(onProgress: @escaping (Double) -> Void, onComplete: @escaping (URL?) -> Void) {
+        self.onProgress = onProgress
+        self.onComplete = onComplete
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        onComplete(location)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        onProgress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if error != nil { onComplete(nil) }
+    }
 }
 
 // MARK: - 设置持久化

@@ -188,15 +188,29 @@ final class AppleSpeechProvider: TranscriptionProvider {
 // MARK: - 本地 Whisper (whisper.cpp)
 
 final class WhisperCppProvider: TranscriptionProvider {
-    private let modelPath: String
-    private let whisperCLIPath: String
+    private var modelPath: String
+    private var whisperCLIPath: String
 
     init(model: WhisperModel = .tiny) {
-        self.whisperCLIPath = "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli"
+        // whisper-cli：优先 app bundle 的 Frameworks，其次 Application Support，最后 brew
+        let bundledCLI = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/whisper-cli")
+        if FileManager.default.fileExists(atPath: bundledCLI.path) {
+            self.whisperCLIPath = bundledCLI.path
+        } else {
+            let appSupport = WhisperModelStore.directory.deletingLastPathComponent().appendingPathComponent("whisper-cli")
+            if FileManager.default.fileExists(atPath: appSupport.path) {
+                self.whisperCLIPath = appSupport.path
+            } else {
+                self.whisperCLIPath = "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli"
+            }
+        }
         self.modelPath = WhisperModelStore.localPath(for: model).path
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        // 0. 确保 whisper-cli 可用（自动下载）
+        try await ensureCLI()
+
         // 1. 转换为 WAV（whisper-cpp 需要 16kHz mono WAV）
         let wavURL = FileManager.default.temporaryDirectory.appendingPathComponent("subforge_whisper_\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: wavURL) }
@@ -210,10 +224,21 @@ final class WhisperCppProvider: TranscriptionProvider {
         return parseWhisperOutput(output)
     }
 
+    // MARK: - 确保 whisper-cli 可用
+
+    private func ensureCLI() async throws {
+        if FileManager.default.fileExists(atPath: whisperCLIPath) { return }
+        throw TranscriptionError.cloudRequestFailedWithDetail("whisper-cli 未找到")
+    }
+
     private func convertToWAV(input: URL, output: URL) async throws {
+        // 用 macOS 自带的 afconvert（不需要 ffmpeg）
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
-        process.arguments = ["-y", "-i", input.path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", output.path]
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
+        process.arguments = [
+            "-f", "WAVE", "-d", "LEI16@16000", "-c", "1",
+            input.path, output.path
+        ]
 
         let pipe = Pipe()
         process.standardError = pipe
@@ -222,7 +247,7 @@ final class WhisperCppProvider: TranscriptionProvider {
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
-            throw TranscriptionError.cloudRequestFailedWithDetail("音频转换失败")
+            throw TranscriptionError.cloudRequestFailedWithDetail("音频转换失败（afconvert）")
         }
     }
 
@@ -297,20 +322,15 @@ final class WhisperCppProvider: TranscriptionProvider {
 
         // 检查 whisper-cli
         guard fm.fileExists(atPath: whisperCLIPath) else {
-            return TranscriptionTestResult(available: false, message: "whisper-cli 未找到", duration: nil)
+            return TranscriptionTestResult(available: false, message: "whisper-cli 未安装，请在设置中下载", duration: nil)
         }
 
         // 检查模型
         guard fm.fileExists(atPath: modelPath) else {
-            return TranscriptionTestResult(available: false, message: "模型文件未找到：\(modelPath)", duration: nil)
+            return TranscriptionTestResult(available: false, message: "模型未下载", duration: nil)
         }
 
-        // 检查 ffmpeg
-        guard fm.fileExists(atPath: "/opt/homebrew/bin/ffmpeg") || fm.fileExists(atPath: "/usr/bin/ffmpeg") else {
-            return TranscriptionTestResult(available: false, message: "ffmpeg 未安装", duration: nil)
-        }
-
-        return TranscriptionTestResult(available: true, message: "可用（tiny 模型，74MB）", duration: nil)
+        return TranscriptionTestResult(available: true, message: "可用", duration: nil)
     }
 }
 

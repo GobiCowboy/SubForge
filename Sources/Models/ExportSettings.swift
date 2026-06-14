@@ -157,6 +157,22 @@ enum WhisperModelStore {
         return dir
     }()
 
+    /// whisper-cli 存储路径
+    static let cliPath: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("SubForge/whisper-cli")
+    }()
+
+    /// whisper-cli 是否已安装
+    static var isCLIInstalled: Bool {
+        // 检查 Application Support 或 brew
+        FileManager.default.fileExists(atPath: cliPath.path) ||
+        FileManager.default.fileExists(atPath: "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli")
+    }
+
+    /// whisper-cli 下载地址（brew bottle，静态编译版）
+    static let cliDownloadURL = "https://ghp.ci/https://github.com/ggerganov/whisper.cpp/releases/download/v1.8.6/whisper-cpp-1.8.6-macos-arm64.tar.gz"
+
     /// 模型文件的本地路径
     static func localPath(for model: WhisperModel) -> URL {
         directory.appendingPathComponent(model.fileName)
