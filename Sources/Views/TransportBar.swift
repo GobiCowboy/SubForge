@@ -148,18 +148,25 @@ struct TransportBar: View {
     private func exportFCPXML() {
         guard let audioURL = appState.audioFileURL else { return }
         let outputURL = appState.settings.resolveOutputURL(for: audioURL, extension: "fcpxml")
+
+        // 自动查找同目录下的 .fcpbundle
+        let bundlePath = FCPXMLGenerator.findFCPBundle(in: audioURL.deletingLastPathComponent())
+
         let xml = FCPXMLGenerator.generate(
             segments: appState.segments,
             projectName: audioURL.deletingPathExtension().lastPathComponent,
             fps: appState.settings.exportSettings.fps,
             width: appState.settings.exportSettings.width,
             height: appState.settings.exportSettings.height,
-            style: appState.settings.subtitleStyle
+            style: appState.settings.subtitleStyle,
+            bundlePath: bundlePath
         )
         do {
             try xml.write(to: outputURL, atomically: true, encoding: .utf8)
-            appState.showToast("FCPXML 已导出：\(outputURL.lastPathComponent)", type: .success)
-            NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+            let bundleInfo = bundlePath.map { " → \($0.lastPathComponent)" } ?? ""
+            appState.showToast("FCPXML 已导出\(bundleInfo)", type: .success)
+            // 直接在 Final Cut Pro 中打开
+            NSWorkspace.shared.open(outputURL)
         } catch {
             appState.showToast("导出失败：\(error.localizedDescription)", type: .error)
         }

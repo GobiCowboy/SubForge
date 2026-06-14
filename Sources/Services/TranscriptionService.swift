@@ -184,6 +184,136 @@ final class AppleSpeechProvider: TranscriptionProvider {
         return result
     }
 }
+
+// MARK: - 本地 Whisper (whisper.cpp)
+
+final class WhisperCppProvider: TranscriptionProvider {
+    private let modelPath: String
+    private let whisperCLIPath: String
+
+    init(model: WhisperModel = .tiny) {
+        self.whisperCLIPath = "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli"
+        self.modelPath = WhisperModelStore.localPath(for: model).path
+    }
+
+    func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        // 1. 转换为 WAV（whisper-cpp 需要 16kHz mono WAV）
+        let wavURL = FileManager.default.temporaryDirectory.appendingPathComponent("subforge_whisper_\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: wavURL) }
+
+        try await convertToWAV(input: audioURL, output: wavURL)
+
+        // 2. 调用 whisper-cli
+        let output = try await runWhisperCLI(wavURL: wavURL, language: language)
+
+        // 3. 解析输出
+        return parseWhisperOutput(output)
+    }
+
+    private func convertToWAV(input: URL, output: URL) async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/ffmpeg")
+        process.arguments = ["-y", "-i", input.path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", output.path]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw TranscriptionError.cloudRequestFailedWithDetail("音频转换失败")
+        }
+    }
+
+    private func runWhisperCLI(wavURL: URL, language: String) async throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: whisperCLIPath)
+        process.arguments = [
+            "-m", modelPath,
+            "-f", wavURL.path,
+            "-l", language.hasPrefix("zh") ? "zh" : language,
+            "-t", "4",
+            "--no-prints"
+        ]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()  // 吞掉 stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            throw TranscriptionError.cloudRequestFailedWithDetail("whisper-cli 执行失败")
+        }
+
+        return output
+    }
+
+    /// 解析 whisper-cli 的时间戳输出
+    /// 格式: [00:00:00.000 --> 00:00:02.120]  文字内容
+    private func parseWhisperOutput(_ output: String) -> [SubtitleSegment] {
+        var segments: [SubtitleSegment] = []
+        let lines = output.components(separatedBy: .newlines)
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // 匹配时间戳格式 [HH:MM:SS.mmm --> HH:MM:SS.mmm]
+            guard trimmed.hasPrefix("["),
+                  let closeBracket = trimmed.firstIndex(of: "]") else { continue }
+
+            let timeStr = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closeBracket])
+            let parts = timeStr.components(separatedBy: "-->")
+            guard parts.count == 2 else { continue }
+
+            let start = parseWhisperTime(parts[0].trimmingCharacters(in: .whitespaces))
+            let end = parseWhisperTime(parts[1].trimmingCharacters(in: .whitespaces))
+            let text = String(trimmed[trimmed.index(after: closeBracket)...]).trimmingCharacters(in: .whitespaces)
+
+            if !text.isEmpty {
+                segments.append(SubtitleSegment(start: start, end: end, text: text))
+            }
+        }
+
+        return segments
+    }
+
+    /// 解析 whisper 时间格式: 00:00:02.120
+    private func parseWhisperTime(_ s: String) -> TimeInterval {
+        let parts = s.components(separatedBy: ":")
+        guard parts.count == 3,
+              let h = Double(parts[0]),
+              let m = Double(parts[1]),
+              let sec = Double(parts[2]) else { return 0 }
+        return h * 3600 + m * 60 + sec
+    }
+
+    func testAvailability() async -> TranscriptionTestResult {
+        let fm = FileManager.default
+
+        // 检查 whisper-cli
+        guard fm.fileExists(atPath: whisperCLIPath) else {
+            return TranscriptionTestResult(available: false, message: "whisper-cli 未找到", duration: nil)
+        }
+
+        // 检查模型
+        guard fm.fileExists(atPath: modelPath) else {
+            return TranscriptionTestResult(available: false, message: "模型文件未找到：\(modelPath)", duration: nil)
+        }
+
+        // 检查 ffmpeg
+        guard fm.fileExists(atPath: "/opt/homebrew/bin/ffmpeg") || fm.fileExists(atPath: "/usr/bin/ffmpeg") else {
+            return TranscriptionTestResult(available: false, message: "ffmpeg 未安装", duration: nil)
+        }
+
+        return TranscriptionTestResult(available: true, message: "可用（tiny 模型，74MB）", duration: nil)
+    }
+}
+
 final class CloudASRProvider: TranscriptionProvider {
     private let apiURL: String
     private let apiKey: String
@@ -464,6 +594,8 @@ enum TranscriptionError: LocalizedError {
 enum TranscriptionService {
     static func createProvider(settings: AppSettings) -> TranscriptionProvider {
         switch settings.transcriptionEngine {
+        case .whisperLocal:
+            return WhisperCppProvider(model: settings.whisperModel)
         case .appleSpeech:
             return AppleSpeechProvider()
         case .cloudASR:

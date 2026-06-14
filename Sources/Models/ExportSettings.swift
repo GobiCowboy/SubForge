@@ -66,7 +66,8 @@ enum CloudLLMPreset: String, CaseIterable, Codable {
 
 struct AppSettings: Equatable, Codable {
     // 转写
-    var transcriptionEngine: TranscriptionEngine = .appleSpeech
+    var transcriptionEngine: TranscriptionEngine = .whisperLocal
+    var whisperModel: WhisperModel = .tiny
     var language: String = "zh-CN"
 
     // AI 校对
@@ -110,8 +111,66 @@ struct AppSettings: Equatable, Codable {
 }
 
 enum TranscriptionEngine: String, CaseIterable, Codable {
+    case whisperLocal = "本地 Whisper"
     case appleSpeech = "Apple Speech"
     case cloudASR = "云端 ASR API"
+}
+
+// MARK: - Whisper 模型
+
+enum WhisperModel: String, CaseIterable, Identifiable, Codable {
+    case tiny = "tiny"
+    case base = "base"
+    case small = "small"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .tiny: return "Tiny (74MB) — 速度快，质量一般"
+        case .base: return "Base (142MB) — 平衡之选"
+        case .small: return "Small (466MB) — 质量好，推荐"
+        }
+    }
+
+    var fileName: String { "ggml-\(rawValue).bin" }
+
+    var downloadURL: String {
+        "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/\(fileName)"
+    }
+
+    var sizeMB: Int {
+        switch self {
+        case .tiny: return 74
+        case .base: return 142
+        case .small: return 466
+        }
+    }
+}
+
+/// 模型文件存储目录
+enum WhisperModelStore {
+    static let directory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("SubForge/models")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// 模型文件的本地路径
+    static func localPath(for model: WhisperModel) -> URL {
+        directory.appendingPathComponent(model.fileName)
+    }
+
+    /// 检查模型是否已下载
+    static func isAvailable(_ model: WhisperModel) -> Bool {
+        FileManager.default.fileExists(atPath: localPath(for: model).path)
+    }
+
+    /// 获取已下载的模型列表
+    static func availableModels() -> [WhisperModel] {
+        WhisperModel.allCases.filter { isAvailable($0) }
+    }
 }
 
 enum ProofreadingEngine: String, CaseIterable, Codable {

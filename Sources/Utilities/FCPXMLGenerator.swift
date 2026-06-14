@@ -3,22 +3,32 @@ import Foundation
 /// FCPXML 1.9 生成器（与 Python fcpxml.py 对齐）
 enum FCPXMLGenerator {
     /// 根据字幕分段生成 FCPXML
+    /// - Parameters:
+    ///   - bundlePath: FCP 库 bundle 路径，指定后 FCPXML 会指向该库
     static func generate(
         segments: [SubtitleSegment],
         projectName: String,
         fps: Int = 30,
         width: Int = 1920,
         height: Int = 1080,
-        style: SubtitleStyle = SubtitleStyle()
+        style: SubtitleStyle = SubtitleStyle(),
+        bundlePath: URL? = nil
     ) -> String {
         let (frameNum, frameDen) = frameDuration(fps)
         let formatName = "FFVideoFormat\(width)x\(height)p\(fps * 100)"
         let projectStart = Int(round(3.6 * Double(frameDen)))
         let projectStartStr = "\(projectStart)/\(frameDen)s"
 
-        // 总时长
         let totalDur = segments.last.map { $0.end } ?? 10.0
         let totalDurStr = toRational(totalDur, frameNum, frameDen)
+
+        // library 标签：有 bundle 时加 location 指向该库
+        let libraryTag: String
+        if let bundle = bundlePath {
+            libraryTag = "<library location=\"file://\(bundle.path)/\">"
+        } else {
+            libraryTag = "<library>"
+        }
 
         var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -28,7 +38,7 @@ enum FCPXMLGenerator {
                 <format id="r1" name="\(formatName)" frameDuration="\(frameNum)/\(frameDen)s" width="\(width)" height="\(height)" colorSpace="1-1-1 (Rec. 709)"/>
                 <effect id="r2" name="Custom" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>
             </resources>
-            <library>
+            \(libraryTag)
                 <event name="\(esc(projectName))">
                     <project name="\(esc(projectName))">
                         <sequence format="r1" tcStart="0s" tcFormat="NDF" duration="\(totalDurStr)" audioLayout="stereo" audioRate="48k">
@@ -38,7 +48,6 @@ enum FCPXMLGenerator {
 
         """
 
-        // 第一条字幕的起始时间（用于计算相对偏移）
         let firstOffset = segments.first.map { $0.start } ?? 0
 
         for (idx, seg) in segments.enumerated() {
@@ -85,27 +94,41 @@ enum FCPXMLGenerator {
         return xml
     }
 
+    // MARK: - 自动查找 .fcpbundle
+
+    /// 在指定目录下查找最新的 .fcpbundle（排除 copy）
+    static func findFCPBundle(in directory: URL) -> URL? {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else {
+            return nil
+        }
+        let bundles = contents
+            .filter { $0.pathExtension == "fcpbundle" && !$0.lastPathComponent.lowercased().contains("copy") }
+            .sorted { a, b in
+                let dateA = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let dateB = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return dateA > dateB
+            }
+        return bundles.first
+    }
+
     // MARK: - 辅助函数
 
-    /// 计算帧时长 (分子, 分母)
     private static func frameDuration(_ fps: Int) -> (Int, Int) {
         return (1, fps)
     }
 
-    /// 秒数转 FCPXML 有理数时间，对齐到帧边界
     private static func toRational(_ seconds: Double, _ frameNum: Int, _ frameDen: Int) -> String {
         let ticks = Int(round(seconds * Double(frameDen) / Double(frameNum)))
         return "\(ticks * frameNum)/\(frameDen)s"
     }
 
-    /// 第一条字幕的连接故事情节偏移
     private static func firstConnectedOffset(_ segments: [SubtitleSegment], _ frameNum: Int, _ frameDen: Int, _ projectStart: Int) -> String {
         let firstStart = segments.first.map { $0.start } ?? 0
         let offset = firstStart + Double(projectStart) / Double(frameDen)
         return toRational(offset, frameNum, frameDen)
     }
 
-    /// 取文本第一行，最长 64 字符
     private static func firstLine(_ text: String) -> String {
         let line = text.components(separatedBy: .newlines).first ?? text
         let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -113,7 +136,6 @@ enum FCPXMLGenerator {
         return String(trimmed.prefix(64))
     }
 
-    /// XML 转义
     private static func esc(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")

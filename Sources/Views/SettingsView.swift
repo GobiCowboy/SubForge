@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var testAudioPlayer: AVAudioPlayer?
     @State private var testAudioDelegate: AudioPlayDelegate?
     @State private var isPlayingTestAudio = false
+    // 模型下载
+    @State private var downloadingModel: WhisperModel?
+    @State private var downloadProgress: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +57,45 @@ struct SettingsView: View {
                                 Text("韩语").tag("ko-KR")
                             }
 
+                            // 本地 Whisper 模型管理
+                            if settings.transcriptionEngine == .whisperLocal {
+                                Divider()
+                                Text("模型管理").font(.caption.bold()).foregroundStyle(.secondary)
+                                ForEach(WhisperModel.allCases) { model in
+                                    HStack(spacing: 10) {
+                                        // 选中指示
+                                        Image(systemName: settings.whisperModel == model ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(settings.whisperModel == model ? .blue : .secondary)
+                                            .onTapGesture { settings.whisperModel = model }
+
+                                        // 模型信息
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(model.displayName).font(.system(size: 13))
+                                            if WhisperModelStore.isAvailable(model) {
+                                                Text("已下载").font(.caption).foregroundStyle(.green)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        // 下载按钮
+                                        if !WhisperModelStore.isAvailable(model) {
+                                            if downloadingModel == model {
+                                                VStack(spacing: 4) {
+                                                    ProgressView(value: downloadProgress)
+                                                        .frame(width: 80)
+                                                    Text("\(Int(downloadProgress * 100))%").font(.caption2).foregroundStyle(.secondary)
+                                                }
+                                            } else {
+                                                Button("下载 (\(model.sizeMB)MB)") { downloadModel(model) }
+                                                    .controlSize(.small)
+                                            }
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+
                             Divider()
 
                             if settings.transcriptionEngine == .cloudASR {
@@ -72,7 +114,11 @@ struct SettingsView: View {
                             // 试听 + 测试
                             testAudioPlayButton
                             Button(action: {
-                                settings.transcriptionEngine == .appleSpeech ? testAppleSpeech() : testCloudASR()
+                                switch settings.transcriptionEngine {
+                                case .whisperLocal: testWhisperLocal()
+                                case .appleSpeech: testAppleSpeech()
+                                case .cloudASR: testCloudASR()
+                                }
                             }) {
                                 HStack(spacing: 6) {
                                     if isTestingTranscription || isTestingCloudASR { ProgressView().controlSize(.mini) }
@@ -81,6 +127,9 @@ struct SettingsView: View {
                             }
                             .disabled(isTestingTranscription || isTestingCloudASR || (settings.transcriptionEngine == .cloudASR && settings.cloudASRKey.isEmpty))
 
+                            if settings.transcriptionEngine == .whisperLocal, let r = transcriptionTestResult {
+                                testResultBox(success: r.available, original: expectedASRText, recognized: r.message)
+                            }
                             if settings.transcriptionEngine == .appleSpeech, let r = transcriptionTestResult {
                                 testResultBox(success: r.available, original: expectedASRText, recognized: r.message)
                             }
@@ -287,6 +336,22 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - 测试本地 Whisper
+
+    private func testWhisperLocal() {
+        isTestingTranscription = true; transcriptionTestResult = nil
+        Task {
+            let provider = WhisperCppProvider()
+            do {
+                let segs = try await provider.transcribe(audioURL: testAudioURL(), language: settings.language)
+                transcriptionTestResult = TranscriptionTestResult(available: true, message: segs.map { $0.text }.joined(separator: "\n"), duration: nil)
+            } catch {
+                transcriptionTestResult = TranscriptionTestResult(available: false, message: error.localizedDescription, duration: nil)
+            }
+            isTestingTranscription = false
+        }
+    }
+
     // MARK: - 测试云端 ASR
 
     private func testCloudASR() {
@@ -324,6 +389,49 @@ struct SettingsView: View {
             llmTestResult = "需要 Apple Intelligence 已启用"; llmTestIsError = false
         } else {
             llmTestResult = "需要 macOS 26+"; llmTestIsError = true
+        }
+    }
+
+    // MARK: - 下载模型
+
+    private func downloadModel(_ model: WhisperModel) {
+        downloadingModel = model
+        downloadProgress = 0
+
+        Task {
+            let url = URL(string: model.downloadURL)!
+            let destination = WhisperModelStore.localPath(for: model)
+
+            do {
+                let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    appState.showToast("下载失败：服务器错误", type: .error)
+                    downloadingModel = nil
+                    return
+                }
+
+                let totalBytes = httpResponse.expectedContentLength
+                var data = Data()
+                var receivedBytes: Int64 = 0
+
+                for try await byte in asyncBytes {
+                    data.append(byte)
+                    receivedBytes += 1
+                    if receivedBytes % 100000 == 0 && totalBytes > 0 {
+                        downloadProgress = Double(receivedBytes) / Double(totalBytes)
+                    }
+                }
+
+                try data.write(to: destination)
+                downloadProgress = 1.0
+                appState.showToast("\(model.rawValue) 模型下载完成", type: .success)
+
+                // 自动选中刚下载的模型
+                settings.whisperModel = model
+            } catch {
+                appState.showToast("下载失败：\(error.localizedDescription)", type: .error)
+            }
+            downloadingModel = nil
         }
     }
 

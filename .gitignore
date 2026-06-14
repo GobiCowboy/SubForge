@@ -1,5 +1,6 @@
 .build/
 SubForge.app/
 config.json
+models/
 *.xcuserstate
 .DS_Store
