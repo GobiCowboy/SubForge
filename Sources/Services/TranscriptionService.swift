@@ -204,7 +204,19 @@ final class WhisperCppProvider: TranscriptionProvider {
                 self.whisperCLIPath = "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli"
             }
         }
-        self.modelPath = WhisperModelStore.localPath(for: model).path
+
+        // 模型路径：优先指定模型，其次自动找已下载的
+        let requestedPath = WhisperModelStore.localPath(for: model).path
+        if FileManager.default.fileExists(atPath: requestedPath) {
+            self.modelPath = requestedPath
+        } else {
+            // 找任意一个已下载的模型
+            if let available = WhisperModelStore.availableModels().first {
+                self.modelPath = WhisperModelStore.localPath(for: available).path
+            } else {
+                self.modelPath = requestedPath  // 让后续报错
+            }
+        }
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {

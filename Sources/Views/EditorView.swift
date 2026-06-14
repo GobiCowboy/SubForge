@@ -5,6 +5,7 @@ struct EditorView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var audioService = AudioPlayerService()
     @State private var showSettings = false
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,6 +66,11 @@ struct EditorView: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             Button {
+                if let monitor = keyMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    keyMonitor = nil
+                }
+                audioService.stop()
                 appState.reset()
             } label: {
                 Label("首页", systemImage: "chevron.left")
@@ -146,7 +152,7 @@ struct EditorView: View {
     // MARK: - 键盘快捷键
 
     private func setupKeyboard() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             handleKeyEvent(event)
         }
     }
