@@ -1,6 +1,5 @@
 import Foundation
 
-/// 字幕分段数据模型
 struct SubtitleSegment: Identifiable, Equatable, Codable {
     let id: UUID
     var start: TimeInterval

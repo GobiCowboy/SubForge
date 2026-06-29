@@ -1,6 +1,9 @@
 .build/
+dist/
 SubForge.app/
 config.json
 models/
+.codex/
+BAK/
 *.xcuserstate
 .DS_Store

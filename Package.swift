@@ -3,11 +3,13 @@ import PackageDescription
 
 let package = Package(
     name: "SubForge",
-    platforms: [.macOS(.v14)],
+    platforms: [
+        .macOS(.v14),
+    ],
     targets: [
         .executableTarget(
             name: "SubForge",
             path: "Sources"
-        )
+        ),
     ]
 )

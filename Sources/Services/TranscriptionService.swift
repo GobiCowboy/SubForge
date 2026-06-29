@@ -1,28 +1,25 @@
+import AVFoundation
 import Foundation
 import Speech
-import AVFoundation
 
-/// 转写服务统一协议
 protocol TranscriptionProvider {
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment]
-    func testAvailability() async -> TranscriptionTestResult
 }
 
 struct TranscriptionTestResult {
     let available: Bool
     let message: String
-    let duration: TimeInterval?
+    let recognizedText: String?
 }
 
-/// Apple Speech 转写实现
 final class AppleSpeechProvider: TranscriptionProvider {
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
-        // 请求授权
         let status = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
             }
         }
+
         guard status == .authorized else {
             throw TranscriptionError.notAuthorized(status)
         }
@@ -39,233 +36,208 @@ final class AppleSpeechProvider: TranscriptionProvider {
 
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
-            var lastSegments: [SubtitleSegment] = []
+            var latestSegments: [SubtitleSegment] = []
 
             let task = recognizer.recognitionTask(with: request) { result, error in
-                if let error = error {
-                    if !hasResumed {
-                        hasResumed = true
-                        if lastSegments.isEmpty {
-                            continuation.resume(throwing: error)
-                        } else {
-                            // 有部分结果就返回
-                            continuation.resume(returning: lastSegments)
-                        }
+                if let error {
+                    guard !hasResumed else { return }
+                    hasResumed = true
+                    if latestSegments.isEmpty {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: latestSegments)
                     }
                     return
                 }
 
-                guard let result = result else { return }
-
-                // 收集最新的 segments（逐词级别）
-                let rawSegments = result.bestTranscription.segments.map { seg -> SubtitleSegment in
+                guard let result else { return }
+                let rawSegments = result.bestTranscription.segments.map { segment in
                     SubtitleSegment(
-                        start: seg.timestamp,
-                        end: seg.timestamp + seg.duration,
-                        text: seg.substring
+                        start: segment.timestamp,
+                        end: segment.timestamp + segment.duration,
+                        text: segment.substring
                     )
                 }
-                let merged = self.mergeIntoSentences(rawSegments)
-                if !merged.isEmpty {
-                    lastSegments = merged
-                }
+                latestSegments = SubtitleSegmentationService.refine(self.mergeIntoSentences(rawSegments))
 
                 if result.isFinal && !hasResumed {
                     hasResumed = true
-                    if lastSegments.isEmpty {
-                        let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !text.isEmpty {
-                            continuation.resume(returning: [SubtitleSegment(start: 0, end: 1, text: text)])
-                        } else {
-                            continuation.resume(returning: [])
-                        }
-                    } else {
-                        continuation.resume(returning: lastSegments)
-                    }
+                    continuation.resume(returning: latestSegments)
                 }
             }
 
-            // 超时保护
             Task {
-                try? await Task.sleep(nanoseconds: 300_000_000_000) // 5分钟
-                if !hasResumed {
-                    hasResumed = true
-                    task.cancel()
-                    if lastSegments.isEmpty {
-                        continuation.resume(throwing: TranscriptionError.timeout)
-                    } else {
-                        continuation.resume(returning: lastSegments)
-                    }
+                try? await Task.sleep(nanoseconds: 300_000_000_000)
+                guard !hasResumed else { return }
+                hasResumed = true
+                task.cancel()
+                if latestSegments.isEmpty {
+                    continuation.resume(throwing: TranscriptionError.timeout)
+                } else {
+                    continuation.resume(returning: latestSegments)
                 }
             }
         }
     }
 
-    func testAvailability() async -> TranscriptionTestResult {
-        let start = Date()
-        let status = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
-        let elapsed = Date().timeIntervalSince(start)
-
-        switch status {
-        case .authorized:
-            let locale = Locale(identifier: "zh-CN")
-            if let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable {
-                return TranscriptionTestResult(available: true, message: "可用，中文识别就绪", duration: elapsed)
-            } else {
-                return TranscriptionTestResult(available: false, message: "中文识别不可用", duration: elapsed)
-            }
-        case .denied:
-            return TranscriptionTestResult(available: false, message: "语音识别权限被拒绝", duration: elapsed)
-        case .restricted:
-            return TranscriptionTestResult(available: false, message: "语音识别受限制", duration: elapsed)
-        case .notDetermined:
-            return TranscriptionTestResult(available: false, message: "权限未确定", duration: elapsed)
-        @unknown default:
-            return TranscriptionTestResult(available: false, message: "未知状态", duration: elapsed)
-        }
-    }
-
-    /// 将逐词级别的 segments 合并为句子级字幕
     private func mergeIntoSentences(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
         guard !segments.isEmpty else { return [] }
 
-        // 句尾标点
         let sentenceEnders: Set<Character> = ["。", "！", "？", "!", "?", ".", "；", ";", "\n"]
-        // 逗号等短暂停顿
         let clauseEnders: Set<Character> = ["，", ",", "、", "：", ":", "—", "–"]
 
-        var result: [SubtitleSegment] = []
+        var results: [SubtitleSegment] = []
         var currentText = ""
         var currentStart: TimeInterval = 0
         var currentEnd: TimeInterval = 0
 
-        for seg in segments {
-            let trimmed = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for segment in segments {
+            let trimmed = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
 
+            let gapFromPrevious = currentText.isEmpty ? 0 : max(0, segment.start - currentEnd)
+
             if currentText.isEmpty {
-                currentStart = seg.start
+                currentStart = segment.start
             }
+
             currentText += trimmed
-            currentEnd = seg.end
+            currentEnd = segment.end
 
-            let lastChar = trimmed.last ?? Character("")
-
-            // 句号、问号、感叹号 → 强制断句
-            if sentenceEnders.contains(lastChar) {
-                result.append(SubtitleSegment(start: currentStart, end: currentEnd, text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            let lastCharacter = trimmed.last ?? Character(" ")
+            if sentenceEnders.contains(lastCharacter) {
+                results.append(
+                    SubtitleSegment(
+                        start: currentStart,
+                        end: currentEnd,
+                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                )
                 currentText = ""
                 continue
             }
 
-            // 逗号等 → 如果累积文本够长（>15字），也断句
-            if clauseEnders.contains(lastChar) && currentText.count >= 15 {
-                result.append(SubtitleSegment(start: currentStart, end: currentEnd, text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            if clauseEnders.contains(lastCharacter) && currentText.count >= 15 {
+                results.append(
+                    SubtitleSegment(
+                        start: currentStart,
+                        end: currentEnd,
+                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                )
                 currentText = ""
                 continue
             }
 
-            // 累积超过 25 个字 → 强制断句（防止字幕太长）
-            if currentText.count >= 25 {
-                result.append(SubtitleSegment(start: currentStart, end: currentEnd, text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            if gapFromPrevious > 0.65 || currentText.count >= 25 {
+                results.append(
+                    SubtitleSegment(
+                        start: currentStart,
+                        end: currentEnd,
+                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                )
                 currentText = ""
             }
         }
 
-        // 剩余文本
         if !currentText.isEmpty {
-            result.append(SubtitleSegment(start: currentStart, end: currentEnd, text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            results.append(
+                SubtitleSegment(
+                    start: currentStart,
+                    end: currentEnd,
+                    text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
         }
 
-        return result
+        return results
     }
 }
 
-// MARK: - 本地 Whisper (whisper.cpp)
-
 final class WhisperCppProvider: TranscriptionProvider {
-    private var modelPath: String
-    private var whisperCLIPath: String
+    private let model: WhisperModel
 
-    init(model: WhisperModel = .tiny) {
-        // whisper-cli：优先 app bundle 的 Frameworks，其次 Application Support，最后 brew
-        let bundledCLI = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/whisper-cli")
-        if FileManager.default.fileExists(atPath: bundledCLI.path) {
-            self.whisperCLIPath = bundledCLI.path
-        } else {
-            let appSupport = WhisperModelStore.directory.deletingLastPathComponent().appendingPathComponent("whisper-cli")
-            if FileManager.default.fileExists(atPath: appSupport.path) {
-                self.whisperCLIPath = appSupport.path
-            } else {
-                self.whisperCLIPath = "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli"
-            }
-        }
-
-        // 模型路径：优先指定模型，其次自动找已下载的
-        let requestedPath = WhisperModelStore.localPath(for: model).path
-        if FileManager.default.fileExists(atPath: requestedPath) {
-            self.modelPath = requestedPath
-        } else {
-            // 找任意一个已下载的模型
-            if let available = WhisperModelStore.availableModels().first {
-                self.modelPath = WhisperModelStore.localPath(for: available).path
-            } else {
-                self.modelPath = requestedPath  // 让后续报错
-            }
-        }
+    init(model: WhisperModel) {
+        self.model = model
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
-        // 0. 确保 whisper-cli 可用（自动下载）
-        try await ensureCLI()
-
-        // 1. 转换为 WAV（whisper-cpp 需要 16kHz mono WAV）
+        let cliPath = try resolveCLIPath()
+        let modelPath = try resolveModelPath()
         let wavURL = FileManager.default.temporaryDirectory.appendingPathComponent("subforge_whisper_\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: wavURL) }
 
-        try await convertToWAV(input: audioURL, output: wavURL)
+        try await Task.detached(priority: .userInitiated) {
+            try Self.convertToWAV(input: audioURL, output: wavURL)
+        }.value
 
-        // 2. 调用 whisper-cli
-        let output = try await runWhisperCLI(wavURL: wavURL, language: language)
+        let output = try await Task.detached(priority: .userInitiated) {
+            try Self.runWhisperCLI(cliPath: cliPath, modelPath: modelPath, wavURL: wavURL, language: language)
+        }.value
 
-        // 3. 解析输出
-        return parseWhisperOutput(output)
+        let parsed = SubtitleSegmentationService.refine(parseWhisperOutput(output))
+        guard !parsed.isEmpty else {
+            throw TranscriptionError.emptyResult
+        }
+        return parsed
     }
 
-    // MARK: - 确保 whisper-cli 可用
+    private func resolveCLIPath() throws -> String {
+        let candidates = [
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/whisper-cli").path,
+            WhisperModelStore.directory.deletingLastPathComponent().appendingPathComponent("whisper-cli").path,
+            "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli",
+            "/opt/homebrew/bin/whisper-cli"
+        ]
 
-    private func ensureCLI() async throws {
-        if FileManager.default.fileExists(atPath: whisperCLIPath) { return }
-        throw TranscriptionError.cloudRequestFailedWithDetail("whisper-cli 未找到")
+        if let path = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+            return path
+        }
+
+        throw TranscriptionError.cliUnavailable
     }
 
-    private func convertToWAV(input: URL, output: URL) async throws {
-        // 用 macOS 自带的 afconvert（不需要 ffmpeg）
+    private func resolveModelPath() throws -> String {
+        if let requestedPath = WhisperModelStore.existingPath(for: model)?.path {
+            return requestedPath
+        }
+
+        if let availableModel = WhisperModelStore.availableModels().first {
+            if let availablePath = WhisperModelStore.existingPath(for: availableModel)?.path {
+                return availablePath
+            }
+        }
+
+        throw TranscriptionError.modelUnavailable
+    }
+
+    private static func convertToWAV(input: URL, output: URL) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
         process.arguments = [
-            "-f", "WAVE", "-d", "LEI16@16000", "-c", "1",
-            input.path, output.path
+            "-f", "WAVE",
+            "-d", "LEI16@16000",
+            "-c", "1",
+            input.path,
+            output.path
         ]
-
-        let pipe = Pipe()
-        process.standardError = pipe
-
         try process.run()
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
-            throw TranscriptionError.cloudRequestFailedWithDetail("音频转换失败（afconvert）")
+            throw TranscriptionError.audioConversionFailed
         }
     }
 
-    private func runWhisperCLI(wavURL: URL, language: String) async throws -> String {
+    private static func runWhisperCLI(
+        cliPath: String,
+        modelPath: String,
+        wavURL: URL,
+        language: String
+    ) throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: whisperCLIPath)
+        process.executableURL = URL(fileURLWithPath: cliPath)
         process.arguments = [
             "-m", modelPath,
             "-f", wavURL.path,
@@ -274,134 +246,169 @@ final class WhisperCppProvider: TranscriptionProvider {
             "--no-prints"
         ]
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()  // 吞掉 stderr
-
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
         try process.run()
         process.waitUntilExit()
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-
-        guard process.terminationStatus == 0 else {
-            throw TranscriptionError.cloudRequestFailedWithDetail("whisper-cli 执行失败")
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if process.terminationStatus != 0 {
+            let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw TranscriptionError.whisperExecutionFailed(error.isEmpty ? "whisper-cli 执行失败" : error)
         }
 
         return output
     }
 
-    /// 解析 whisper-cli 的时间戳输出
-    /// 格式: [00:00:00.000 --> 00:00:02.120]  文字内容
     private func parseWhisperOutput(_ output: String) -> [SubtitleSegment] {
-        var segments: [SubtitleSegment] = []
-        let lines = output.components(separatedBy: .newlines)
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // 匹配时间戳格式 [HH:MM:SS.mmm --> HH:MM:SS.mmm]
-            guard trimmed.hasPrefix("["),
-                  let closeBracket = trimmed.firstIndex(of: "]") else { continue }
-
-            let timeStr = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closeBracket])
-            let parts = timeStr.components(separatedBy: "-->")
-            guard parts.count == 2 else { continue }
-
-            let start = parseWhisperTime(parts[0].trimmingCharacters(in: .whitespaces))
-            let end = parseWhisperTime(parts[1].trimmingCharacters(in: .whitespaces))
-            let text = String(trimmed[trimmed.index(after: closeBracket)...]).trimmingCharacters(in: .whitespaces)
-
-            if !text.isEmpty {
-                segments.append(SubtitleSegment(start: start, end: end, text: text))
-            }
-        }
-
-        return segments
+        output
+            .components(separatedBy: .newlines)
+            .compactMap(parseWhisperLine)
     }
 
-    /// 解析 whisper 时间格式: 00:00:02.120
-    private func parseWhisperTime(_ s: String) -> TimeInterval {
-        let parts = s.components(separatedBy: ":")
+    private func parseWhisperLine(_ line: String) -> SubtitleSegment? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("["),
+              let closeBracket = trimmed.firstIndex(of: "]")
+        else {
+            return nil
+        }
+
+        let timeString = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closeBracket])
+        let parts = timeString.components(separatedBy: "-->")
+        guard parts.count == 2 else { return nil }
+
+        let start = parseWhisperTime(parts[0].trimmingCharacters(in: .whitespaces))
+        let end = parseWhisperTime(parts[1].trimmingCharacters(in: .whitespaces))
+        let text = String(trimmed[trimmed.index(after: closeBracket)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        return SubtitleSegment(start: start, end: max(end, start + 0.1), text: text)
+    }
+
+    private func parseWhisperTime(_ string: String) -> TimeInterval {
+        let parts = string.components(separatedBy: ":")
         guard parts.count == 3,
-              let h = Double(parts[0]),
-              let m = Double(parts[1]),
-              let sec = Double(parts[2]) else { return 0 }
-        return h * 3600 + m * 60 + sec
-    }
-
-    func testAvailability() async -> TranscriptionTestResult {
-        let fm = FileManager.default
-
-        // 检查 whisper-cli
-        guard fm.fileExists(atPath: whisperCLIPath) else {
-            return TranscriptionTestResult(available: false, message: "whisper-cli 未安装，请在设置中下载", duration: nil)
+              let hours = Double(parts[0]),
+              let minutes = Double(parts[1]),
+              let seconds = Double(parts[2])
+        else {
+            return 0
         }
-
-        // 检查模型
-        guard fm.fileExists(atPath: modelPath) else {
-            return TranscriptionTestResult(available: false, message: "模型未下载", duration: nil)
-        }
-
-        return TranscriptionTestResult(available: true, message: "可用", duration: nil)
+        return hours * 3600 + minutes * 60 + seconds
     }
 }
 
 final class CloudASRProvider: TranscriptionProvider {
+    private let preferredSegmentDuration: TimeInterval = 3.8
+    private let hardSegmentDuration: TimeInterval = 5.2
+
     private let apiURL: String
     private let apiKey: String
     private let model: String
 
-    init(apiURL: String, apiKey: String, model: String = "whisper-1") {
+    init(apiURL: String, apiKey: String, model: String) {
         self.apiURL = apiURL
         self.apiKey = apiKey
         self.model = model
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
-        guard !apiURL.isEmpty else {
+        guard !apiURL.isEmpty, !apiKey.isEmpty else {
             throw TranscriptionError.cloudNotConfigured
         }
 
-        // DashScope 异步 API
-        if apiURL.contains("dashscope.aliyuncs.com") {
-            return try await transcribeDashScope(audioURL: audioURL, language: language)
+        if isDashScopeCompatibleModeURL {
+            return try await transcribeDashScopeCompatible(audioURL: audioURL, language: language)
         }
 
-        // 标准 Whisper 兼容 API（multipart）
-        return try await transcribeWhisper(audioURL: audioURL, language: language)
+        if isDashScopeAsyncURL {
+            return try await transcribeDashScopeAsync(audioURL: audioURL, language: language)
+        }
+
+        return try await transcribeWhisperCompatible(audioURL: audioURL, language: language)
     }
 
-    // MARK: - DashScope 异步 API
+    private var isDashScopeCompatibleModeURL: Bool {
+        guard let url = URL(string: apiURL) else { return false }
+        return url.path.hasSuffix("/compatible-mode/v1/chat/completions")
+    }
 
-    private func transcribeDashScope(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
-        // 1. 读取音频文件并编码为 base64
+    private var isDashScopeAsyncURL: Bool {
+        guard let url = URL(string: apiURL) else { return false }
+        return url.path.hasSuffix("/api/v1/services/audio/asr/transcription")
+    }
+
+    private func transcribeDashScopeCompatible(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let audioData = try Data(contentsOf: audioURL)
-        let base64 = audioData.base64EncodedString()
-        let ext = audioURL.pathExtension.lowercased()
-        let mimeType = ext == "m4a" || ext == "mp4" ? "audio/mp4" : ext == "mp3" ? "audio/mpeg" : "audio/wav"
-        let fileURL = "data:\(mimeType);base64,\(base64)"
-
-        // 2. 提交任务
-        let taskID = try await submitDashScopeTask(fileURL: fileURL, language: language)
-
-        // 3. 轮询结果（返回 transcription_url）
-        let resultURL = try await pollDashScopeTask(taskID: taskID)
-
-        // 4. 下载并解析结果
-        return try await downloadAndParseDashScopeResult(url: resultURL, audioURL: audioURL)
-    }
-
-    private func submitDashScopeTask(fileURL: String, language: String) async throws -> String {
+        let mimeType = switch audioURL.pathExtension.lowercased() {
+        case "m4a", "mp4": "audio/mp4"
+        case "mp3": "audio/mpeg"
+        default: "audio/wav"
+        }
+        let dataURI = "data:\(mimeType);base64,\(audioData.base64EncodedString())"
         let body: [String: Any] = [
             "model": model,
-            "input": [
-                "file_url": fileURL
+            "messages": [
+                [
+                    "role": "user",
+                    "content": [
+                        [
+                            "type": "input_audio",
+                            "input_audio": [
+                                "data": dataURI
+                            ]
+                        ]
+                    ]
+                ]
             ],
-            "parameters": [
-                "channel_id": [0],
-                "enable_itn": true,
-                "enable_words": true
-            ]
+            "stream": false,
+            "asr_options": dashScopeASROptions(language: language)
+        ]
+
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        var request = URLRequest(url: URL(string: apiURL)!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = bodyData
+        request.timeoutInterval = 180
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let message = String(data: data, encoding: .utf8) ?? ""
+            throw TranscriptionError.cloudRequestFailedWithDetail("DashScope 兼容模式失败 HTTP \(code): \(message.prefix(200))")
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String
+        else {
+            throw TranscriptionError.cloudResponseInvalid
+        }
+
+        let duration = await audioDuration(url: audioURL)
+        return approximateSegments(from: content, duration: duration)
+    }
+
+    private func transcribeDashScopeAsync(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        let audioData = try Data(contentsOf: audioURL)
+        let mimeType = switch audioURL.pathExtension.lowercased() {
+        case "m4a", "mp4": "audio/mp4"
+        case "mp3": "audio/mpeg"
+        default: "audio/wav"
+        }
+        let fileURL = "data:\(mimeType);base64,\(audioData.base64EncodedString())"
+
+        let body: [String: Any] = [
+            "model": model,
+            "input": ["file_url": fileURL],
+            "parameters": dashScopeTaskParameters(language: language)
         ]
 
         let bodyData = try JSONSerialization.data(withJSONObject: body)
@@ -416,22 +423,27 @@ final class CloudASRProvider: TranscriptionProvider {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw TranscriptionError.cloudRequestFailedWithDetail("DashScope 提交失败 HTTP \(code): \(body.prefix(200))")
+            let message = String(data: data, encoding: .utf8) ?? ""
+            throw TranscriptionError.cloudRequestFailedWithDetail("DashScope 提交失败 HTTP \(code): \(message.prefix(200))")
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let output = json["output"] as? [String: Any],
-              let taskID = output["task_id"] as? String else {
+              let taskID = output["task_id"] as? String
+        else {
             throw TranscriptionError.cloudResponseInvalid
         }
-        return taskID
+
+        let resultURL = try await pollDashScopeTask(taskID: taskID)
+        return try await downloadDashScopeResult(url: resultURL, audioURL: audioURL)
     }
 
-    /// 轮询任务，返回结果文件 URL
     private func pollDashScopeTask(taskID: String) async throws -> String {
-        let pollURL = "https://dashscope.aliyuncs.com/api/v1/tasks/\(taskID)"
-        var request = URLRequest(url: URL(string: pollURL)!)
+        guard let pollURL = dashScopeTaskPollingURL(taskID: taskID) else {
+            throw TranscriptionError.cloudResponseInvalid
+        }
+
+        var request = URLRequest(url: pollURL)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 300
 
@@ -439,79 +451,290 @@ final class CloudASRProvider: TranscriptionProvider {
             let (data, _) = try await URLSession.shared.data(for: request)
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let output = json["output"] as? [String: Any],
-                  let status = output["task_status"] as? String else {
+                  let status = output["task_status"] as? String
+            else {
                 throw TranscriptionError.cloudResponseInvalid
             }
 
             switch status {
             case "SUCCEEDED":
-                // 下载结果文件 URL
                 if let result = output["result"] as? [String: String],
-                   let url = result["transcription_url"] {
-                    return url
+                   let transcriptionURL = result["transcription_url"] {
+                    return transcriptionURL
                 }
                 throw TranscriptionError.cloudResponseInvalid
             case "FAILED":
-                let msg = output["message"] as? String ?? "未知错误"
-                throw TranscriptionError.cloudRequestFailedWithDetail("DashScope 任务失败：\(msg)")
+                let message = output["message"] as? String ?? "未知错误"
+                throw TranscriptionError.cloudRequestFailedWithDetail("DashScope 任务失败：\(message)")
             default:
-                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 秒
+                try await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
 
         throw TranscriptionError.timeout
     }
 
-    /// 下载并解析 DashScope 结果文件
-    private func downloadAndParseDashScopeResult(url: String, audioURL: URL) async throws -> [SubtitleSegment] {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: url)!)
+    private func dashScopeTaskPollingURL(taskID: String) -> URL? {
+        guard let requestURL = URL(string: apiURL),
+              var components = URLComponents(url: requestURL, resolvingAgainstBaseURL: false)
+        else {
+            return nil
+        }
+
+        components.path = "/api/v1/tasks/\(taskID)"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private func dashScopeASROptions(language: String) -> [String: Any] {
+        var options: [String: Any] = ["enable_itn": true]
+        if let normalized = normalizeDashScopeLanguage(language) {
+            options["language"] = normalized
+        }
+        return options
+    }
+
+    private func dashScopeTaskParameters(language: String) -> [String: Any] {
+        var parameters: [String: Any] = [
+            "channel_id": [0],
+            "enable_itn": true,
+            "enable_words": true
+        ]
+        if let normalized = normalizeDashScopeLanguage(language) {
+            parameters["language"] = normalized
+        }
+        return parameters
+    }
+
+    private func normalizeDashScopeLanguage(_ language: String) -> String? {
+        switch language {
+        case "zh-CN", "zh-TW":
+            return "zh"
+        case "en-US":
+            return "en"
+        case "ja-JP":
+            return "ja"
+        default:
+            return nil
+        }
+    }
+
+    private func approximateSegments(from text: String, duration: TimeInterval) -> [SubtitleSegment] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let enders = CharacterSet(charactersIn: "。！？!?；;")
+        var chunks: [String] = []
+        var current = ""
+
+        for scalar in trimmed.unicodeScalars {
+            current.unicodeScalars.append(scalar)
+            if enders.contains(scalar) {
+                let sentence = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sentence.isEmpty {
+                    chunks.append(sentence)
+                }
+                current = ""
+            }
+        }
+
+        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            chunks.append(tail)
+        }
+
+        if chunks.isEmpty {
+            chunks = [trimmed]
+        }
+
+        let totalUnits = max(chunks.reduce(0) { $0 + max($1.count, 1) }, 1)
+        let totalDuration = max(duration, 0.1)
+        var cursor: TimeInterval = 0
+
+        return chunks.enumerated().map { index, chunk in
+            let weight = Double(max(chunk.count, 1)) / Double(totalUnits)
+            let segmentDuration = index == chunks.count - 1 ? max(totalDuration - cursor, 0.1) : max(totalDuration * weight, 0.2)
+            let start = cursor
+            let end = min(totalDuration, cursor + segmentDuration)
+            cursor = end
+            return SubtitleSegment(start: start, end: max(end, start + 0.1), text: chunk)
+        }
+    }
+
+    private func downloadDashScopeResult(url: String, audioURL: URL) async throws -> [SubtitleSegment] {
+        guard let resolvedURL = resolvedDashScopeResultURL(from: url) else {
+            throw TranscriptionError.cloudResponseInvalid
+        }
+
+        let (data, _) = try await URLSession.shared.data(from: resolvedURL)
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw TranscriptionError.cloudResponseInvalid
         }
 
-        // 尝试解析 sentences（带时间戳）
         if let transcripts = json["transcripts"] as? [[String: Any]],
            let first = transcripts.first,
            let sentences = first["sentences"] as? [[String: Any]] {
-            let segments = sentences.compactMap { s -> SubtitleSegment? in
-                guard let text = (s["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !text.isEmpty else { return nil }
-                let start = (s["begin_time"] as? Double ?? 0) / 1000.0
-                let end = (s["end_time"] as? Double ?? 0) / 1000.0
-                return SubtitleSegment(start: start, end: end > start ? end : start + 1, text: text)
+            var segments: [SubtitleSegment] = []
+
+            for sentence in sentences {
+                if let splitFromWords = splitDashScopeSentenceWords(sentence), !splitFromWords.isEmpty {
+                    segments.append(contentsOf: splitFromWords)
+                    continue
+                }
+
+                guard let text = (sentence["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !text.isEmpty else {
+                    continue
+                }
+
+                let start = (sentence["begin_time"] as? Double ?? 0) / 1000.0
+                let end = (sentence["end_time"] as? Double ?? 0) / 1000.0
+                segments.append(contentsOf: splitLongSegment(SubtitleSegment(start: start, end: max(end, start + 0.1), text: text)))
             }
-            if !segments.isEmpty { return segments }
+
+            if !segments.isEmpty {
+                return SubtitleSegmentationService.refine(segments)
+            }
         }
 
-        // 回退：纯文本
         if let transcripts = json["transcripts"] as? [[String: Any]],
            let first = transcripts.first,
-           let text = first["text"] as? String, !text.isEmpty {
-            let duration = getAudioDuration(url: audioURL)
-            return [SubtitleSegment(start: 0, end: duration, text: text)]
+           let text = first["text"] as? String,
+           !text.isEmpty {
+            let duration = await audioDuration(url: audioURL)
+            return SubtitleSegmentationService.refine(approximateSegments(from: text, duration: duration))
         }
 
         throw TranscriptionError.cloudResponseInvalid
     }
 
-    // MARK: - 标准 Whisper 兼容 API（multipart）
+    private func splitDashScopeSentenceWords(_ sentence: [String: Any]) -> [SubtitleSegment]? {
+        guard let words = sentence["words"] as? [[String: Any]], !words.isEmpty else {
+            return nil
+        }
 
-    private func transcribeWhisper(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        var results: [SubtitleSegment] = []
+        var currentText = ""
+        var currentStart: TimeInterval?
+        var currentEnd: TimeInterval = 0
+
+        func flush() {
+            let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let start = currentStart, !text.isEmpty else { return }
+            results.append(
+                SubtitleSegment(
+                    start: start,
+                    end: max(currentEnd, start + 0.1),
+                    text: text
+                )
+            )
+            currentText = ""
+            currentStart = nil
+            currentEnd = 0
+        }
+
+        for word in words {
+            guard let token = word["text"] as? String else { continue }
+            let punctuation = word["punctuation"] as? String ?? ""
+            let start = (word["begin_time"] as? Double ?? 0) / 1000.0
+            let end = (word["end_time"] as? Double ?? start * 1000) / 1000.0
+
+            if currentStart == nil {
+                currentStart = start
+            }
+
+            currentText += token + punctuation
+            currentEnd = max(currentEnd, end)
+
+            let duration = currentEnd - (currentStart ?? start)
+            let strongBreak = ["。", "！", "？", "!", "?"].contains(punctuation)
+            let softBreak = ["，", "、", "；", ";", "：", ":"].contains(punctuation)
+
+            if strongBreak || duration >= hardSegmentDuration || (softBreak && duration >= preferredSegmentDuration) {
+                flush()
+            }
+        }
+
+        flush()
+
+        return results.isEmpty ? nil : results
+    }
+
+    private func splitLongSegment(_ segment: SubtitleSegment) -> [SubtitleSegment] {
+        let duration = segment.end - segment.start
+        let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard duration > hardSegmentDuration, !text.isEmpty else {
+            return [segment]
+        }
+
+        let delimiters = CharacterSet(charactersIn: "，。、；：！？,.;:!?")
+        var chunks: [String] = []
+        var current = ""
+
+        for scalar in text.unicodeScalars {
+            current.unicodeScalars.append(scalar)
+            if delimiters.contains(scalar), current.count >= 6 {
+                let chunk = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !chunk.isEmpty {
+                    chunks.append(chunk)
+                }
+                current = ""
+            }
+        }
+
+        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tail.isEmpty {
+            chunks.append(tail)
+        }
+
+        guard chunks.count > 1 else {
+            return [segment]
+        }
+
+        let totalUnits = max(chunks.reduce(0) { $0 + max($1.count, 1) }, 1)
+        var cursor = segment.start
+
+        return chunks.enumerated().map { index, chunk in
+            let weight = Double(max(chunk.count, 1)) / Double(totalUnits)
+            let chunkDuration = index == chunks.count - 1
+                ? max(segment.end - cursor, 0.1)
+                : max(duration * weight, 0.35)
+            let start = cursor
+            let end = min(segment.end, cursor + chunkDuration)
+            cursor = end
+            return SubtitleSegment(start: start, end: max(end, start + 0.1), text: chunk)
+        }
+    }
+
+    private func resolvedDashScopeResultURL(from rawURL: String) -> URL? {
+        guard var components = URLComponents(string: rawURL) else {
+            return nil
+        }
+
+        if components.scheme == "http",
+           let host = components.host,
+           host.contains("aliyuncs.com") {
+            components.scheme = "https"
+        }
+
+        return components.url
+    }
+
+    private func transcribeWhisperCompatible(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let boundary = "----SubForge-\(UUID().uuidString)"
         var body = Data()
 
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(model)\r\n".data(using: .utf8)!)
+        func appendField(_ name: String, value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
 
-        let langCode = language.hasPrefix("zh") ? "zh" : language
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"language\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(langCode)\r\n".data(using: .utf8)!)
-
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n".data(using: .utf8)!)
-        body.append("verbose_json\r\n".data(using: .utf8)!)
+        appendField("model", value: model)
+        appendField("language", value: language.hasPrefix("zh") ? "zh" : language)
+        appendField("response_format", value: "verbose_json")
 
         let audioData = try Data(contentsOf: audioURL)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -529,12 +752,10 @@ final class CloudASRProvider: TranscriptionProvider {
         request.timeoutInterval = 600
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TranscriptionError.cloudRequestFailed
-        }
-        if httpResponse.statusCode != 200 {
-            let body = String(data: data, encoding: .utf8) ?? "未知错误"
-            throw TranscriptionError.cloudRequestFailedWithDetail("HTTP \(httpResponse.statusCode): \(body.prefix(200))")
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let message = String(data: data, encoding: .utf8) ?? ""
+            throw TranscriptionError.cloudRequestFailedWithDetail("HTTP \(code): \(message.prefix(200))")
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -542,53 +763,39 @@ final class CloudASRProvider: TranscriptionProvider {
         }
 
         if let segmentsData = json["segments"] as? [[String: Any]] {
-            return segmentsData.compactMap { dict -> SubtitleSegment? in
+            let segments = segmentsData.compactMap { dict -> SubtitleSegment? in
                 guard let start = dict["start"] as? Double,
                       let end = dict["end"] as? Double,
                       let text = (dict["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !text.isEmpty else { return nil }
-                return SubtitleSegment(start: start, end: end, text: text)
+                      !text.isEmpty else {
+                    return nil
+                }
+
+                return SubtitleSegment(start: start, end: max(end, start + 0.1), text: text)
+            }
+
+            if !segments.isEmpty {
+                return SubtitleSegmentationService.refine(segments)
             }
         }
 
-        if let text = json["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let duration = getAudioDuration(url: audioURL)
-            return [SubtitleSegment(start: 0, end: duration, text: text.trimmingCharacters(in: .whitespacesAndNewlines))]
+        if let text = json["text"] as? String,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let duration = await audioDuration(url: audioURL)
+            return SubtitleSegmentationService.refine(approximateSegments(from: text, duration: duration))
         }
 
         throw TranscriptionError.cloudResponseInvalid
     }
 
-    private func getAudioDuration(url: URL) -> TimeInterval {
+    private func audioDuration(url: URL) async -> TimeInterval {
         let asset = AVURLAsset(url: url)
-        let duration = asset.duration
-        let seconds = CMTimeGetSeconds(duration)
-        return seconds.isNaN ? 10.0 : seconds
-    }
-
-    func testAvailability() async -> TranscriptionTestResult {
-        guard !apiURL.isEmpty, !apiKey.isEmpty else {
-            return TranscriptionTestResult(available: false, message: "未配置 API 地址或 Key", duration: nil)
-        }
-        guard let url = URL(string: apiURL) else {
-            return TranscriptionTestResult(available: false, message: "API 地址格式错误", duration: nil)
-        }
-        let start = Date()
         do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.timeoutInterval = 10
-            let (_, response) = try await URLSession.shared.data(for: request)
-            let elapsed = Date().timeIntervalSince(start)
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode < 500 {
-                return TranscriptionTestResult(available: true, message: "服务可达，延迟 \(String(format: "%.1f", elapsed * 1000))ms", duration: elapsed)
-            } else {
-                return TranscriptionTestResult(available: false, message: "服务返回错误", duration: elapsed)
-            }
+            let duration = try await asset.load(.duration)
+            let seconds = CMTimeGetSeconds(duration)
+            return seconds.isNaN ? 10.0 : seconds
         } catch {
-            let elapsed = Date().timeIntervalSince(start)
-            return TranscriptionTestResult(available: false, message: "连接失败：\(error.localizedDescription)", duration: elapsed)
+            return 10.0
         }
     }
 }
@@ -596,42 +803,57 @@ final class CloudASRProvider: TranscriptionProvider {
 enum TranscriptionError: LocalizedError {
     case notAuthorized(SFSpeechRecognizerAuthorizationStatus)
     case recognizerUnavailable(String)
+    case cliUnavailable
+    case modelUnavailable
+    case audioConversionFailed
+    case whisperExecutionFailed(String)
     case cloudNotConfigured
-    case cloudRequestFailed
     case cloudRequestFailedWithDetail(String)
     case cloudResponseInvalid
     case timeout
+    case emptyResult
 
     var errorDescription: String? {
         switch self {
         case .notAuthorized(let status):
-            return "语音识别未授权（状态: \(status.rawValue)）"
-        case .recognizerUnavailable(let lang):
-            return "语言 \(lang) 的识别器不可用"
+            "语音识别未授权（状态: \(status.rawValue)）"
+        case .recognizerUnavailable(let language):
+            "语言 \(language) 的识别器不可用"
+        case .cliUnavailable:
+            "whisper-cli 未安装，请先在本机安装 whisper-cpp"
+        case .modelUnavailable:
+            "Whisper 模型未下载，请先在设置中下载模型"
+        case .audioConversionFailed:
+            "音频转换失败（afconvert）"
+        case .whisperExecutionFailed(let message):
+            "whisper-cli 执行失败：\(message)"
         case .cloudNotConfigured:
-            return "云端 ASR 未配置，请在设置中填写 API 地址和 Key"
-        case .cloudRequestFailed:
-            return "云端 ASR 请求失败"
+            "云端 ASR 未配置，请填写 Base URL、Key 和模型名"
         case .cloudRequestFailedWithDetail(let detail):
-            return "云端 ASR 错误：\(detail)"
+            "云端 ASR 错误：\(detail)"
         case .cloudResponseInvalid:
-            return "云端 ASR 响应格式异常"
+            "云端 ASR 响应格式异常"
         case .timeout:
-            return "转写超时（5分钟）"
+            "转写超时（5分钟）"
+        case .emptyResult:
+            "没有识别出可用字幕"
         }
     }
 }
 
-/// 工厂：根据设置创建转写 provider
 enum TranscriptionService {
     static func createProvider(settings: AppSettings) -> TranscriptionProvider {
         switch settings.transcriptionEngine {
         case .whisperLocal:
-            return WhisperCppProvider(model: settings.whisperModel)
+            WhisperCppProvider(model: settings.whisperModel)
         case .appleSpeech:
-            return AppleSpeechProvider()
+            AppleSpeechProvider()
         case .cloudASR:
-            return CloudASRProvider(apiURL: settings.effectiveASRURL, apiKey: settings.cloudASRKey, model: settings.effectiveASRModel)
+            CloudASRProvider(
+                apiURL: settings.effectiveASRURL,
+                apiKey: settings.cloudASRKey,
+                model: settings.effectiveASRModel
+            )
         }
     }
 }

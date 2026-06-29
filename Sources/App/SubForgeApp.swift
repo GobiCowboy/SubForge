@@ -1,0 +1,65 @@
+import SwiftUI
+
+@main
+struct SubForgeApp: App {
+    @StateObject private var model = AppModel()
+
+    var body: some Scene {
+        WindowGroup("SubForge") {
+            RootView()
+                .environmentObject(model)
+                .frame(minWidth: 1180, minHeight: 760)
+        }
+        .commands {
+            CommandMenu("字幕") {
+                Button("打开文件") {
+                    model.requestImportFromMenu()
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
+                Button("导出") {
+                    model.exportArtifacts()
+                }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(model.segments.isEmpty)
+
+                Divider()
+
+                Button("返回首页") {
+                    if model.mode == .progress {
+                        model.resetWorkspace()
+                    } else {
+                        model.showHome()
+                    }
+                }
+                .disabled(model.mode == .home)
+            }
+
+            CommandMenu("播放") {
+                Button(model.isPlaying ? "暂停" : "播放") {
+                    model.togglePlayback()
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(model.mode != .editor)
+
+                Button("后退 1 秒") {
+                    model.skip(by: -1)
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command])
+                .disabled(model.mode != .editor)
+
+                Button("前进 1 秒") {
+                    model.skip(by: 1)
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command])
+                .disabled(model.mode != .editor)
+            }
+        }
+
+        Settings {
+            SettingsView()
+                .environmentObject(model)
+                .frame(width: 720, height: 760)
+        }
+    }
+}
