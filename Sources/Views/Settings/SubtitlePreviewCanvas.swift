@@ -146,6 +146,12 @@ struct SubtitlePreviewCanvas: View {
             .lineSpacing(style.lineSpacing)
             .multilineTextAlignment(swiftUITextAlignment)
             .foregroundStyle(color)
+            .shadow(
+                color: style.shadowEnabled ? colorFromHex(style.shadowColorHex).opacity(style.shadowOpacity) : .clear,
+                radius: style.shadowEnabled ? style.shadowBlur : 0,
+                x: 0,
+                y: style.shadowEnabled ? style.shadowOffsetY : 0
+            )
             .frame(maxWidth: maxWidth, alignment: previewAlignment)
             .fixedSize(horizontal: false, vertical: true)
     }

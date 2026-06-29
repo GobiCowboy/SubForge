@@ -3,146 +3,206 @@ import SwiftUI
 struct SubtitleStyleSettingsPane: View {
     @Binding var settings: AppSettings
 
+    @State private var textExpanded = true
+    @State private var layoutExpanded = true
+    @State private var positionExpanded = true
+    @State private var fillExpanded = true
+    @State private var strokeExpanded = true
+    @State private var shadowExpanded = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "样式配置") {
+            SettingsGroup(title: "字幕样式") {
                 SettingsSectionCard {
-                    sectionLabel("基本")
+                    SubtitleInspectorSection(title: "文本", isExpanded: $textExpanded) {
+                        HStack(alignment: .top, spacing: 20) {
+                            SubtitleInspectorPickerRow(title: "字体") {
+                                Picker("字体", selection: $settings.subtitleStyle.fontFamily) {
+                                    Text("苹方-简").tag("PingFang SC")
+                                    Text("黑体-简").tag("Heiti SC")
+                                    Text("Arial").tag("Arial")
+                                }
+                                .labelsHidden()
+                                .frame(width: 250)
+                            }
 
-                    HStack(spacing: 16) {
-                        Picker("字体", selection: $settings.subtitleStyle.fontFamily) {
-                            Text("苹方-简").tag("PingFang SC")
-                            Text("黑体-简").tag("Heiti SC")
-                            Text("Arial").tag("Arial")
-                        }
-                        .font(.system(size: 12))
-
-                        Picker("字重", selection: $settings.subtitleStyle.fontWeight) {
-                            ForEach(SubtitleFontWeight.allCases) { weight in
-                                Text(weight.rawValue).tag(weight)
+                            SubtitleInspectorPickerRow(title: "字重") {
+                                Picker("字重", selection: $settings.subtitleStyle.fontWeight) {
+                                    ForEach(SubtitleFontWeight.allCases) { weight in
+                                        Text(weight.rawValue).tag(weight)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 180)
                             }
                         }
-                        .font(.system(size: 12))
-                        .frame(maxWidth: 180)
+
+                        SubtitleInspectorSliderRow(
+                            title: "字号",
+                            value: $settings.subtitleStyle.fontSize,
+                            range: 20...84,
+                            step: 1,
+                            display: subtitleInspectorValue(settings.subtitleStyle.fontSize, unit: "pt")
+                        )
+
+                        SubtitleInspectorColorRow(
+                            title: "文字颜色",
+                            value: $settings.subtitleStyle.fontColorHex
+                        )
                     }
 
-                    sliderRow(
-                        title: "大小",
-                        value: $settings.subtitleStyle.fontSize,
-                        range: 20...84,
-                        step: 1,
-                        display: "\(Int(settings.subtitleStyle.fontSize))"
-                    )
+                    SubtitleInspectorSection(title: "布局", isExpanded: $layoutExpanded) {
+                        HStack(alignment: .top, spacing: 20) {
+                            SubtitleInspectorPickerRow(title: "水平对齐") {
+                                Picker("水平对齐", selection: $settings.subtitleStyle.horizontalAlignment) {
+                                    ForEach(SubtitleHorizontalAlignment.allCases) { alignment in
+                                        Text(alignment.rawValue.replacingOccurrences(of: "对齐", with: "")).tag(alignment)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 220)
+                            }
 
-                    Picker("对齐", selection: $settings.subtitleStyle.horizontalAlignment) {
-                        ForEach(SubtitleHorizontalAlignment.allCases) { alignment in
-                            Text(alignment.rawValue).tag(alignment)
+                            SubtitleInspectorPickerRow(title: "垂直对齐") {
+                                Picker("垂直对齐", selection: $settings.subtitleStyle.position) {
+                                    ForEach(SubtitlePosition.allCases) { position in
+                                        Text(position.rawValue).tag(position)
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 220)
+                            }
+                        }
+
+                        SubtitleInspectorSliderRow(
+                            title: "行高",
+                            value: $settings.subtitleStyle.lineSpacing,
+                            range: 0...24,
+                            step: 1,
+                            display: subtitleInspectorValue(settings.subtitleStyle.lineSpacing, unit: "pt")
+                        )
+
+                        SubtitleInspectorSliderRow(
+                            title: "字距",
+                            value: $settings.subtitleStyle.characterSpacing,
+                            range: -2...12,
+                            step: 0.5,
+                            display: subtitleInspectorValue(settings.subtitleStyle.characterSpacing, unit: "pt")
+                        )
+                    }
+
+                    SubtitleInspectorSection(title: "位置", isExpanded: $positionExpanded) {
+                        HStack(alignment: .top, spacing: 20) {
+                            SubtitleInspectorNumberFieldRow(
+                                title: "X",
+                                value: $settings.subtitleStyle.offsetX,
+                                unit: "px"
+                            )
+
+                            SubtitleInspectorNumberFieldRow(
+                                title: "Y",
+                                value: $settings.subtitleStyle.offsetY,
+                                unit: "px"
+                            )
                         }
                     }
-                    .font(.system(size: 12))
-                    .pickerStyle(.segmented)
 
-                    Picker("垂直对齐", selection: $settings.subtitleStyle.position) {
-                        ForEach(SubtitlePosition.allCases) { position in
-                            Text(position.rawValue).tag(position)
+                    SubtitleInspectorSection(
+                        title: "填充",
+                        isExpanded: $fillExpanded,
+                        isEnabled: $settings.subtitleStyle.surfaceEnabled
+                    ) {
+                        if settings.subtitleStyle.surfaceEnabled {
+                            SubtitleInspectorColorRow(
+                                title: "颜色",
+                                value: $settings.subtitleStyle.surfaceColorHex
+                            )
+
+                            SubtitleInspectorSliderRow(
+                                title: "透明度",
+                                value: $settings.subtitleStyle.surfaceOpacity,
+                                range: 0...1,
+                                step: 0.05,
+                                display: subtitleInspectorValue(settings.subtitleStyle.surfaceOpacity * 100, unit: "%")
+                            )
+
+                            SubtitleInspectorSliderRow(
+                                title: "模糊",
+                                value: $settings.subtitleStyle.surfaceBlur,
+                                range: 0...12,
+                                step: 0.5,
+                                display: subtitleInspectorValue(settings.subtitleStyle.surfaceBlur, unit: "px")
+                            )
                         }
                     }
-                    .font(.system(size: 12))
-                    .pickerStyle(.segmented)
 
-                    sliderRow(
-                        title: "行间距",
-                        value: $settings.subtitleStyle.lineSpacing,
-                        range: 0...24,
-                        step: 1,
-                        display: "\(Int(settings.subtitleStyle.lineSpacing))"
-                    )
+                    SubtitleInspectorSection(
+                        title: "描边",
+                        isExpanded: $strokeExpanded,
+                        isEnabled: $settings.subtitleStyle.outlineEnabled
+                    ) {
+                        if settings.subtitleStyle.outlineEnabled {
+                            SubtitleInspectorColorRow(
+                                title: "颜色",
+                                value: $settings.subtitleStyle.outlineColorHex
+                            )
 
-                    sliderRow(
-                        title: "字距",
-                        value: $settings.subtitleStyle.characterSpacing,
-                        range: -2...12,
-                        step: 0.5,
-                        display: "\(Int(settings.subtitleStyle.characterSpacing.rounded()))%"
-                    )
+                            SubtitleInspectorSliderRow(
+                                title: "透明度",
+                                value: $settings.subtitleStyle.outlineOpacity,
+                                range: 0...1,
+                                step: 0.05,
+                                display: subtitleInspectorValue(settings.subtitleStyle.outlineOpacity * 100, unit: "%")
+                            )
 
-                    sectionSpacing
-                    sectionLabel("位置")
+                            SubtitleInspectorSliderRow(
+                                title: "模糊",
+                                value: $settings.subtitleStyle.outlineBlur,
+                                range: 0...8,
+                                step: 0.5,
+                                display: subtitleInspectorValue(settings.subtitleStyle.outlineBlur, unit: "px")
+                            )
 
-                    HStack(spacing: 16) {
-                        sliderRow(
-                            title: "X",
-                            value: $settings.subtitleStyle.offsetX,
-                            range: -240...240,
-                            step: 2,
-                            display: "\(Int(settings.subtitleStyle.offsetX)) px"
-                        )
-
-                        sliderRow(
-                            title: "Y",
-                            value: $settings.subtitleStyle.offsetY,
-                            range: -240...120,
-                            step: 2,
-                            display: "\(Int(settings.subtitleStyle.offsetY)) px"
-                        )
+                            SubtitleInspectorSliderRow(
+                                title: "宽度",
+                                value: $settings.subtitleStyle.outlineWidth,
+                                range: 0...8,
+                                step: 0.5,
+                                display: subtitleInspectorValue(settings.subtitleStyle.outlineWidth, unit: "px")
+                            )
+                        }
                     }
 
-                    sectionSpacing
-                    styleToggleHeader(title: "表面", isOn: $settings.subtitleStyle.surfaceEnabled)
+                    SubtitleInspectorSection(
+                        title: "阴影",
+                        isExpanded: $shadowExpanded,
+                        isEnabled: $settings.subtitleStyle.shadowEnabled
+                    ) {
+                        if settings.subtitleStyle.shadowEnabled {
+                            SubtitleInspectorColorRow(
+                                title: "颜色",
+                                value: $settings.subtitleStyle.shadowColorHex
+                            )
 
-                    if settings.subtitleStyle.surfaceEnabled {
-                        colorRow(title: "颜色", text: $settings.subtitleStyle.surfaceColorHex)
+                            SubtitleInspectorSliderRow(
+                                title: "透明度",
+                                value: $settings.subtitleStyle.shadowOpacity,
+                                range: 0...1,
+                                step: 0.05,
+                                display: subtitleInspectorValue(settings.subtitleStyle.shadowOpacity * 100, unit: "%")
+                            )
 
-                        sliderRow(
-                            title: "不透明度",
-                            value: $settings.subtitleStyle.surfaceOpacity,
-                            range: 0...1,
-                            step: 0.05,
-                            display: "\(Int(settings.subtitleStyle.surfaceOpacity * 100))%"
-                        )
-
-                        sliderRow(
-                            title: "模糊",
-                            value: $settings.subtitleStyle.surfaceBlur,
-                            range: 0...12,
-                            step: 0.5,
-                            display: settings.subtitleStyle.surfaceBlur.formatted(.number.precision(.fractionLength(1)))
-                        )
+                            SubtitleInspectorSliderRow(
+                                title: "模糊",
+                                value: $settings.subtitleStyle.shadowBlur,
+                                range: 0...24,
+                                step: 0.5,
+                                display: subtitleInspectorValue(settings.subtitleStyle.shadowBlur, unit: "px")
+                            )
+                        }
                     }
-
-                    sectionSpacing
-                    styleToggleHeader(title: "外框", isOn: $settings.subtitleStyle.outlineEnabled)
-
-                    if settings.subtitleStyle.outlineEnabled {
-                        colorRow(title: "颜色", text: $settings.subtitleStyle.outlineColorHex)
-
-                        sliderRow(
-                            title: "不透明度",
-                            value: $settings.subtitleStyle.outlineOpacity,
-                            range: 0...1,
-                            step: 0.05,
-                            display: "\(Int(settings.subtitleStyle.outlineOpacity * 100))%"
-                        )
-
-                        sliderRow(
-                            title: "模糊",
-                            value: $settings.subtitleStyle.outlineBlur,
-                            range: 0...8,
-                            step: 0.5,
-                            display: settings.subtitleStyle.outlineBlur.formatted(.number.precision(.fractionLength(1)))
-                        )
-
-                        sliderRow(
-                            title: "宽度",
-                            value: $settings.subtitleStyle.outlineWidth,
-                            range: 0...8,
-                            step: 0.5,
-                            display: settings.subtitleStyle.outlineWidth.formatted(.number.precision(.fractionLength(1)))
-                        )
-                    }
-
-                    sectionSpacing
-                    colorRow(title: "文字颜色", text: $settings.subtitleStyle.fontColorHex)
                 }
             }
 
@@ -151,66 +211,6 @@ struct SubtitleStyleSettingsPane: View {
                     SubtitlePreviewCanvas(style: settings.subtitleStyle)
                 }
             }
-        }
-    }
-
-    private var sectionSpacing: some View {
-        Color.clear
-            .frame(height: 4)
-    }
-
-    private func sectionLabel(_ title: String) -> some View {
-        SettingsSubsectionHeader(title: title)
-    }
-
-    private func styleToggleHeader(title: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            SettingsSubsectionHeader(title: title)
-        }
-        .toggleStyle(.switch)
-    }
-
-    private func colorRow(title: String, text: Binding<String>) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 84, alignment: .leading)
-
-            TextField("#FFFFFF", text: text)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 12, design: .monospaced))
-                .textSelection(.enabled)
-
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(colorFromHex(text.wrappedValue))
-                .frame(width: 34, height: 22)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.12))
-                )
-        }
-    }
-
-    private func sliderRow(
-        title: String,
-        value: Binding<Double>,
-        range: ClosedRange<Double>,
-        step: Double,
-        display: String
-    ) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 84, alignment: .leading)
-
-            Slider(value: value, in: range, step: step)
-
-            Text(display)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 62, alignment: .trailing)
         }
     }
 }
