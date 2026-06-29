@@ -19,7 +19,7 @@ struct SettingsView: View {
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 34) {
+                VStack(alignment: .leading, spacing: 32) {
                     switch selection {
                     case .general:
                         GeneralSettingsPane(settings: settingsBinding)
@@ -35,8 +35,8 @@ struct SettingsView: View {
                         WatchSettingsPane(settings: settingsBinding)
                     }
                 }
-                .padding(.horizontal, 34)
-                .padding(.vertical, 30)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 28)
                 .frame(maxWidth: 940, alignment: .leading)
             }
             .background(Color(nsColor: .windowBackgroundColor))

@@ -117,7 +117,7 @@ struct TranscriptionSettingsPane: View {
 
     private var whisperSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Divider()
+            SettingsSubsectionHeader(title: "本地 Whisper")
 
             SettingsStatusRow(
                 title: "whisper-cli",
@@ -162,7 +162,7 @@ struct TranscriptionSettingsPane: View {
 
     private var cloudASRSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Divider()
+            SettingsSubsectionHeader(title: "云端 ASR")
 
             Picker("服务预设", selection: $settings.cloudASRPreset) {
                 ForEach(CloudASRPreset.allCases) { preset in

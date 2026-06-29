@@ -82,11 +82,10 @@ struct SettingsValidationResultBox: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
 
-                Divider()
-
                 Text("当前结果")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .padding(.top, 4)
                 Text(resultText)
                     .font(.system(size: 14))
                     .textSelection(.enabled)

@@ -16,7 +16,7 @@ struct SettingsGroup<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.system(size: 18, weight: .semibold))
             content
@@ -37,30 +37,39 @@ struct SettingsSectionCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 20) {
             content
         }
-        .padding(26)
+        .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(cardStroke, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(tone == .emphasis ? 0.08 : 0.04), radius: 18, x: 0, y: 6)
     }
 
     private var cardBackground: Color {
-        Color(nsColor: tone == .emphasis ? .controlBackgroundColor : .textBackgroundColor)
+        Color(nsColor: tone == .emphasis ? .textBackgroundColor : .controlBackgroundColor)
     }
 
     private var cardStroke: Color {
         switch tone {
         case .regular:
-            Color(nsColor: .separatorColor).opacity(0.28)
+            Color(nsColor: .separatorColor).opacity(0.18)
         case .emphasis:
-            Color(nsColor: .separatorColor).opacity(0.4)
+            Color(nsColor: .separatorColor).opacity(0.24)
         }
+    }
+}
+
+struct SettingsSubsectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.primary)
     }
 }
 
