@@ -33,5 +33,9 @@ struct RootView: View {
                     .padding(.top, 20)
             }
         }
+        .sheet(isPresented: $model.isShortcutGuidePresented) {
+            ShortcutGuideSheet()
+                .environmentObject(model)
+        }
     }
 }

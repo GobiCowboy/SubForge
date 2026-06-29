@@ -12,7 +12,7 @@
 | `Sources/Views/Home/` | 首页与导入入口 |
 | `Sources/Views/Editor/` | 字幕编辑工作台 |
 | `Sources/Views/Settings/` | 设置中心及其分组页面 |
-| `Sources/Views/Shared/` | 流水线进度、侧边栏、Toast 等共享视图 |
+| `Sources/Views/Shared/` | 流水线进度、侧边栏、Toast、快捷键说明等共享视图 |
 | `docs/` | 产品、基础、功能和项目记忆文档 |
 | `script/` | 本地构建运行入口 |
 | `dist/` | 构建产物暂存 |
@@ -46,6 +46,7 @@
 - `Utilities/` 只放纯工具函数与解析能力
 - `Views/Home/`、`Views/Editor/`、`Views/Settings/` 按页面域拆分，不互相堆叠
 - `Views/Shared/` 只放跨页面复用的视图，不把单页私有视图误放进去
+- 快捷键说明、Toast 这类会被编辑页和全局入口共同调用的视图，继续放在 `Views/Shared/`
 
 ## 6. 当前结构约束
 

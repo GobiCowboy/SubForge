@@ -194,6 +194,18 @@ struct WorkbenchView: View {
                         metricRow("字幕条数", value: "\(model.segments.count)")
                         metricRow("语言", value: model.summaryLanguage)
                     }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        ShortcutGuidePanel(compact: true)
+
+                        Button("打开完整快捷键说明") {
+                            model.presentShortcutGuide()
+                        }
+                        .font(.system(size: 12))
+                        .buttonStyle(.link)
+                    }
                 } else {
                     Text("导入文件后，这里会显示当前字幕的精确编辑信息。")
                         .font(.system(size: 13))

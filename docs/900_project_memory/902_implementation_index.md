@@ -14,3 +14,8 @@
 | I-008 | 模型纠正服务层 | 已存在 | `ProofreadingService` 已接入 OpenAI 兼容模型纠正链路 |
 | I-009 | Whisper 模型管理 | 已存在 | `WhisperModelStore`、`WhisperModelDownloader` 负责本地模型下载与检测 |
 | I-010 | 设置验证资源 | 已存在 | `SettingsTestAsset` + 设置页验证结果组件已接入内置测试音频 / 文本 |
+| I-011 | 编辑键盘监视链路 | 已存在 | `EditorKeyboardMonitor` + `AppModel` 统一处理 `Space` / `Tab` / `J K L` / `Esc` |
+| I-012 | 媒体预览与波形层 | 已存在 | `MediaPlaybackService`、`WaveformAnalysisService` 已接入真实播放与波形分析 |
+| I-013 | 快捷键说明组件 | 已存在 | `ShortcutGuideView` 同时服务右侧 Inspector 与全局说明弹层 |
+| I-014 | 统一运行脚本 | 已存在 | `script/build_and_run.sh` 已覆盖 debug / release / verify / logs / telemetry |
+| I-015 | 应用日志入口 | 已存在 | `AppLog` 已收口 editor / proofreading 等分类日志 |

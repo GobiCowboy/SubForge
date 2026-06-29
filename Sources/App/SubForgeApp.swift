@@ -39,7 +39,6 @@ struct SubForgeApp: App {
                 Button(model.isPlaying ? "暂停" : "播放") {
                     model.togglePlayback()
                 }
-                .keyboardShortcut(.space, modifiers: [])
                 .disabled(model.mode != .editor)
 
                 Button("后退 1 秒") {
@@ -53,6 +52,13 @@ struct SubForgeApp: App {
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [.command])
                 .disabled(model.mode != .editor)
+            }
+
+            CommandMenu("帮助") {
+                Button("快捷键说明") {
+                    model.presentShortcutGuide()
+                }
+                .keyboardShortcut("/", modifiers: [.command, .shift])
             }
         }
 

@@ -84,6 +84,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var capturedTimestamp = ""
     @Published var activeEditorSurface: EditorSurface = .table
     @Published var showInspector = true
+    @Published var isShortcutGuidePresented = false
     @Published var toast: ToastMessage?
 
     private var cancellables = Set<AnyCancellable>()
@@ -261,7 +262,7 @@ final class AppModel: ObservableObject {
                     do {
                         let corrected = try await proofreadingProvider.proofread(
                             segments: transcribedSegments,
-                            batchSize: 20,
+                            batchSize: 60,
                             prompt: self.settings.proofreadingPrompt,
                             strictCorrections: self.settings.proofreadingStrictCorrections
                         )
@@ -594,24 +595,61 @@ final class AppModel: ObservableObject {
             endEditingSubtitle()
         }
 
-        let rates: [Double] = [1.0, 1.5, 2.0]
-        let nextRate: Double
+        let rates: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+        let currentIndex = rates.firstIndex(where: { abs($0 - playbackRate) < 0.001 }) ?? 2
+        let targetRate = isPlaying
+            ? rates[(currentIndex + 1) % rates.count]
+            : rates[currentIndex]
 
-        if isPlaying {
-            let currentIndex = rates.firstIndex(where: { abs($0 - playbackRate) < 0.001 }) ?? 0
-            nextRate = rates[min(currentIndex + 1, rates.count - 1)]
-        } else {
-            nextRate = 1.0
+        playbackRate = targetRate
+        startPlayback()
+        showToast("正向播放 \(String(format: "%.2g", targetRate))x", level: .info)
+    }
+
+    func handleSpacePlaybackShortcut() {
+        guard mode == .editor else { return }
+
+        AppLog.editor.info(
+            "spaceShortcut playing=\(self.isPlaying, privacy: .public) editing=\(self.isEditingSubtitle, privacy: .public) selected=\(String(describing: self.selectedSegmentID), privacy: .public) currentTime=\(self.currentTime, privacy: .public)"
+        )
+
+        if isEditingSubtitle {
+            endEditingSubtitle()
+            startPlayback()
+            return
         }
 
-        playbackRate = nextRate
-        startPlayback()
-        showToast("正向播放 \(String(format: "%.2g", nextRate))x", level: .info)
+        if isPlaying {
+            stopPlayback()
+            if selectedSegmentID == nil {
+                selectedSegmentID = segments.first?.id
+            }
+            beginEditingSelectedSubtitle()
+            return
+        }
+
+        if selectedSegmentID == nil {
+            selectedSegmentID = segments.first?.id
+        }
+
+        if playbackDuration > 0 {
+            startPlayback()
+        } else {
+            beginEditingSelectedSubtitle()
+        }
     }
 
     private func startPlayback() {
         guard playbackDuration > 0 else { return }
         stopPlayback(captureTimestamp: false)
+
+        if currentTime >= max(playbackDuration - 0.05, 0), playbackDuration > 0.05 {
+            currentTime = 0
+            if playbackService.hasLoadedMedia {
+                playbackService.seek(to: 0)
+            }
+        }
+
         isPlaying = true
 
         if playbackService.hasLoadedMedia {
@@ -687,10 +725,17 @@ final class AppModel: ObservableObject {
 
         if isEditingSubtitle {
             switch event.keyCode {
+            case 49:
+                if modifiers.contains(.shift) {
+                    AppLog.editor.info("shiftSpacePassThrough editing=true")
+                    return false
+                }
+                handleSpacePlaybackShortcut()
+                return true
             case 48:
                 moveEditingFocus(reverse: modifiers.contains(.shift))
                 return true
-            case 36, 76, 53:
+            case 53:
                 endEditingSubtitle()
                 return true
             default:
@@ -710,12 +755,8 @@ final class AppModel: ObservableObject {
         case 37:
             handleForwardPlaybackShortcut()
             return true
-        case 36, 76:
-            guard !isPlaying else { return false }
-            beginEditingSelectedSubtitle()
-            return true
         case 49:
-            togglePlayback()
+            handleSpacePlaybackShortcut()
             return true
         case 126:
             selectPreviousSegment()
@@ -780,6 +821,10 @@ final class AppModel: ObservableObject {
         if self.toast == toast {
             self.toast = nil
         }
+    }
+
+    func presentShortcutGuide() {
+        isShortcutGuidePresented = true
     }
 
     func openImportPanel() {

@@ -39,4 +39,12 @@
 
 ## 6. 本轮约束
 
-这里只定义日志应覆盖什么，不定义具体 logger 代码接口。
+当前实现已经统一收口到 `Sources/Utilities/AppLog.swift`，分类与本文建议保持一致。
+
+建议调试命令：
+
+- 全量应用日志：`log stream --style compact --info --predicate 'process == "SubForge"'`
+- AI 校对日志：`log stream --style compact --info --predicate 'subsystem == "SubForge" AND category == "proofreading"'`
+- 编辑快捷键日志：`log stream --style compact --info --predicate 'subsystem == "SubForge" AND category == "editor"'`
+
+后续新增日志时，优先扩展现有分类，不重新散落到页面里各自定义。

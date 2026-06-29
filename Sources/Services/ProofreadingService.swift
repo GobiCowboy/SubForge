@@ -30,17 +30,65 @@ final class CloudLLMProvider: ProofreadingProvider {
             throw ProofreadingError.notConfigured
         }
 
+        let startedAt = Date()
         var allCorrected: [SubtitleSegment] = []
-        let batches = stride(from: 0, to: segments.count, by: max(1, batchSize)).map {
-            Array(segments[$0..<min($0 + max(1, batchSize), segments.count)])
-        }
+        let batches = makeBatches(
+            segments,
+            maxLineCount: max(1, batchSize),
+            maxCharacterCount: 2200
+        )
 
-        for batch in batches {
+        AppLog.proofreading.info(
+            "proofreadStart segments=\(segments.count, privacy: .public) batches=\(batches.count, privacy: .public) lineLimit=\(max(1, batchSize), privacy: .public)"
+        )
+
+        for (index, batch) in batches.enumerated() {
+            let batchStartedAt = Date()
             let corrected = try await proofreadBatch(batch, prompt: prompt, strictCorrections: strictCorrections)
             allCorrected.append(contentsOf: corrected)
+            AppLog.proofreading.info(
+                "proofreadBatchDone index=\(index + 1, privacy: .public)/\(batches.count, privacy: .public) lines=\(batch.count, privacy: .public) elapsed=\(Date().timeIntervalSince(batchStartedAt), privacy: .public)"
+            )
         }
 
+        AppLog.proofreading.info(
+            "proofreadDone segments=\(allCorrected.count, privacy: .public) elapsed=\(Date().timeIntervalSince(startedAt), privacy: .public)"
+        )
+
         return allCorrected
+    }
+
+    private func makeBatches(
+        _ segments: [SubtitleSegment],
+        maxLineCount: Int,
+        maxCharacterCount: Int
+    ) -> [[SubtitleSegment]] {
+        guard !segments.isEmpty else { return [] }
+
+        var batches: [[SubtitleSegment]] = []
+        var currentBatch: [SubtitleSegment] = []
+        var currentCharacterCount = 0
+
+        for segment in segments {
+            let estimatedCharacters = max(segment.text.count + 8, 1)
+            let exceedsLineLimit = currentBatch.count >= maxLineCount
+            let exceedsCharacterLimit = !currentBatch.isEmpty && currentCharacterCount + estimatedCharacters > maxCharacterCount
+
+            if exceedsLineLimit || exceedsCharacterLimit {
+                batches.append(currentBatch)
+                currentBatch = []
+                currentCharacterCount = 0
+            }
+
+            currentBatch.append(segment)
+            currentCharacterCount += estimatedCharacters
+        }
+
+        if !currentBatch.isEmpty {
+            batches.append(currentBatch)
+        }
+
+        return batches
     }
 
     private func proofreadBatch(
