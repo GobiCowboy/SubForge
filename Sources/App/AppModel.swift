@@ -260,11 +260,13 @@ final class AppModel: ObservableObject {
     private func applyWatchSettings(_ settings: AppSettings) {
         let path = settings.watchSettings.directoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard settings.watchSettings.autoStart, !path.isEmpty else {
+            AppLog.watcher.info("watch disabled autoStart=\(settings.watchSettings.autoStart, privacy: .public) pathEmpty=\(path.isEmpty, privacy: .public)")
             watchFolderService.stop()
             syncWatchState()
             return
         }
 
+        AppLog.watcher.info("watch apply settings path=\(path, privacy: .public)")
         watchFolderService.start(watching: URL(fileURLWithPath: path, isDirectory: true))
         syncWatchState()
     }
