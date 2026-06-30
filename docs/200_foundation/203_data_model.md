@@ -73,6 +73,20 @@
 - `exportSettings`
 - `watchSettings`
 
+默认初始化：
+
+- `interfaceLanguage`: 简体中文
+- `showMenuBarIcon`: 开启
+- `transcriptionEngine`: Apple 语音
+- `language`: 中文
+- `proofreadingEnabled`: 关闭
+- `subtitleStyle`: 横屏、内白外黑
+- `exportSettings.format`: SRT + FCPXML
+- `exportSettings.exportToFinalCutPro`: 关闭
+- `exportSettings.overwriteExisting`: 关闭
+- `exportSettings.saveLocation`: 与源文件同目录
+- `watchSettings.autoStart`: 关闭
+
 ### 2.5 ExportSettings
 
 表示导出阶段所需参数。

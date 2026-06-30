@@ -3,7 +3,7 @@
 dist/
 SubForge.app/
 config.json
-models/
+/models/
 .codex/
 BAK/
 *.xcuserstate
