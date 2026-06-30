@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WatchSettingsPane: View {
+    @EnvironmentObject private var model: AppModel
     @Binding var settings: AppSettings
 
     var body: some View {
@@ -27,6 +28,30 @@ struct WatchSettingsPane: View {
                     SettingsListRow(title: "人工复核") {
                         Toggle("", isOn: $settings.watchSettings.manualReviewBeforeExport)
                             .labelsHidden()
+                    }
+
+                    SettingsListRow(
+                        title: "监听状态",
+                        description: model.watchStatusMessage
+                    ) {
+                        if model.isWatchingDirectory {
+                            Button("停止监听") {
+                                model.stopWatchFolder()
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            Button("开始监听") {
+                                model.startWatchFolder()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(settings.watchSettings.directoryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+
+                    SettingsListRow(title: "已处理") {
+                        Text("\(model.watchedFileCount) 个文件")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

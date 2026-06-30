@@ -263,7 +263,7 @@ struct HomeView: View {
             return (.gray, false)
         }
 
-        if watch.autoStart {
+        if model.isWatchingDirectory {
             return (.green, true)
         }
 

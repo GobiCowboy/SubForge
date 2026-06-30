@@ -19,3 +19,4 @@
 | I-013 | 快捷键说明组件 | 已存在 | `ShortcutGuideView` 同时服务右侧 Inspector 与全局说明弹层，快捷键以 keycap 方式渲染 |
 | I-014 | 统一运行脚本 | 已存在 | `script/build_and_run.sh` 已覆盖 debug / release / verify / logs / telemetry |
 | I-015 | 应用日志入口 | 已存在 | `AppLog` 已收口 editor / proofreading 等分类日志 |
+| I-016 | FCP 目录监听服务 | 已存在 | `WatchFolderService` 负责轮询监听目录、稳定检测、FCP 元数据识别，并通过 `AppModel.importDocument(at:)` 接入现有处理链路 |

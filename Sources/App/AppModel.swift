@@ -86,12 +86,16 @@ final class AppModel: ObservableObject {
     @Published var showInspector = true
     @Published var isShortcutGuidePresented = false
     @Published var toast: ToastMessage?
+    @Published private(set) var isWatchingDirectory = false
+    @Published private(set) var watchStatusMessage = "未启动"
+    @Published private(set) var watchedFileCount = 0
 
     private var cancellables = Set<AnyCancellable>()
     private var playbackTimer: Timer?
     private var pipelineTask: Task<Void, Never>?
     private let playbackService = MediaPlaybackService()
     private let keyboardMonitor = EditorKeyboardMonitor()
+    private let watchFolderService = WatchFolderService()
     private var waveformTask: Task<Void, Never>?
     @Published private(set) var editorFocusContext: EditorFocusContext = .none
 
@@ -102,7 +106,10 @@ final class AppModel: ObservableObject {
 
         $settings
             .dropFirst()
-            .sink { SettingsStore.save($0) }
+            .sink { [weak self] settings in
+                SettingsStore.save(settings)
+                self?.applyWatchSettings(settings)
+            }
             .store(in: &cancellables)
 
         $recentProjects
@@ -132,12 +139,16 @@ final class AppModel: ObservableObject {
         keyboardMonitor.start { [weak self] event in
             self?.handleEditorKeyDown(event) ?? false
         }
+
+        bindWatchFolderService()
+        applyWatchSettings(initialSettings)
     }
 
     deinit {
         playbackTimer?.invalidate()
         pipelineTask?.cancel()
         waveformTask?.cancel()
+        watchFolderService.stop()
     }
 
     var selectedSegment: SubtitleSegment? {
@@ -217,6 +228,70 @@ final class AppModel: ObservableObject {
             prepareMediaPreview(for: url)
             startTranscription(for: url)
         }
+    }
+
+    func startWatchFolder() {
+        var updated = settings
+        updated.watchSettings.autoStart = true
+        settings = updated
+        applyWatchSettings(updated)
+    }
+
+    func stopWatchFolder() {
+        var updated = settings
+        updated.watchSettings.autoStart = false
+        settings = updated
+        watchFolderService.stop()
+        syncWatchState()
+    }
+
+    private func bindWatchFolderService() {
+        watchFolderService.onStateChange = { [weak self] in
+            self?.syncWatchState()
+        }
+
+        watchFolderService.onDetectedFCPAudio = { [weak self] url in
+            self?.handleDetectedFCPAudio(url) ?? false
+        }
+
+        syncWatchState()
+    }
+
+    private func applyWatchSettings(_ settings: AppSettings) {
+        let path = settings.watchSettings.directoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard settings.watchSettings.autoStart, !path.isEmpty else {
+            watchFolderService.stop()
+            syncWatchState()
+            return
+        }
+
+        watchFolderService.start(watching: URL(fileURLWithPath: path, isDirectory: true))
+        syncWatchState()
+    }
+
+    private func syncWatchState() {
+        isWatchingDirectory = watchFolderService.isWatching
+        watchStatusMessage = watchFolderService.statusMessage
+        watchedFileCount = watchFolderService.processedCount
+    }
+
+    private func handleDetectedFCPAudio(_ url: URL) -> Bool {
+        guard pipelineTask == nil else {
+            AppLog.watcher.info("watch detected \(url.lastPathComponent, privacy: .public), but pipeline is busy")
+            return false
+        }
+
+        AppLog.watcher.info("watch accepted FCP audio \(url.path, privacy: .public)")
+        activateAppForWatchedFile()
+        showToast("监听到 FCP 音频：\(url.lastPathComponent)", level: .info)
+        importDocument(at: url)
+        return true
+    }
+
+    private func activateAppForWatchedFile() {
+        NSApp.unhide(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
     }
 
     func openRecentProject(_ project: RecentProject) {
