@@ -1,10 +1,18 @@
+import AppKit
 import SwiftUI
 
 @main
 struct SubForgeApp: App {
+    @NSApplicationDelegateAdaptor(SubForgeAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
 
+    @SceneBuilder
     var body: some Scene {
+        mainWindow
+        settingsWindow
+    }
+
+    private var mainWindow: some Scene {
         WindowGroup("SubForge") {
             RootView()
                 .environmentObject(model)
@@ -61,7 +69,9 @@ struct SubForgeApp: App {
                 .keyboardShortcut("/", modifiers: [.command, .shift])
             }
         }
+    }
 
+    private var settingsWindow: some Scene {
         Settings {
             SettingsView()
                 .environmentObject(model)

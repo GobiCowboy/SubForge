@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ProjectSidebar: View {
@@ -35,10 +36,17 @@ struct ProjectSidebar: View {
     }
 
     private var sidebarHeader: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 10) {
+            Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                .resizable()
+                .frame(width: 30, height: 30)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+
             Text("SubForge")
                 .font(.system(size: 28, weight: .bold))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 18)
         .padding(.top, 24)
         .padding(.bottom, 12)

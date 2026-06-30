@@ -96,6 +96,7 @@ final class AppModel: ObservableObject {
     private let playbackService = MediaPlaybackService()
     private let keyboardMonitor = EditorKeyboardMonitor()
     private let watchFolderService = WatchFolderService()
+    private let menuBarController = MenuBarController()
     private var waveformTask: Task<Void, Never>?
     @Published private(set) var editorFocusContext: EditorFocusContext = .none
 
@@ -103,11 +104,17 @@ final class AppModel: ObservableObject {
         let initialSettings = SettingsStore.load()
         settings = initialSettings
         pipelineStages = Self.makePipelineStages(proofreadingEnabled: initialSettings.proofreadingEnabled)
+        menuBarController.bind(model: self)
+        SubForgeAppDelegate.applyActivationPolicy(for: initialSettings)
+        menuBarController.setVisible(initialSettings.showMenuBarIcon)
 
         $settings
             .dropFirst()
             .sink { [weak self] settings in
                 SettingsStore.save(settings)
+                SubForgeAppDelegate.applyActivationPolicy(for: settings)
+                self?.menuBarController.setVisible(settings.showMenuBarIcon)
+                self?.menuBarController.refreshMenu()
                 self?.applyWatchSettings(settings)
             }
             .store(in: &cancellables)
@@ -183,6 +190,39 @@ final class AppModel: ObservableObject {
 
     func requestImportFromMenu() {
         openImportPanel()
+    }
+
+    func activateMainWindow() {
+        AppLog.lifecycle.info("activate main window requested visibleWindows=\(NSApp.windows.filter { $0.isVisible }.count, privacy: .public) allWindows=\(NSApp.windows.count, privacy: .public)")
+
+        NSApp.unhide(nil)
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        NSApp.activate(ignoringOtherApps: true)
+
+        if MainWindowController.shared.showWindow() {
+            NSApp.arrangeInFront(nil)
+            return
+        }
+
+        guard let window = preferredMainWindow() else {
+            AppLog.lifecycle.warning("activate main window skipped, no app window available")
+            return
+        }
+
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        NSApp.arrangeInFront(nil)
+    }
+
+    private func preferredMainWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            window.isVisible && window.canBecomeMain
+        } ?? NSApp.windows.first { window in
+            window.canBecomeMain
+        } ?? NSApp.windows.first
     }
 
     func showHome() {
@@ -275,6 +315,7 @@ final class AppModel: ObservableObject {
         isWatchingDirectory = watchFolderService.isWatching
         watchStatusMessage = watchFolderService.statusMessage
         watchedFileCount = watchFolderService.processedCount
+        menuBarController.refreshMenu()
     }
 
     private func handleDetectedFCPAudio(_ url: URL) -> Bool {
@@ -284,16 +325,13 @@ final class AppModel: ObservableObject {
         }
 
         AppLog.watcher.info("watch accepted FCP audio \(url.path, privacy: .public)")
-        activateAppForWatchedFile()
+        activateMainWindow()
         showToast("监听到 FCP 音频：\(url.lastPathComponent)", level: .info)
         importDocument(at: url)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.activateMainWindow()
+        }
         return true
-    }
-
-    private func activateAppForWatchedFile() {
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first?.makeKeyAndOrderFront(nil)
     }
 
     func openRecentProject(_ project: RecentProject) {

@@ -37,5 +37,6 @@ struct RootView: View {
             ShortcutGuideSheet()
                 .environmentObject(model)
         }
+        .background(MainWindowCloseBehavior().frame(width: 0, height: 0))
     }
 }
