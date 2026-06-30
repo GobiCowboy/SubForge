@@ -65,7 +65,7 @@ struct SubForgeApp: App {
         Settings {
             SettingsView()
                 .environmentObject(model)
-                .frame(width: 720, height: 760)
+                .frame(width: 900, height: 760)
         }
     }
 }

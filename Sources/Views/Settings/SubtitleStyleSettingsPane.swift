@@ -3,214 +3,325 @@ import SwiftUI
 struct SubtitleStyleSettingsPane: View {
     @Binding var settings: AppSettings
 
-    @State private var textExpanded = true
-    @State private var layoutExpanded = true
-    @State private var positionExpanded = true
-    @State private var fillExpanded = true
-    @State private var strokeExpanded = true
-    @State private var shadowExpanded = true
+    private var fontSizeBinding: Binding<Double> {
+        Binding(
+            get: { settings.subtitleStyle.fontSize },
+            set: { settings.subtitleStyle.fontSize = min(max($0.rounded(), 24), 96) }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "字幕样式") {
-                SettingsSectionCard {
-                    SubtitleInspectorSection(title: "文本", isExpanded: $textExpanded) {
-                        HStack(alignment: .top, spacing: 20) {
-                            SubtitleInspectorPickerRow(title: "字体") {
-                                Picker("字体", selection: $settings.subtitleStyle.fontFamily) {
-                                    Text("苹方-简").tag("PingFang SC")
-                                    Text("黑体-简").tag("Heiti SC")
-                                    Text("Arial").tag("Arial")
-                                }
-                                .labelsHidden()
-                                .frame(width: 250)
-                            }
-
-                            SubtitleInspectorPickerRow(title: "字重") {
-                                Picker("字重", selection: $settings.subtitleStyle.fontWeight) {
-                                    ForEach(SubtitleFontWeight.allCases) { weight in
-                                        Text(weight.rawValue).tag(weight)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 180)
+            SettingsGroup(title: "基本样式") {
+                SettingsListSection {
+                    SettingsListRow(title: "画幅") {
+                        HStack(spacing: 0) {
+                            ForEach(SubtitleCanvasOrientation.allCases) { orientation in
+                                orientationButton(orientation)
                             }
                         }
-
-                        SubtitleInspectorSliderRow(
-                            title: "字号",
-                            value: $settings.subtitleStyle.fontSize,
-                            range: 20...84,
-                            step: 1,
-                            display: subtitleInspectorValue(settings.subtitleStyle.fontSize, unit: "pt")
-                        )
-
-                        SubtitleInspectorColorRow(
-                            title: "文字颜色",
-                            value: $settings.subtitleStyle.fontColorHex
-                        )
+                        .padding(3)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .frame(width: SettingsListMetrics.pickerWidth, alignment: .trailing)
                     }
 
-                    SubtitleInspectorSection(title: "布局", isExpanded: $layoutExpanded) {
-                        HStack(alignment: .top, spacing: 20) {
-                            SubtitleInspectorPickerRow(title: "水平对齐") {
-                                Picker("水平对齐", selection: $settings.subtitleStyle.horizontalAlignment) {
-                                    ForEach(SubtitleHorizontalAlignment.allCases) { alignment in
-                                        Text(alignment.rawValue.replacingOccurrences(of: "对齐", with: "")).tag(alignment)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 220)
+                    SettingsListRow(title: "字体") {
+                        SettingsTrailingControl {
+                            Picker("字体", selection: $settings.subtitleStyle.fontFamily) {
+                                Text("苹方-简").tag("PingFang SC")
+                                Text("黑体-简").tag("Heiti SC")
+                                Text("Arial").tag("Arial")
                             }
+                            .labelsHidden()
+                        }
+                    }
 
-                            SubtitleInspectorPickerRow(title: "垂直对齐") {
-                                Picker("垂直对齐", selection: $settings.subtitleStyle.position) {
-                                    ForEach(SubtitlePosition.allCases) { position in
-                                        Text(position.rawValue).tag(position)
-                                    }
-                                }
+                    SettingsListRow(title: "字号") {
+                        HStack(spacing: 12) {
+                            Text("\(Int(settings.subtitleStyle.fontSize.rounded())) pt")
+                                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                .frame(width: 64, alignment: .trailing)
+
+                            Stepper("", value: fontSizeBinding, in: 24...96, step: 1)
                                 .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 220)
+                        }
+                        .frame(width: SettingsListMetrics.pickerWidth, alignment: .trailing)
+                    }
+
+                    SettingsListRow(title: "预设", alignment: .center) {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.fixed(92), spacing: 8), count: 3),
+                            alignment: .trailing,
+                            spacing: 8
+                        ) {
+                            ForEach(SubtitleStylePreset.allCases) { preset in
+                                SubtitlePresetButton(
+                                    preset: preset,
+                                    isSelected: settings.subtitleStyle.preset == preset
+                                ) {
+                                    applyPreset(preset)
+                                }
                             }
                         }
-
-                        SubtitleInspectorSliderRow(
-                            title: "行高",
-                            value: $settings.subtitleStyle.lineSpacing,
-                            range: 0...24,
-                            step: 1,
-                            display: subtitleInspectorValue(settings.subtitleStyle.lineSpacing, unit: "pt")
-                        )
-
-                        SubtitleInspectorSliderRow(
-                            title: "字距",
-                            value: $settings.subtitleStyle.characterSpacing,
-                            range: -2...12,
-                            step: 0.5,
-                            display: subtitleInspectorValue(settings.subtitleStyle.characterSpacing, unit: "pt")
-                        )
+                        .frame(width: SettingsListMetrics.controlWidth, alignment: .trailing)
                     }
-
-                    SubtitleInspectorSection(title: "位置", isExpanded: $positionExpanded) {
-                        HStack(alignment: .top, spacing: 20) {
-                            SubtitleInspectorNumberFieldRow(
-                                title: "X",
-                                value: $settings.subtitleStyle.offsetX,
-                                unit: "px"
-                            )
-
-                            SubtitleInspectorNumberFieldRow(
-                                title: "Y",
-                                value: $settings.subtitleStyle.offsetY,
-                                unit: "px"
-                            )
-                        }
-                    }
-
-                    SubtitleInspectorSection(
-                        title: "填充",
-                        isExpanded: $fillExpanded,
-                        isEnabled: $settings.subtitleStyle.surfaceEnabled
-                    ) {
-                        if settings.subtitleStyle.surfaceEnabled {
-                            SubtitleInspectorColorRow(
-                                title: "颜色",
-                                value: $settings.subtitleStyle.surfaceColorHex
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "透明度",
-                                value: $settings.subtitleStyle.surfaceOpacity,
-                                range: 0...1,
-                                step: 0.05,
-                                display: subtitleInspectorValue(settings.subtitleStyle.surfaceOpacity * 100, unit: "%")
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "模糊",
-                                value: $settings.subtitleStyle.surfaceBlur,
-                                range: 0...12,
-                                step: 0.5,
-                                display: subtitleInspectorValue(settings.subtitleStyle.surfaceBlur, unit: "px")
-                            )
-                        }
-                    }
-
-                    SubtitleInspectorSection(
-                        title: "描边",
-                        isExpanded: $strokeExpanded,
-                        isEnabled: $settings.subtitleStyle.outlineEnabled
-                    ) {
-                        if settings.subtitleStyle.outlineEnabled {
-                            SubtitleInspectorColorRow(
-                                title: "颜色",
-                                value: $settings.subtitleStyle.outlineColorHex
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "透明度",
-                                value: $settings.subtitleStyle.outlineOpacity,
-                                range: 0...1,
-                                step: 0.05,
-                                display: subtitleInspectorValue(settings.subtitleStyle.outlineOpacity * 100, unit: "%")
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "模糊",
-                                value: $settings.subtitleStyle.outlineBlur,
-                                range: 0...8,
-                                step: 0.5,
-                                display: subtitleInspectorValue(settings.subtitleStyle.outlineBlur, unit: "px")
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "宽度",
-                                value: $settings.subtitleStyle.outlineWidth,
-                                range: 0...8,
-                                step: 0.5,
-                                display: subtitleInspectorValue(settings.subtitleStyle.outlineWidth, unit: "px")
-                            )
-                        }
-                    }
-
-                    SubtitleInspectorSection(
-                        title: "阴影",
-                        isExpanded: $shadowExpanded,
-                        isEnabled: $settings.subtitleStyle.shadowEnabled
-                    ) {
-                        if settings.subtitleStyle.shadowEnabled {
-                            SubtitleInspectorColorRow(
-                                title: "颜色",
-                                value: $settings.subtitleStyle.shadowColorHex
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "透明度",
-                                value: $settings.subtitleStyle.shadowOpacity,
-                                range: 0...1,
-                                step: 0.05,
-                                display: subtitleInspectorValue(settings.subtitleStyle.shadowOpacity * 100, unit: "%")
-                            )
-
-                            SubtitleInspectorSliderRow(
-                                title: "模糊",
-                                value: $settings.subtitleStyle.shadowBlur,
-                                range: 0...24,
-                                step: 0.5,
-                                display: subtitleInspectorValue(settings.subtitleStyle.shadowBlur, unit: "px")
-                            )
-                        }
-                    }
-                }
-            }
-
-            SettingsGroup(title: "字幕预览") {
-                SettingsSectionCard(tone: .emphasis) {
-                    SubtitlePreviewCanvas(style: settings.subtitleStyle)
                 }
             }
         }
+        .onAppear(perform: syncPresetFromCurrentStyle)
+    }
+
+    private func orientationButton(_ orientation: SubtitleCanvasOrientation) -> some View {
+        let isSelected = settings.subtitleStyle.canvasOrientation == orientation
+
+        return Button {
+            applyOrientation(orientation)
+        } label: {
+            Text(orientation.rawValue)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected ? Color.accentColor : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func applyOrientation(_ orientation: SubtitleCanvasOrientation) {
+        settings.subtitleStyle.canvasOrientation = orientation
+        settings.subtitleStyle.position = .bottom
+        settings.subtitleStyle.offsetX = 0
+        settings.subtitleStyle.offsetY = orientation == .landscape ? -28 : -84
+        settings.subtitleStyle.fontSize = orientation == .landscape ? 56 : 72
+    }
+
+    private func applyPreset(_ preset: SubtitleStylePreset) {
+        settings.subtitleStyle.preset = preset
+        settings.subtitleStyle.fontWeight = .semibold
+        settings.subtitleStyle.horizontalAlignment = .center
+        settings.subtitleStyle.position = .bottom
+        settings.subtitleStyle.offsetX = 0
+        settings.subtitleStyle.offsetY = settings.subtitleStyle.canvasOrientation == .landscape ? -28 : -84
+        settings.subtitleStyle.lineSpacing = 0
+        settings.subtitleStyle.characterSpacing = 0
+        settings.subtitleStyle.shadowEnabled = false
+        settings.subtitleStyle.shadowOpacity = 0.35
+        settings.subtitleStyle.shadowBlur = 10
+        settings.subtitleStyle.shadowOffsetY = 4
+
+        switch preset {
+        case .whiteTextBlackOutline:
+            settings.subtitleStyle.fontColorHex = "#FFFFFF"
+            settings.subtitleStyle.outlineEnabled = true
+            settings.subtitleStyle.outlineColorHex = "#111111"
+            settings.subtitleStyle.outlineOpacity = 1
+            settings.subtitleStyle.outlineBlur = 0
+            settings.subtitleStyle.outlineWidth = 2
+            settings.subtitleStyle.surfaceEnabled = false
+            settings.subtitleStyle.surfaceColorHex = "#111111"
+            settings.subtitleStyle.surfaceOpacity = 0.72
+            settings.subtitleStyle.surfaceBlur = 0
+        case .blackTextWhiteOutline:
+            settings.subtitleStyle.fontColorHex = "#111111"
+            settings.subtitleStyle.outlineEnabled = true
+            settings.subtitleStyle.outlineColorHex = "#FFFFFF"
+            settings.subtitleStyle.outlineOpacity = 1
+            settings.subtitleStyle.outlineBlur = 0
+            settings.subtitleStyle.outlineWidth = 2
+            settings.subtitleStyle.surfaceEnabled = false
+            settings.subtitleStyle.surfaceColorHex = "#FFFFFF"
+            settings.subtitleStyle.surfaceOpacity = 0.72
+            settings.subtitleStyle.surfaceBlur = 0
+        case .whiteTextDarkFill:
+            settings.subtitleStyle.fontColorHex = "#FFFFFF"
+            settings.subtitleStyle.outlineEnabled = false
+            settings.subtitleStyle.outlineColorHex = "#111111"
+            settings.subtitleStyle.outlineOpacity = 1
+            settings.subtitleStyle.outlineBlur = 0
+            settings.subtitleStyle.outlineWidth = 0
+            settings.subtitleStyle.surfaceEnabled = true
+            settings.subtitleStyle.surfaceColorHex = "#111111"
+            settings.subtitleStyle.surfaceOpacity = 0.72
+            settings.subtitleStyle.surfaceBlur = 0
+        case .yellowTextBlackOutline:
+            settings.subtitleStyle.fontColorHex = "#FFD84D"
+            settings.subtitleStyle.outlineEnabled = true
+            settings.subtitleStyle.outlineColorHex = "#111111"
+            settings.subtitleStyle.outlineOpacity = 1
+            settings.subtitleStyle.outlineBlur = 0
+            settings.subtitleStyle.outlineWidth = 2
+            settings.subtitleStyle.surfaceEnabled = false
+            settings.subtitleStyle.surfaceColorHex = "#111111"
+            settings.subtitleStyle.surfaceOpacity = 0.72
+            settings.subtitleStyle.surfaceBlur = 0
+        case .whiteTextBlueFill:
+            settings.subtitleStyle.fontColorHex = "#FFFFFF"
+            settings.subtitleStyle.outlineEnabled = false
+            settings.subtitleStyle.outlineColorHex = "#111111"
+            settings.subtitleStyle.outlineOpacity = 1
+            settings.subtitleStyle.outlineBlur = 0
+            settings.subtitleStyle.outlineWidth = 0
+            settings.subtitleStyle.surfaceEnabled = true
+            settings.subtitleStyle.surfaceColorHex = "#1358D6"
+            settings.subtitleStyle.surfaceOpacity = 0.82
+            settings.subtitleStyle.surfaceBlur = 0
+        }
+    }
+
+    private func syncPresetFromCurrentStyle() {
+        if settings.subtitleStyle.surfaceEnabled {
+            if settings.subtitleStyle.surfaceColorHex.uppercased() == "#1358D6" {
+                settings.subtitleStyle.preset = .whiteTextBlueFill
+            } else {
+                settings.subtitleStyle.preset = .whiteTextDarkFill
+            }
+            return
+        }
+
+        if settings.subtitleStyle.fontColorHex.uppercased() == "#FFD84D",
+           settings.subtitleStyle.outlineEnabled,
+           settings.subtitleStyle.outlineColorHex.uppercased() == "#111111" {
+            settings.subtitleStyle.preset = .yellowTextBlackOutline
+            return
+        }
+
+        if settings.subtitleStyle.fontColorHex.uppercased() == "#111111",
+           settings.subtitleStyle.outlineEnabled,
+           settings.subtitleStyle.outlineColorHex.uppercased() == "#FFFFFF" {
+            settings.subtitleStyle.preset = .blackTextWhiteOutline
+            return
+        }
+
+        settings.subtitleStyle.preset = .whiteTextBlackOutline
+    }
+}
+
+private struct SubtitlePresetButton: View {
+    private struct TextOffset: Identifiable {
+        let id: Int
+        let size: CGSize
+    }
+
+    let preset: SubtitleStylePreset
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                presetSample
+
+                Text(preset.rawValue)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .frame(width: 92, height: 74)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color(nsColor: .windowBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(0.20), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var presetSample: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+
+            if presetUsesFill {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(fillColor)
+                    .frame(width: 44, height: 30)
+            }
+
+            outlinedText
+        }
+        .frame(width: 54, height: 34)
+    }
+
+    private var outlinedText: some View {
+        ZStack {
+            if !presetUsesFill {
+                ForEach(outlineOffsets) { offset in
+                    Text("Aa")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(strokeColor)
+                        .offset(offset.size)
+                }
+            }
+
+            Text("Aa")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(textColor)
+        }
+    }
+
+    private var outlineOffsets: [TextOffset] {
+        [
+            CGSize(width: -1.2, height: 0),
+            CGSize(width: 1.2, height: 0),
+            CGSize(width: 0, height: -1.2),
+            CGSize(width: 0, height: 1.2),
+            CGSize(width: -1.2, height: -1.2),
+            CGSize(width: 1.2, height: -1.2),
+            CGSize(width: -1.2, height: 1.2),
+            CGSize(width: 1.2, height: 1.2)
+        ].enumerated().map { TextOffset(id: $0.offset, size: $0.element) }
+    }
+
+    private var textColor: Color {
+        switch preset {
+        case .whiteTextBlackOutline, .whiteTextDarkFill, .whiteTextBlueFill:
+            return .white
+        case .blackTextWhiteOutline:
+            return Color(hexLiteral: "#111111")
+        case .yellowTextBlackOutline:
+            return Color(hexLiteral: "#FFD84D")
+        }
+    }
+
+    private var strokeColor: Color {
+        switch preset {
+        case .whiteTextBlackOutline, .yellowTextBlackOutline:
+            return Color(hexLiteral: "#111111")
+        case .blackTextWhiteOutline:
+            return .white
+        case .whiteTextDarkFill, .whiteTextBlueFill:
+            return .clear
+        }
+    }
+
+    private var fillColor: Color {
+        switch preset {
+        case .whiteTextDarkFill:
+            return Color(hexLiteral: "#111111").opacity(0.82)
+        case .whiteTextBlueFill:
+            return Color(hexLiteral: "#1358D6").opacity(0.82)
+        default:
+            return .clear
+        }
+    }
+
+    private var presetUsesFill: Bool {
+        switch preset {
+        case .whiteTextDarkFill, .whiteTextBlueFill:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+private extension Color {
+    init(hexLiteral: String) {
+        self = colorFromHex(hexLiteral)
     }
 }

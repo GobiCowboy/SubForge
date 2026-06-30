@@ -15,20 +15,8 @@ struct TranscriptionSettingsPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
             SettingsGroup(title: "转写配置") {
-                SettingsSectionCard {
-                    Picker("转写引擎", selection: $settings.transcriptionEngine) {
-                        ForEach(TranscriptionEngine.allCases) { engine in
-                            Text(engine.rawValue).tag(engine)
-                        }
-                    }
-
-                    Picker("语言", selection: $settings.language) {
-                        Text("中文").tag("zh-CN")
-                        Text("中文（繁体）").tag("zh-TW")
-                        Text("中英混合").tag("zh-CN,en-US")
-                        Text("English").tag("en-US")
-                        Text("日本語").tag("ja-JP")
-                    }
+                SettingsListSection {
+                    transcriptionHeaderControls
 
                     switch settings.transcriptionEngine {
                     case .whisperLocal:
@@ -36,25 +24,20 @@ struct TranscriptionSettingsPane: View {
                     case .cloudASR:
                         cloudASRSection
                     case .appleSpeech:
-                        SettingsStatusRow(
+                        SettingsListRow(
                             title: "Apple 语音",
-                            value: "调用系统语音识别能力，首次验证会请求权限",
-                            tint: .secondary
-                        )
+                            description: "调用系统语音识别能力，首次验证会请求权限。"
+                        ) {
+                            Text("已启用")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
 
             SettingsGroup(title: "转写验证") {
                 SettingsSectionCard(tone: .emphasis) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "waveform.badge.plus")
-                            .foregroundStyle(Color.accentColor)
-                        Text("使用内置测试音频验证当前转写链路。")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-
                     SettingsStatusRow(
                         title: "当前引擎",
                         value: settings.transcriptionEngine.rawValue,
@@ -99,6 +82,34 @@ struct TranscriptionSettingsPane: View {
         }
     }
 
+    private var transcriptionHeaderControls: some View {
+        HStack(spacing: 12) {
+            SettingsCompactPicker(title: "转写引擎", systemImage: "waveform") {
+                Picker("转写引擎", selection: $settings.transcriptionEngine) {
+                    ForEach(TranscriptionEngine.allCases) { engine in
+                        Text(engine.rawValue).tag(engine)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 168)
+            }
+
+            SettingsCompactPicker(title: "语言", systemImage: "globe") {
+                Picker("语言", selection: $settings.language) {
+                    Text("中文").tag("zh-CN")
+                    Text("中文（繁体）").tag("zh-TW")
+                    Text("中英混合").tag("zh-CN,en-US")
+                    Text("English").tag("en-US")
+                    Text("日本語").tag("ja-JP")
+                }
+                .labelsHidden()
+                .frame(width: 168)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var validationBlocked: Bool {
         switch settings.transcriptionEngine {
         case .whisperLocal:
@@ -116,67 +127,116 @@ struct TranscriptionSettingsPane: View {
     }
 
     private var whisperSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SettingsSubsectionHeader(title: "本地 Whisper")
+        SettingsInsetPanel {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("本地 Whisper")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("离线转写，模型越大质量越好。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
 
-            SettingsStatusRow(
-                title: "whisper-cli",
-                value: WhisperRuntime.isCLIAvailable ? "已检测到" : "未检测到",
-                tint: WhisperRuntime.isCLIAvailable ? .green : .red
-            )
+                Spacer()
 
-            ForEach(WhisperModel.allCases) { candidate in
-                HStack(spacing: 12) {
-                    Image(systemName: settings.whisperModel == candidate ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(settings.whisperModel == candidate ? Color.accentColor : .secondary)
-                        .onTapGesture {
-                            settings.whisperModel = candidate
-                        }
+                SettingsPill(
+                    text: WhisperRuntime.isCLIAvailable ? "已检测到" : "未检测到",
+                    tint: WhisperRuntime.isCLIAvailable ? .green : .red
+                )
+            }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(candidate.displayName)
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(candidate.detail)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if WhisperModelStore.isAvailable(candidate) {
-                        SettingsPill(text: "已下载", tint: .green)
-                    } else if downloadingModel == candidate {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Button("下载 \(candidate.sizeMB)MB") {
-                            downloadModel(candidate)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
+            VStack(spacing: 8) {
+                ForEach(WhisperModel.allCases) { candidate in
+                    whisperModelRow(candidate)
                 }
             }
         }
     }
 
-    private var cloudASRSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SettingsSubsectionHeader(title: "云端 ASR")
+    private func whisperModelRow(_ candidate: WhisperModel) -> some View {
+        let isSelected = settings.whisperModel == candidate
 
-            Picker("服务预设", selection: $settings.cloudASRPreset) {
-                ForEach(CloudASRPreset.allCases) { preset in
-                    Text(preset.rawValue).tag(preset)
+        return HStack(spacing: 12) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(candidate.displayName)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(candidate.detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if WhisperModelStore.isAvailable(candidate) {
+                SettingsPill(text: "已下载", tint: .green)
+            } else if downloadingModel == candidate {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("下载 \(candidate.sizeMB)MB") {
+                    downloadModel(candidate)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture {
+            settings.whisperModel = candidate
+        }
+    }
+
+    private var cloudASRSection: some View {
+        SettingsInsetPanel {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("云端 ASR")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("需要服务地址和 API Key，适合正式批量转写。")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsListRow(title: "服务预设") {
+                SettingsTrailingControl {
+                    Picker("服务预设", selection: $settings.cloudASRPreset) {
+                        ForEach(CloudASRPreset.allCases) { preset in
+                            Text(preset.rawValue).tag(preset)
+                        }
+                    }
+                    .labelsHidden()
+                    .onChange(of: settings.cloudASRPreset) { _, preset in
+                        settings.cloudASRURL = preset.defaultURL
+                        settings.cloudASRModel = preset.defaultModel
+                    }
                 }
             }
-            .onChange(of: settings.cloudASRPreset) { _, preset in
-                settings.cloudASRURL = preset.defaultURL
-                settings.cloudASRModel = preset.defaultModel
+
+            SettingsListRow(title: "Base URL") {
+                TextField("Base URL", text: $settings.cloudASRURL)
+                    .textFieldStyle(.roundedBorder)
+                    .help(settings.cloudASRURL)
             }
 
-            TextField("Base URL", text: $settings.cloudASRURL)
-            SecureField("API Key", text: $settings.cloudASRKey)
-            TextField("模型名", text: $settings.cloudASRModel)
+            SettingsListRow(title: "API Key") {
+                SecureField("API Key", text: $settings.cloudASRKey)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            SettingsListRow(title: "模型") {
+                TextField("模型名", text: $settings.cloudASRModel)
+                    .textFieldStyle(.roundedBorder)
+                    .help(settings.cloudASRModel)
+            }
         }
     }
 

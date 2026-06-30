@@ -14,7 +14,7 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: $selection)
-                .frame(width: 232)
+                .frame(width: 216)
 
             Divider()
 
@@ -37,8 +37,9 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 28)
-                .frame(maxWidth: 940, alignment: .leading)
+                .frame(width: 632, alignment: .leading)
             }
+            .frame(width: 683, alignment: .leading)
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .background(Color(nsColor: .windowBackgroundColor))

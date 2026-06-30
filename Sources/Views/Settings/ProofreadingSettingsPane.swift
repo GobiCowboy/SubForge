@@ -11,39 +11,55 @@ struct ProofreadingSettingsPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
             SettingsGroup(title: "校对配置") {
-                SettingsSectionCard {
-                    Toggle("启用模型纠正", isOn: $settings.proofreadingEnabled)
+                SettingsListSection {
+                    SettingsListRow(title: "启用模型纠正") {
+                        Toggle("", isOn: $settings.proofreadingEnabled)
+                            .labelsHidden()
+                    }
 
                     if settings.proofreadingEnabled {
-                        Picker("服务预设", selection: $settings.cloudLLMPreset) {
-                            ForEach(CloudLLMPreset.allCases) { preset in
-                                Text(preset.rawValue).tag(preset)
+                        SettingsListRow(title: "服务预设") {
+                            SettingsTrailingControl {
+                                Picker("服务预设", selection: $settings.cloudLLMPreset) {
+                                    ForEach(CloudLLMPreset.allCases) { preset in
+                                        Text(preset.rawValue).tag(preset)
+                                    }
+                                }
+                                .labelsHidden()
+                                .onChange(of: settings.cloudLLMPreset) { _, preset in
+                                    settings.cloudLLMURL = preset.defaultURL
+                                    settings.cloudLLMModel = preset.defaultModel
+                                    settings.proofreadingEngine = .cloudLLM
+                                }
                             }
                         }
-                        .onChange(of: settings.cloudLLMPreset) { _, preset in
-                            settings.cloudLLMURL = preset.defaultURL
-                            settings.cloudLLMModel = preset.defaultModel
-                            settings.proofreadingEngine = .cloudLLM
+
+                        SettingsListRow(title: "Base URL") {
+                            TextField("Base URL", text: $settings.cloudLLMURL)
+                                .textFieldStyle(.roundedBorder)
+                                .help(settings.cloudLLMURL)
                         }
 
-                        TextField("Base URL", text: $settings.cloudLLMURL)
-                        SecureField("API Key", text: $settings.cloudLLMKey)
-                        TextField("模型名", text: $settings.cloudLLMModel)
-                        Toggle("只做严格纠错，不主动润色", isOn: $settings.proofreadingStrictCorrections)
+                        SettingsListRow(title: "API Key") {
+                            SecureField("API Key", text: $settings.cloudLLMKey)
+                                .textFieldStyle(.roundedBorder)
+                        }
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("提示词")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                        SettingsListRow(title: "模型") {
+                            TextField("模型名", text: $settings.cloudLLMModel)
+                                .textFieldStyle(.roundedBorder)
+                                .help(settings.cloudLLMModel)
+                        }
 
+                        SettingsListRow(title: "提示词", alignment: .top) {
                             TextEditor(text: $settings.proofreadingPrompt)
                                 .font(.system(size: 14))
-                                .frame(height: 72)
-                                .padding(12)
-                                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .frame(height: 88)
+                                .padding(10)
+                                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .strokeBorder(Color.black.opacity(0.08))
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
                                 )
                         }
                     }

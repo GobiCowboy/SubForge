@@ -730,6 +730,10 @@ final class AppModel: ObservableObject {
                     AppLog.editor.info("shiftSpacePassThrough editing=true")
                     return false
                 }
+                if activeTextInputHasMarkedText() {
+                    AppLog.editor.info("imeSpacePassThrough editing=true")
+                    return false
+                }
                 handleSpacePlaybackShortcut()
                 return true
             case 48:
@@ -775,6 +779,20 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func activeTextInputHasMarkedText() -> Bool {
+        if let inputClient = NSApp.keyWindow?.firstResponder as? NSTextInputClient,
+           inputClient.hasMarkedText() {
+            return true
+        }
+
+        if let inputClient = NSApp.keyWindow?.fieldEditor(false, for: nil) as? NSTextInputClient,
+           inputClient.hasMarkedText() {
+            return true
+        }
+
+        return false
+    }
+
     private func captureCurrentTimestamp() {
         let formatted = formatClock(currentTime)
         capturedTimestamp = formatted
@@ -810,8 +828,14 @@ final class AppModel: ObservableObject {
         do {
             try SRTCodec.generate(segments).write(to: srtURL, atomically: true, encoding: .utf8)
             try makeFCPXML(projectName: baseName, segments: segments).write(to: fcpxmlURL, atomically: true, encoding: .utf8)
-            NSWorkspace.shared.activateFileViewerSelecting([srtURL, fcpxmlURL])
-            showToast("已导出 SRT 和 FCPXML", level: .success)
+
+            if settings.exportSettings.exportToFinalCutPro {
+                try importIntoFinalCutPro(fcpxmlURL)
+                showToast("已导出并发送到 Final Cut Pro", level: .success)
+            } else {
+                NSWorkspace.shared.activateFileViewerSelecting([srtURL, fcpxmlURL])
+                showToast("已导出 SRT 和 FCPXML", level: .success)
+            }
         } catch {
             showToast("导出失败：\(error.localizedDescription)", level: .error)
         }
@@ -916,6 +940,43 @@ final class AppModel: ObservableObject {
           </library>
         </fcpxml>
         """
+    }
+
+    private func importIntoFinalCutPro(_ fcpxmlURL: URL) throws {
+        let escapedPath = escapeAppleScriptString(fcpxmlURL.path)
+        let source = """
+        tell application "Final Cut Pro"
+            activate
+            open POSIX file "\(escapedPath)"
+        end tell
+        """
+
+        var errorInfo: NSDictionary?
+        guard let script = NSAppleScript(source: source) else {
+            throw NSError(
+                domain: "SubForge.FinalCutProImport",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "无法创建 Final Cut Pro 导入脚本。"]
+            )
+        }
+
+        script.executeAndReturnError(&errorInfo)
+
+        if let errorInfo {
+            let message = errorInfo[NSAppleScript.errorMessage] as? String
+                ?? "无法打开 Final Cut Pro 或导入 FCPXML。"
+            throw NSError(
+                domain: "SubForge.FinalCutProImport",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
+        }
+    }
+
+    private func escapeAppleScriptString(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     private func escapeXML(_ string: String) -> String {

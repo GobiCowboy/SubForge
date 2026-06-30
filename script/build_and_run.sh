@@ -59,6 +59,8 @@ stage_bundle() {
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>SubForge 需要语音识别权限来验证 Apple 语音转写能力。</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>SubForge 需要控制 Final Cut Pro 来导入导出的 FCPXML。</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>

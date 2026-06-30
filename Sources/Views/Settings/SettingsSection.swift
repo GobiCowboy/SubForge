@@ -4,7 +4,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "通用"
     case transcription = "转写"
     case proofreading = "校对"
-    case subtitle = "字幕样式"
+    case subtitle = "基本样式"
     case export = "导出"
     case watch = "目录监听"
 

@@ -6,14 +6,22 @@ struct GeneralSettingsPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
             SettingsGroup(title: "通用设置") {
-                SettingsSectionCard {
-                    Picker("界面语言", selection: $settings.interfaceLanguage) {
-                        ForEach(InterfaceLanguage.allCases) { language in
-                            Text(language.rawValue).tag(language)
+                SettingsListSection {
+                    SettingsListRow(title: "界面语言") {
+                        SettingsTrailingControl {
+                            Picker("界面语言", selection: $settings.interfaceLanguage) {
+                                ForEach(InterfaceLanguage.allCases) { language in
+                                    Text(language.rawValue).tag(language)
+                                }
+                            }
+                            .labelsHidden()
                         }
                     }
 
-                    Toggle("显示菜单栏图标", isOn: $settings.showMenuBarIcon)
+                    SettingsListRow(title: "菜单栏图标") {
+                        Toggle("", isOn: $settings.showMenuBarIcon)
+                            .labelsHidden()
+                    }
                 }
             }
         }

@@ -32,55 +32,79 @@ struct SubtitlePreviewCanvas: View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
     }
 
+    private var stageAspectRatio: CGFloat {
+        switch style.canvasOrientation {
+        case .landscape:
+            return 16 / 9
+        case .portrait:
+            return 9 / 16
+        }
+    }
+
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                previewShape
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.08, green: 0.09, blue: 0.12),
-                                Color(red: 0.12, green: 0.13, blue: 0.17),
-                                Color(red: 0.17, green: 0.19, blue: 0.24)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                previewShape
-                    .overlay(alignment: .topLeading) {
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-                            .frame(width: 180, height: 180)
-                            .blur(radius: 50)
-                            .offset(x: -40, y: -60)
-                    }
-
-                previewShape
-                    .strokeBorder(Color.white.opacity(0.08))
-
-                previewFrame(proxy: proxy)
-
-                VStack {
-                    HStack {
-                        SettingsPill(text: "预览")
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(18)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                SettingsPill(text: "预览")
+                SettingsPill(text: style.canvasOrientation == .landscape ? "16:9" : "9:16", tint: .secondary)
             }
-            .clipShape(previewShape)
+
+            GeometryReader { proxy in
+                ZStack {
+                    previewShape
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
+                        )
+
+                    stageFrame(proxy: proxy)
+                }
+                .clipShape(previewShape)
+            }
         }
         .frame(height: 320)
     }
 
+    private func stageFrame(proxy: GeometryProxy) -> some View {
+        let containerWidth = proxy.size.width - 48
+        let containerHeight = proxy.size.height - 48
+        let stageSize = fittedStageSize(maxWidth: containerWidth, maxHeight: containerHeight)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.08, green: 0.09, blue: 0.12),
+                            Color(red: 0.12, green: 0.13, blue: 0.17),
+                            Color(red: 0.17, green: 0.19, blue: 0.24)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(alignment: .topLeading) {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 180, height: 180)
+                        .blur(radius: 50)
+                        .offset(x: -40, y: -60)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08))
+                )
+
+            previewFrame(stageSize: stageSize)
+        }
+        .frame(width: stageSize.width, height: stageSize.height)
+    }
+
     @ViewBuilder
-    private func previewFrame(proxy: GeometryProxy) -> some View {
+    private func previewFrame(stageSize: CGSize) -> some View {
         let horizontalPadding: CGFloat = 34
         let verticalPadding: CGFloat = 28
-        let subtitleBlock = subtitleBlock(maxWidth: proxy.size.width - (horizontalPadding * 2))
+        let subtitleBlock = subtitleBlock(maxWidth: stageSize.width - (horizontalPadding * 2))
 
         VStack {
             if style.position == .bottom || style.position == .middle {
@@ -105,7 +129,17 @@ struct SubtitlePreviewCanvas: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.vertical, verticalPadding)
-        .frame(width: proxy.size.width, height: proxy.size.height)
+        .frame(width: stageSize.width, height: stageSize.height)
+    }
+
+    private func fittedStageSize(maxWidth: CGFloat, maxHeight: CGFloat) -> CGSize {
+        let widthFromHeight = maxHeight * stageAspectRatio
+
+        if widthFromHeight <= maxWidth {
+            return CGSize(width: widthFromHeight, height: maxHeight)
+        }
+
+        return CGSize(width: maxWidth, height: maxWidth / stageAspectRatio)
     }
 
     private func subtitleBlock(maxWidth: CGFloat) -> some View {
