@@ -10,8 +10,9 @@ struct ExportSettingsPane: View {
                     SettingsListRow(title: "导出格式") {
                         SettingsTrailingControl {
                             Picker("导出格式", selection: $settings.exportSettings.format) {
-                                Text("FCPXML").tag(ExportFormat.fcpxml)
                                 Text("SRT").tag(ExportFormat.srt)
+                                Text("FCPXML").tag(ExportFormat.fcpxml)
+                                Text("SRT + FCPXML").tag(ExportFormat.srtAndFCPXML)
                             }
                             .labelsHidden()
                         }

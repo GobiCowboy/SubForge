@@ -812,29 +812,33 @@ final class AppModel: ObservableObject {
     func exportArtifacts() {
         guard !segments.isEmpty else { return }
 
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "导出到此处"
-        panel.message = "选择导出目录"
-
-        guard panel.runModal() == .OK, let directory = panel.url else { return }
-
-        let baseName = currentDocumentURL?.deletingPathExtension().lastPathComponent ?? "SubForge Export"
-        let srtURL = directory.appendingPathComponent(baseName).appendingPathExtension("srt")
-        let fcpxmlURL = directory.appendingPathComponent(baseName).appendingPathExtension("fcpxml")
-
         do {
-            try SRTCodec.generate(segments).write(to: srtURL, atomically: true, encoding: .utf8)
-            try makeFCPXML(projectName: baseName, segments: segments).write(to: fcpxmlURL, atomically: true, encoding: .utf8)
+            guard let directory = chooseExportDirectory() else { return }
+
+            let baseName = currentDocumentURL?.deletingPathExtension().lastPathComponent ?? "SubForge Export"
+            let plan = makeExportPlan(baseName: baseName, directory: directory)
+            var exportedURLs: [URL] = []
+
+            if let srtURL = plan.srtURL {
+                try SRTCodec.generate(segments).write(to: srtURL, atomically: true, encoding: .utf8)
+                exportedURLs.append(srtURL)
+            }
+
+            if let fcpxmlURL = plan.fcpxmlURL {
+                try makeFCPXML(projectName: baseName, segments: segments).write(to: fcpxmlURL, atomically: true, encoding: .utf8)
+                exportedURLs.append(fcpxmlURL)
+            }
 
             if settings.exportSettings.exportToFinalCutPro {
+                guard let fcpxmlURL = plan.fcpxmlURL else {
+                    showToast("导出到 FCP 需要选择 FCPXML 或 SRT + FCPXML", level: .error)
+                    return
+                }
                 try importIntoFinalCutPro(fcpxmlURL)
                 showToast("已导出并发送到 Final Cut Pro", level: .success)
             } else {
-                NSWorkspace.shared.activateFileViewerSelecting([srtURL, fcpxmlURL])
-                showToast("已导出 SRT 和 FCPXML", level: .success)
+                NSWorkspace.shared.activateFileViewerSelecting(exportedURLs)
+                showToast("已导出 \(plan.summary)", level: .success)
             }
         } catch {
             showToast("导出失败：\(error.localizedDescription)", level: .error)
@@ -905,6 +909,106 @@ final class AppModel: ObservableObject {
             await MainActor.run {
                 self.dismissToast(message)
             }
+        }
+    }
+
+    private struct ExportPlan {
+        let srtURL: URL?
+        let fcpxmlURL: URL?
+        let summary: String
+    }
+
+    private func chooseExportDirectory() -> URL? {
+        switch settings.exportSettings.saveLocation {
+        case .sameAsSource:
+            if let directory = currentDocumentURL?.deletingLastPathComponent() {
+                return directory
+            }
+            return askForExportDirectory()
+        case .customFolder:
+            let path = settings.exportSettings.customOutputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty {
+                return URL(fileURLWithPath: path, isDirectory: true)
+            }
+            return askForExportDirectory()
+        }
+    }
+
+    private func askForExportDirectory() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "导出到此处"
+        panel.message = "选择导出目录"
+
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
+    }
+
+    private func makeExportPlan(baseName: String, directory: URL) -> ExportPlan {
+        let needsFCPXML = settings.exportSettings.exportToFinalCutPro
+        let format = settings.exportSettings.format
+
+        let srtURL = shouldExportSRT(format)
+            ? exportURL(directory: directory, baseName: baseName, extensionName: "srt")
+            : nil
+        let fcpxmlURL = (shouldExportFCPXML(format) || needsFCPXML)
+            ? exportURL(directory: directory, baseName: baseName, extensionName: "fcpxml")
+            : nil
+
+        return ExportPlan(
+            srtURL: srtURL,
+            fcpxmlURL: fcpxmlURL,
+            summary: exportSummary(srtURL: srtURL, fcpxmlURL: fcpxmlURL)
+        )
+    }
+
+    private func shouldExportSRT(_ format: ExportFormat) -> Bool {
+        switch format {
+        case .srt, .srtAndFCPXML, .txt, .vtt:
+            return true
+        case .fcpxml:
+            return false
+        }
+    }
+
+    private func shouldExportFCPXML(_ format: ExportFormat) -> Bool {
+        switch format {
+        case .fcpxml, .srtAndFCPXML:
+            return true
+        case .srt, .txt, .vtt:
+            return false
+        }
+    }
+
+    private func exportURL(directory: URL, baseName: String, extensionName: String) -> URL {
+        let proposedURL = directory.appendingPathComponent(baseName).appendingPathExtension(extensionName)
+        guard !settings.exportSettings.overwriteExisting else {
+            return proposedURL
+        }
+
+        var candidate = proposedURL
+        var index = 1
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory
+                .appendingPathComponent("\(baseName)-\(index)")
+                .appendingPathExtension(extensionName)
+            index += 1
+        }
+        return candidate
+    }
+
+    private func exportSummary(srtURL: URL?, fcpxmlURL: URL?) -> String {
+        switch (srtURL != nil, fcpxmlURL != nil) {
+        case (true, true):
+            return "SRT 和 FCPXML"
+        case (true, false):
+            return "SRT"
+        case (false, true):
+            return "FCPXML"
+        case (false, false):
+            return "文件"
         }
     }
 

@@ -19,6 +19,7 @@ private let editorShortcutItems: [ShortcutGuideItem] = [
     .init(keys: ["J"], description: "后退 1 秒。"),
     .init(keys: ["K"], description: "暂停并复制当前时间戳。"),
     .init(keys: ["L"], description: "按当前速度播放，并在 0.5x 到 2.0x 之间循环调速。"),
+    .init(keys: ["⌘E"], description: "按当前导出设置导出字幕。"),
 ]
 
 struct ShortcutGuidePanel: View {

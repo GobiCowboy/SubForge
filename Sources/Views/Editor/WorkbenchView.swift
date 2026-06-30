@@ -41,13 +41,25 @@ struct WorkbenchView: View {
 
                 Spacer()
 
-                Button {
-                    model.showInspector.toggle()
-                } label: {
-                    Label(model.showInspector ? "隐藏右栏" : "显示右栏", systemImage: model.showInspector ? "sidebar.right" : "sidebar.right")
+                HStack(spacing: 8) {
+                    Button {
+                        model.exportArtifacts()
+                    } label: {
+                        Label("导出", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(!model.canExport)
+                    .help("导出当前字幕（⌘E）")
+
+                    Button {
+                        model.showInspector.toggle()
+                    } label: {
+                        Label(model.showInspector ? "隐藏右栏" : "显示右栏", systemImage: "sidebar.right")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
 
             HStack {
