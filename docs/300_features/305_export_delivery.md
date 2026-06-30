@@ -46,6 +46,9 @@
 - SRT + FCPXML 适合同时交付字幕文件和剪辑工程导入文件
 - 当目录中存在 FCP 目标上下文时，应尽量减少用户额外操作
 - 开启导出到 FCP 时，导出成功后应直接把 FCPXML 交给 Final Cut Pro
+- FCPXML 中的字幕样式必须来自设置页“基本样式”，包括字体、字号、颜色、描边/填充近似与 X/Y/Z 位置
+- FCPXML 标题 Position 直接使用基本样式里的 X/Y/Z；横屏默认 `0 -467 0`，竖屏默认 `0 -495 0`
+- FCPXML 必须通过 Final Cut Pro DTD 校验：`resources` 只放资源项，`text-style-def` 跟随对应 `title` 并包含 `text-style`
 
 ## 6. 验收标准
 

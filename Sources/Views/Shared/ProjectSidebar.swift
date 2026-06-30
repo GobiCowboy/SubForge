@@ -28,7 +28,7 @@ struct ProjectSidebar: View {
             .padding(.vertical, 14)
         }
         .frame(width: 280)
-        .background(Color(red: 0.95, green: 0.95, blue: 0.95).opacity(0.7))
+        .background(.regularMaterial)
         .overlay(alignment: .trailing) {
             Divider()
         }
@@ -59,7 +59,7 @@ struct ProjectSidebar: View {
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.black.opacity(0.05))
+                .fill(Color.primary.opacity(0.06))
         )
         .onTapGesture(perform: onImport)
     }
@@ -154,7 +154,7 @@ struct ProjectSidebar: View {
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isSelected ? Color.black.opacity(0.05) : Color.clear)
+                .fill(isSelected ? Color.primary.opacity(0.07) : Color.clear)
         )
     }
 
@@ -187,7 +187,7 @@ struct ProjectSidebar: View {
                 .fill(Color.clear)
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.08))
+                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.20))
                 }
         )
     }

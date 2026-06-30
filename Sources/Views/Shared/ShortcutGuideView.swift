@@ -22,6 +22,12 @@ private let editorShortcutItems: [ShortcutGuideItem] = [
     .init(keys: ["⌘E"], description: "按当前导出设置导出字幕。"),
 ]
 
+private let compactShortcutItems: [ShortcutGuideItem] = {
+    let primaryItems = Array(editorShortcutItems.prefix(5))
+    guard let exportItem = editorShortcutItems.last else { return primaryItems }
+    return primaryItems + [exportItem]
+}()
+
 struct ShortcutGuidePanel: View {
     let compact: Bool
     var showsTitle = true
@@ -35,7 +41,7 @@ struct ShortcutGuidePanel: View {
             }
 
             VStack(alignment: .leading, spacing: compact ? 11 : 14) {
-                ForEach(compact ? Array(editorShortcutItems.prefix(5)) : editorShortcutItems) { item in
+                ForEach(compact ? compactShortcutItems : editorShortcutItems) { item in
                     ShortcutGuideRow(item: item, compact: compact)
                 }
             }

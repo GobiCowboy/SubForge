@@ -6,7 +6,28 @@ struct SubtitleStyleSettingsPane: View {
     private var fontSizeBinding: Binding<Double> {
         Binding(
             get: { settings.subtitleStyle.fontSize },
-            set: { settings.subtitleStyle.fontSize = min(max($0.rounded(), 24), 96) }
+            set: { settings.subtitleStyle.fontSize = min(max($0.rounded(), 12), 120) }
+        )
+    }
+
+    private var positionXBinding: Binding<Double> {
+        Binding(
+            get: { settings.subtitleStyle.positionX },
+            set: { settings.subtitleStyle.positionX = $0.rounded() }
+        )
+    }
+
+    private var positionYBinding: Binding<Double> {
+        Binding(
+            get: { settings.subtitleStyle.positionY },
+            set: { settings.subtitleStyle.positionY = $0.rounded() }
+        )
+    }
+
+    private var positionZBinding: Binding<Double> {
+        Binding(
+            get: { settings.subtitleStyle.positionZ },
+            set: { settings.subtitleStyle.positionZ = $0.rounded() }
         )
     }
 
@@ -42,10 +63,19 @@ struct SubtitleStyleSettingsPane: View {
                                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                                 .frame(width: 64, alignment: .trailing)
 
-                            Stepper("", value: fontSizeBinding, in: 24...96, step: 1)
+                            Stepper("", value: fontSizeBinding, in: 12...120, step: 1)
                                 .labelsHidden()
                         }
                         .frame(width: SettingsListMetrics.pickerWidth, alignment: .trailing)
+                    }
+
+                    SettingsListRow(title: "位置") {
+                        HStack(spacing: 8) {
+                            positionField("X", value: positionXBinding)
+                            positionField("Y", value: positionYBinding)
+                            positionField("Z", value: positionZBinding)
+                        }
+                        .frame(width: SettingsListMetrics.controlWidth, alignment: .trailing)
                     }
 
                     SettingsListRow(title: "预设", alignment: .center) {
@@ -95,7 +125,10 @@ struct SubtitleStyleSettingsPane: View {
         settings.subtitleStyle.position = .bottom
         settings.subtitleStyle.offsetX = 0
         settings.subtitleStyle.offsetY = orientation == .landscape ? -28 : -84
-        settings.subtitleStyle.fontSize = orientation == .landscape ? 56 : 72
+        settings.subtitleStyle.positionX = 0
+        settings.subtitleStyle.positionY = orientation == .landscape ? -467 : -495
+        settings.subtitleStyle.positionZ = 0
+        settings.subtitleStyle.fontSize = orientation == .landscape ? 56 : 35
     }
 
     private func applyPreset(_ preset: SubtitleStylePreset) {
@@ -105,6 +138,9 @@ struct SubtitleStyleSettingsPane: View {
         settings.subtitleStyle.position = .bottom
         settings.subtitleStyle.offsetX = 0
         settings.subtitleStyle.offsetY = settings.subtitleStyle.canvasOrientation == .landscape ? -28 : -84
+        settings.subtitleStyle.positionX = 0
+        settings.subtitleStyle.positionY = settings.subtitleStyle.canvasOrientation == .landscape ? -467 : -495
+        settings.subtitleStyle.positionZ = 0
         settings.subtitleStyle.lineSpacing = 0
         settings.subtitleStyle.characterSpacing = 0
         settings.subtitleStyle.shadowEnabled = false
@@ -196,6 +232,18 @@ struct SubtitleStyleSettingsPane: View {
         }
 
         settings.subtitleStyle.preset = .whiteTextBlackOutline
+    }
+
+    private func positionField(_ label: String, value: Binding<Double>) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            TextField(label, value: value, format: .number.precision(.fractionLength(0)))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12, design: .monospaced))
+                .frame(width: 64)
+        }
     }
 }
 

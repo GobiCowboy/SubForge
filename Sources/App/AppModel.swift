@@ -1013,28 +1013,50 @@ final class AppModel: ObservableObject {
     }
 
     private func makeFCPXML(projectName: String, segments: [SubtitleSegment]) -> String {
-        let titles = segments.enumerated().map { index, segment in
-            """
-                  <title lane="1" offset="\(segment.start)s" duration="\(max(segment.end - segment.start, 0.1))s" ref="r2" name="Caption \(index + 1)">
-                    <text>
-                      <text-style ref="ts1">\(escapeXML(segment.text))</text-style>
-                    </text>
-                  </title>
+        let style = settings.subtitleStyle
+        let fps = max(settings.exportSettings.fps, 1)
+        let format = fcpxmlFormat(for: style.canvasOrientation, fps: fps)
+        let totalDuration = fcpxmlTime(max(playbackDuration, segments.last?.end ?? 1), fps: fps, minimumFrames: 1)
+        let titleStart = "0s"
+
+        let titles = segments.enumerated().compactMap { index, segment -> String? in
+            let duration = max(segment.end - segment.start, 0.1)
+            guard duration > 0 else { return nil }
+
+            let textStyleID = "ts\(index + 1)"
+            let name = escapeXML(firstFCPXMLTitleLine(segment.text, fallback: "Caption \(index + 1)"))
+            let offset = fcpxmlTime(segment.start, fps: fps)
+            let titleDuration = fcpxmlTime(duration, fps: fps, minimumFrames: 1)
+            let position = fcpxmlTitlePosition(style)
+            let styleAttributes = fcpxmlTextStyleAttributes(style)
+
+            return """
+                                <title ref="r2" offset="\(offset)" name="\(name)" duration="\(titleDuration)" start="\(titleStart)">
+                                  <param name="Position" key="9999/10199/10201/1/100/101" value="\(position.x) \(position.y) \(position.z)"/>
+                                  <param name="Alignment" key="9999/10199/10201/2/354/1002961760/401" value="1 (Center)"/>
+                                  <param name="Alignment" key="9999/10199/10201/2/373" value="0 (Left) 2 (Bottom)"/>
+                                  <text>
+                                    <text-style ref="\(textStyleID)">\(escapeXML(segment.text))</text-style>
+                                  </text>
+                                  <text-style-def id="\(textStyleID)">
+                                    <text-style \(styleAttributes)/>
+                                  </text-style-def>
+                                </title>
             """
         }.joined(separator: "\n")
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
-        <fcpxml version="1.10">
+        <!DOCTYPE fcpxml>
+        <fcpxml version="1.9">
           <resources>
-            <format id="r1" name="FFVideoFormat1080p30" frameDuration="1/30s" width="1920" height="1080"/>
-            <effect id="r2" name="Basic Title" uid=".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti"/>
-            <text-style-def id="ts1"/>
+            <format id="r1" name="\(format.name)" frameDuration="1/\(fps)s" width="\(format.width)" height="\(format.height)" colorSpace="1-1-1 (Rec. 709)"/>
+            <effect id="r2" name="Custom" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>
           </resources>
           <library>
             <event name="SubForge Export">
               <project name="\(escapeXML(projectName))">
-                <sequence format="r1" duration="\(max(playbackDuration, segments.last?.end ?? 1))s">
+                <sequence format="r1" tcStart="0s" tcFormat="NDF" duration="\(totalDuration)" audioLayout="stereo" audioRate="48k">
                   <spine>
         \(titles)
                   </spine>
@@ -1044,6 +1066,107 @@ final class AppModel: ObservableObject {
           </library>
         </fcpxml>
         """
+    }
+
+    private struct FCPXMLFormat {
+        let name: String
+        let width: Int
+        let height: Int
+    }
+
+    private func fcpxmlFormat(for orientation: SubtitleCanvasOrientation, fps: Int) -> FCPXMLFormat {
+        switch orientation {
+        case .landscape:
+            FCPXMLFormat(name: "FFVideoFormat1920x1080p\(fps * 100)", width: 1920, height: 1080)
+        case .portrait:
+            FCPXMLFormat(name: "FFVideoFormat1080x1920p\(fps * 100)", width: 1080, height: 1920)
+        }
+    }
+
+    private func fcpxmlTime(_ seconds: Double, fps: Int, minimumFrames: Int = 0) -> String {
+        let frames = max(Int(round(seconds * Double(fps))), minimumFrames)
+        return "\(frames)/\(fps)s"
+    }
+
+    private func firstFCPXMLTitleLine(_ text: String, fallback: String) -> String {
+        let line = text.components(separatedBy: .newlines).first ?? text
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        return trimmed.count <= 64 ? trimmed : String(trimmed.prefix(64))
+    }
+
+    private func fcpxmlTitlePosition(_ style: SubtitleStyle) -> (x: String, y: String, z: String) {
+        (
+            formatFCPXMLNumber(style.positionX),
+            formatFCPXMLNumber(style.positionY),
+            formatFCPXMLNumber(style.positionZ)
+        )
+    }
+
+    private func fcpxmlTextStyleAttributes(_ style: SubtitleStyle) -> String {
+        let fontFace: String
+        switch style.fontWeight {
+        case .regular:
+            fontFace = "Regular"
+        case .medium:
+            fontFace = "Medium"
+        case .semibold:
+            fontFace = "Semibold"
+        case .bold:
+            fontFace = "Bold"
+        }
+
+        let alignment: String
+        switch style.horizontalAlignment {
+        case .leading:
+            alignment = "left"
+        case .center:
+            alignment = "center"
+        case .trailing:
+            alignment = "right"
+        }
+
+        let strokeColor: String
+        let strokeWidth: String
+        if style.outlineEnabled {
+            strokeColor = fcpxmlColor(style.outlineColorHex, alpha: style.outlineOpacity)
+            strokeWidth = formatFCPXMLNumber(-max(style.outlineWidth, 0.5))
+        } else if style.surfaceEnabled {
+            strokeColor = fcpxmlColor(style.surfaceColorHex, alpha: style.surfaceOpacity)
+            strokeWidth = formatFCPXMLNumber(-max(8, style.fontSize * 0.18))
+        } else {
+            strokeColor = fcpxmlColor("#000000", alpha: 0)
+            strokeWidth = "0"
+        }
+
+        return """
+        font="\(escapeXML(style.fontFamily))" fontSize="\(formatFCPXMLNumber(style.fontSize))" fontFace="\(fontFace)" fontColor="\(fcpxmlColor(style.fontColorHex))" strokeColor="\(strokeColor)" strokeWidth="\(strokeWidth)" alignment="\(alignment)"
+        """
+    }
+
+    private func fcpxmlColor(_ hex: String, alpha: Double = 1) -> String {
+        let trimmed = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = Int(trimmed, radix: 16) ?? 0
+        let red = Double((value >> 16) & 0xFF) / 255
+        let green = Double((value >> 8) & 0xFF) / 255
+        let blue = Double(value & 0xFF) / 255
+
+        return [
+            formatFCPXMLNumber(red),
+            formatFCPXMLNumber(green),
+            formatFCPXMLNumber(blue),
+            formatFCPXMLNumber(max(0, min(alpha, 1)))
+        ].joined(separator: " ")
+    }
+
+    private func formatFCPXMLNumber(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(Int(value))
+        }
+
+        return String(format: "%.4f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
     }
 
     private func importIntoFinalCutPro(_ fcpxmlURL: URL) throws {
