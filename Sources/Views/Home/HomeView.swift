@@ -22,7 +22,7 @@ struct HomeView: View {
 
             footerBar
         }
-        .background(Color.white)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             animateWatchStatus = true
         }
@@ -158,7 +158,7 @@ struct HomeView: View {
         .background(panelBackground(cornerRadius: 20, fillOpacity: 0.05))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08))
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
         }
     }
 
@@ -177,7 +177,7 @@ struct HomeView: View {
         .font(.system(size: 11, weight: .medium))
         .padding(.horizontal, 20)
         .frame(height: 44)
-        .background(Color.white.opacity(0.92))
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.92))
         .overlay(alignment: .top) {
             Divider()
         }
@@ -204,10 +204,10 @@ struct HomeView: View {
 
     private func panelBackground(cornerRadius: CGFloat, fillOpacity: Double = 0) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.black.opacity(fillOpacity))
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(max(0.72, fillOpacity)))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.08))
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
             }
     }
 

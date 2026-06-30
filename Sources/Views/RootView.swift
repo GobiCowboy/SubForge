@@ -6,7 +6,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white
+            Color(nsColor: .windowBackgroundColor)
                 .ignoresSafeArea()
 
             HStack(spacing: 0) {
