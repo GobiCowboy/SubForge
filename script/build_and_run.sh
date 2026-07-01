@@ -6,6 +6,8 @@ APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 MIN_SYSTEM_VERSION="14.0"
 BUILD_CONFIGURATION="debug"
+APP_VERSION="${APP_VERSION:-1.0}"
+APP_BUILD="${APP_BUILD:-1}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -13,8 +15,10 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
 
 usage() {
   echo "usage: $0 [run|release|--debug|--logs|--telemetry|--verify|--release-logs|--release-telemetry|--release-verify]" >&2
@@ -35,6 +39,7 @@ stage_bundle() {
   rm -rf "$APP_BUNDLE"
   mkdir -p "$APP_MACOS"
   mkdir -p "$APP_RESOURCES"
+  mkdir -p "$APP_FRAMEWORKS"
   cp "$build_bin" "$APP_BINARY"
   chmod +x "$APP_BINARY"
 
@@ -44,6 +49,17 @@ stage_bundle() {
 
   if [ -f "$ROOT_DIR/Resources/AppIcon.icns" ]; then
     cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_RESOURCES/AppIcon.icns"
+  fi
+
+  if [ -f "$ROOT_DIR/Resources/PrivacyInfo.xcprivacy" ]; then
+    cp "$ROOT_DIR/Resources/PrivacyInfo.xcprivacy" "$APP_RESOURCES/PrivacyInfo.xcprivacy"
+  fi
+
+  if [ -d "$ROOT_DIR/BAK/SubForge.app/Contents/Frameworks" ]; then
+    ditto "$ROOT_DIR/BAK/SubForge.app/Contents/Frameworks" "$APP_FRAMEWORKS"
+    if [ -f "$APP_FRAMEWORKS/whisper-cli" ]; then
+      chmod +x "$APP_FRAMEWORKS/whisper-cli"
+    fi
   fi
 
   cat >"$INFO_PLIST" <<PLIST
@@ -59,12 +75,18 @@ stage_bundle() {
   <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$APP_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$APP_BUILD</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.video</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>SubForge 需要语音识别权限来验证 Apple 语音转写能力。</string>
+  <string>SubForge 需要语音识别权限，将用户选择的音频转写为字幕。</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>SubForge 需要控制 Final Cut Pro 来导入导出的 FCPXML。</string>
   <key>NSPrincipalClass</key>
@@ -72,6 +94,25 @@ stage_bundle() {
 </dict>
 </plist>
 PLIST
+}
+
+sign_bundle_if_requested() {
+  if [ "${CODE_SIGN:-0}" != "1" ] && [ -z "${CODE_SIGN_IDENTITY:-}" ]; then
+    return
+  fi
+
+  local identity="${CODE_SIGN_IDENTITY:--}"
+  local timestamp_arg="--timestamp"
+  if [ "$identity" = "-" ]; then
+    timestamp_arg="--timestamp=none"
+  fi
+
+  codesign --force \
+    --options runtime \
+    "$timestamp_arg" \
+    --entitlements "$ENTITLEMENTS" \
+    --sign "$identity" \
+    "$APP_BUNDLE"
 }
 
 open_app() {
@@ -103,6 +144,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       ;;
     release)
@@ -110,6 +152,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       ;;
     --debug|debug)
@@ -117,6 +160,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       lldb -- "$APP_BINARY"
       ;;
     --logs|logs)
@@ -124,6 +168,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       stream_logs
       ;;
@@ -132,6 +177,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       stream_telemetry
       ;;
@@ -140,6 +186,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       verify_launch
       ;;
@@ -148,6 +195,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       stream_logs
       ;;
@@ -156,6 +204,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       stream_telemetry
       ;;
@@ -164,6 +213,7 @@ main() {
       kill_existing
       build_app
       stage_bundle
+      sign_bundle_if_requested
       open_app
       verify_launch
       ;;

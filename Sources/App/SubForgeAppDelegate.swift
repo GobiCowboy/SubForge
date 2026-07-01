@@ -2,21 +2,24 @@ import AppKit
 
 final class SubForgeAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        applyActivationPolicy(for: SettingsStore.load())
+        Self.showDockIcon()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         _ = MainWindowController.shared.showWindow()
-        sender.activate(ignoringOtherApps: true)
         return false
     }
 
     static func applyActivationPolicy(for settings: AppSettings) {
-        applyActivationPolicy(showMenuBarIcon: settings.showMenuBarIcon)
+        showDockIcon()
     }
 
-    static func applyActivationPolicy(showMenuBarIcon: Bool) {
-        NSApp.setActivationPolicy(showMenuBarIcon ? .accessory : .regular)
+    static func showDockIcon() {
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    static func hideDockIconForMenuBarResidentMode() {
+        NSApp.setActivationPolicy(.accessory)
     }
 
     private func applyActivationPolicy(for settings: AppSettings) {

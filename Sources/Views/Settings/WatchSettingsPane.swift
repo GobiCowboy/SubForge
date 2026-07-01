@@ -14,7 +14,10 @@ struct WatchSettingsPane: View {
                                 .textFieldStyle(.roundedBorder)
 
                             Button("选择…") {
-                                chooseDirectory(for: $settings.watchSettings.directoryPath)
+                                chooseDirectory(
+                                    for: $settings.watchSettings.directoryPath,
+                                    bookmarkData: $settings.watchSettings.directoryBookmarkData
+                                )
                             }
                             .buttonStyle(.bordered)
                         }

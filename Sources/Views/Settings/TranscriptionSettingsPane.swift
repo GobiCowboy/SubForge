@@ -113,7 +113,7 @@ struct TranscriptionSettingsPane: View {
     private var validationBlocked: Bool {
         switch settings.transcriptionEngine {
         case .whisperLocal:
-            return !WhisperModelStore.isAvailable(settings.whisperModel)
+            return !WhisperRuntime.isCLIAvailable || !WhisperModelStore.isAvailable(settings.whisperModel)
         case .cloudASR:
             if settings.cloudASRKey.isEmpty {
                 return true

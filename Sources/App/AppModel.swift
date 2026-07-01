@@ -97,6 +97,7 @@ final class AppModel: ObservableObject {
     private let keyboardMonitor = EditorKeyboardMonitor()
     private let watchFolderService = WatchFolderService()
     private let menuBarController = MenuBarController()
+    private var watchDirectoryAccess: SecurityScopedResourceAccess?
     private var waveformTask: Task<Void, Never>?
     @Published private(set) var editorFocusContext: EditorFocusContext = .none
 
@@ -195,6 +196,7 @@ final class AppModel: ObservableObject {
     func activateMainWindow() {
         AppLog.lifecycle.info("activate main window requested visibleWindows=\(NSApp.windows.filter { $0.isVisible }.count, privacy: .public) allWindows=\(NSApp.windows.count, privacy: .public)")
 
+        SubForgeAppDelegate.showDockIcon()
         NSApp.unhide(nil)
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         NSApp.activate(ignoringOtherApps: true)
@@ -282,6 +284,7 @@ final class AppModel: ObservableObject {
         updated.watchSettings.autoStart = false
         settings = updated
         watchFolderService.stop()
+        watchDirectoryAccess = nil
         syncWatchState()
     }
 
@@ -302,12 +305,26 @@ final class AppModel: ObservableObject {
         guard settings.watchSettings.autoStart, !path.isEmpty else {
             AppLog.watcher.info("watch disabled autoStart=\(settings.watchSettings.autoStart, privacy: .public) pathEmpty=\(path.isEmpty, privacy: .public)")
             watchFolderService.stop()
+            watchDirectoryAccess = nil
             syncWatchState()
             return
         }
 
-        AppLog.watcher.info("watch apply settings path=\(path, privacy: .public)")
-        watchFolderService.start(watching: URL(fileURLWithPath: path, isDirectory: true))
+        guard let access = SecurityScopedResourceAccess(
+            bookmarkData: settings.watchSettings.directoryBookmarkData,
+            fallbackPath: path,
+            isDirectory: true
+        ) else {
+            AppLog.watcher.error("watch start failed, directory access unavailable path=\(path, privacy: .public)")
+            watchFolderService.stop()
+            watchDirectoryAccess = nil
+            syncWatchState()
+            return
+        }
+
+        AppLog.watcher.info("watch apply settings path=\(access.url.path, privacy: .public)")
+        watchDirectoryAccess = access
+        watchFolderService.start(watching: access.url)
         syncWatchState()
     }
 
@@ -363,10 +380,18 @@ final class AppModel: ObservableObject {
                 await self.advancePipeline(.prepare, progress: 0.14, message: "正在准备文件与轨道信息…")
                 guard !Task.isCancelled else { return }
 
-                let provider = TranscriptionService.createProvider(settings: self.settings)
-                let engineName = self.settings.transcriptionEngine.rawValue
+                var transcriptionSettings = self.settings
+                if transcriptionSettings.transcriptionEngine == .whisperLocal,
+                   !WhisperRuntime.isCLIAvailable {
+                    transcriptionSettings.transcriptionEngine = .appleSpeech
+                    self.settings = transcriptionSettings
+                    self.showToast("未检测到 Whisper 运行组件，已切换到 Apple 语音继续转写", level: .error)
+                }
+
+                let provider = TranscriptionService.createProvider(settings: transcriptionSettings)
+                let engineName = transcriptionSettings.transcriptionEngine.rawValue
                 self.markStageActive(.transcribe, progress: 0.36, message: "正在使用 \(engineName) 转写…")
-                var transcribedSegments = try await provider.transcribe(audioURL: url, language: self.settings.language)
+                var transcribedSegments = try await provider.transcribe(audioURL: url, language: transcriptionSettings.language)
                 transcribedSegments = self.normalizeSegments(transcribedSegments)
                 guard !Task.isCancelled else { return }
                 self.markStageDone(.transcribe, progress: self.settings.proofreadingEnabled ? 0.72 : 0.92)
@@ -928,7 +953,8 @@ final class AppModel: ObservableObject {
         guard !segments.isEmpty else { return }
 
         do {
-            guard let directory = chooseExportDirectory() else { return }
+            guard let directoryChoice = chooseExportDirectory() else { return }
+            let directory = directoryChoice.url
 
             let baseName = currentDocumentURL?.deletingPathExtension().lastPathComponent ?? "SubForge Export"
             let plan = makeExportPlan(baseName: baseName, directory: directory)
@@ -1033,23 +1059,35 @@ final class AppModel: ObservableObject {
         let summary: String
     }
 
-    private func chooseExportDirectory() -> URL? {
+    private struct ExportDirectoryChoice {
+        let url: URL
+        let access: SecurityScopedResourceAccess?
+    }
+
+    private func chooseExportDirectory() -> ExportDirectoryChoice? {
         switch settings.exportSettings.saveLocation {
         case .sameAsSource:
             if let directory = currentDocumentURL?.deletingLastPathComponent() {
-                return directory
+                return ExportDirectoryChoice(url: directory, access: SecurityScopedResourceAccess(url: directory))
             }
             return askForExportDirectory()
         case .customFolder:
             let path = settings.exportSettings.customOutputPath.trimmingCharacters(in: .whitespacesAndNewlines)
             if !path.isEmpty {
-                return URL(fileURLWithPath: path, isDirectory: true)
+                guard let access = SecurityScopedResourceAccess(
+                    bookmarkData: settings.exportSettings.customOutputBookmarkData,
+                    fallbackPath: path,
+                    isDirectory: true
+                ) else {
+                    return nil
+                }
+                return ExportDirectoryChoice(url: access.url, access: access)
             }
             return askForExportDirectory()
         }
     }
 
-    private func askForExportDirectory() -> URL? {
+    private func askForExportDirectory() -> ExportDirectoryChoice? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -1058,7 +1096,8 @@ final class AppModel: ObservableObject {
         panel.message = "选择导出目录"
 
         guard panel.runModal() == .OK else { return nil }
-        return panel.url
+        guard let url = panel.url else { return nil }
+        return ExportDirectoryChoice(url: url, access: SecurityScopedResourceAccess(url: url))
     }
 
     private func makeExportPlan(baseName: String, directory: URL) -> ExportPlan {
@@ -1131,55 +1170,144 @@ final class AppModel: ObservableObject {
         let style = settings.subtitleStyle
         let fps = max(settings.exportSettings.fps, 1)
         let format = fcpxmlFormat(for: style.canvasOrientation, fps: fps)
-        let totalDuration = fcpxmlTime(max(playbackDuration, segments.last?.end ?? 1), fps: fps, minimumFrames: 1)
-        let titleStart = "0s"
-
-        let titles = segments.enumerated().compactMap { index, segment -> String? in
-            let duration = max(segment.end - segment.start, 0.1)
-            guard duration > 0 else { return nil }
-
-            let textStyleID = "ts\(index + 1)"
-            let name = escapeXML(firstFCPXMLTitleLine(segment.text, fallback: "Caption \(index + 1)"))
-            let offset = fcpxmlTime(segment.start, fps: fps)
-            let titleDuration = fcpxmlTime(duration, fps: fps, minimumFrames: 1)
-            let position = fcpxmlTitlePosition(style)
-            let styleAttributes = fcpxmlTextStyleAttributes(style)
-
-            return """
-                                <title ref="r2" offset="\(offset)" name="\(name)" duration="\(titleDuration)" start="\(titleStart)">
-                                  <param name="Position" key="9999/10199/10201/1/100/101" value="\(position.x) \(position.y) \(position.z)"/>
-                                  <param name="Alignment" key="9999/10199/10201/2/354/1002961760/401" value="1 (Center)"/>
-                                  <param name="Alignment" key="9999/10199/10201/2/373" value="0 (Left) 2 (Bottom)"/>
-                                  <text>
-                                    <text-style ref="\(textStyleID)">\(escapeXML(segment.text))</text-style>
-                                  </text>
-                                  <text-style-def id="\(textStyleID)">
-                                    <text-style \(styleAttributes)/>
-                                  </text-style-def>
-                                </title>
-            """
-        }.joined(separator: "\n")
+        let totalSeconds = max(playbackDuration, segments.last?.end ?? 1)
+        let totalDuration = fcpxmlTime(totalSeconds, fps: fps, minimumFrames: 1)
+        let storylineItems = makeFCPXMLStorylineItems(
+            segments: segments,
+            totalDuration: totalSeconds,
+            style: style,
+            fps: fps
+        )
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE fcpxml>
-        <fcpxml version="1.9">
+        <fcpxml version="1.14">
           <resources>
             <format id="r1" name="\(format.name)" frameDuration="1/\(fps)s" width="\(format.width)" height="\(format.height)" colorSpace="1-1-1 (Rec. 709)"/>
-            <effect id="r2" name="Custom" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>
+            <effect id="r2" name="自定" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>
           </resources>
           <library>
             <event name="SubForge Export">
               <project name="\(escapeXML(projectName))">
                 <sequence format="r1" tcStart="0s" tcFormat="NDF" duration="\(totalDuration)" audioLayout="stereo" audioRate="48k">
                   <spine>
-        \(titles)
+                    <gap name="空隙" offset="0s" start="3600s" duration="\(totalDuration)">
+                      <spine lane="1" offset="3600s">
+        \(storylineItems)
+                      </spine>
+                    </gap>
                   </spine>
                 </sequence>
               </project>
             </event>
           </library>
         </fcpxml>
+        """
+    }
+
+    private func makeFCPXMLStorylineItems(
+        segments: [SubtitleSegment],
+        totalDuration: Double,
+        style: SubtitleStyle,
+        fps: Int
+    ) -> String {
+        let sortedSegments = segments.sorted { $0.start < $1.start }
+        var items: [String] = []
+        var cursor: Double = 0
+        var blankIndex = 1
+        var titleIndex = 1
+        let frameDuration = 1 / Double(fps)
+
+        for segment in sortedSegments {
+            let start = max(segment.start, cursor)
+            if start - cursor >= frameDuration / 2 {
+                items.append(makeFCPXMLGap(
+                    index: blankIndex,
+                    offset: cursor,
+                    duration: start - cursor,
+                    fps: fps
+                ))
+                blankIndex += 1
+                cursor = start
+            }
+
+            let end = max(segment.end, start)
+            let duration = max(end - start, frameDuration)
+            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if text.isEmpty {
+                items.append(makeFCPXMLGap(
+                    index: blankIndex,
+                    offset: start,
+                    duration: duration,
+                    fps: fps
+                ))
+                blankIndex += 1
+                cursor = max(cursor, end)
+                continue
+            }
+
+            items.append(makeFCPXMLTitle(
+                segment: segment,
+                index: titleIndex,
+                offset: start,
+                duration: duration,
+                style: style,
+                fps: fps
+            ))
+            titleIndex += 1
+            cursor = max(cursor, end)
+        }
+
+        if totalDuration - cursor >= frameDuration / 2 {
+            items.append(makeFCPXMLGap(
+                index: blankIndex,
+                offset: cursor,
+                duration: totalDuration - cursor,
+                fps: fps
+            ))
+        }
+
+        return items.joined(separator: "\n")
+    }
+
+    private func makeFCPXMLGap(index: Int, offset: Double, duration: Double, fps: Int) -> String {
+        let safeDuration = max(duration, 0)
+        let name = "Blank \(formatFCPXMLTimestamp(offset))-\(formatFCPXMLTimestamp(offset + safeDuration))"
+        return """
+                        <gap name="\(escapeXML(name))" offset="\(fcpxmlTime(offset, fps: fps))" duration="\(fcpxmlTime(safeDuration, fps: fps))"/>
+        """
+    }
+
+    private func makeFCPXMLTitle(
+        segment: SubtitleSegment,
+        index: Int,
+        offset: Double,
+        duration: Double,
+        style: SubtitleStyle,
+        fps: Int
+    ) -> String {
+        let textStyleID = "ts\(index)"
+        let name = escapeXML(firstFCPXMLTitleLine(segment.text, fallback: "Caption \(index)"))
+        let position = fcpxmlTitlePosition(style)
+        let styleAttributes = fcpxmlTextStyleAttributes(style)
+
+        return """
+                        <title ref="r2" offset="\(fcpxmlTime(offset, fps: fps))" name="\(name)" duration="\(fcpxmlTime(duration, fps: fps, minimumFrames: 1))">
+                          <param name="位置" key="9999/10199/10201/1/100/101" value="\(position.x) \(position.y) \(position.z)"/>
+                          <param name="对齐" key="9999/10199/10201/2/354/1002961760/401" value="1 (居中)"/>
+                          <param name="对齐" key="9999/10199/10201/2/373" value="0 (左) 2 (下)"/>
+                          <param name="Out Sequencing" key="9999/10199/10201/4/10233/201/202" value="0 (到)"/>
+                          <param name="disableDRT" key="3733" value="1"/>
+                          <text>
+                            <text-style ref="\(textStyleID)">\(escapeXML(segment.text))</text-style>
+                          </text>
+                          <text-style-def id="\(textStyleID)">
+                            <text-style \(styleAttributes)/>
+                          </text-style-def>
+                          <adjust-colorConform enabled="1" autoOrManual="manual" conformType="conformNone" peakNitsOfPQSource="1000" peakNitsOfSDRToPQSource="203"/>
+                        </title>
         """
     }
 
@@ -1200,7 +1328,17 @@ final class AppModel: ObservableObject {
 
     private func fcpxmlTime(_ seconds: Double, fps: Int, minimumFrames: Int = 0) -> String {
         let frames = max(Int(round(seconds * Double(fps))), minimumFrames)
+        if frames == 0 {
+            return "0s"
+        }
         return "\(frames)/\(fps)s"
+    }
+
+    private func formatFCPXMLTimestamp(_ seconds: Double) -> String {
+        let clampedSeconds = max(seconds, 0)
+        let minutes = Int(clampedSeconds / 60)
+        let remainingSeconds = clampedSeconds - Double(minutes * 60)
+        return String(format: "%02d:%06.3f", minutes, remainingSeconds)
     }
 
     private func firstFCPXMLTitleLine(_ text: String, fallback: String) -> String {
@@ -1285,40 +1423,71 @@ final class AppModel: ObservableObject {
     }
 
     private func importIntoFinalCutPro(_ fcpxmlURL: URL) throws {
-        let escapedPath = escapeAppleScriptString(fcpxmlURL.path)
-        let source = """
-        tell application "Final Cut Pro"
-            activate
-            open POSIX file "\(escapedPath)"
-        end tell
-        """
+        let attempts: [[String]] = [
+            ["-b", "com.apple.FinalCutApp", fcpxmlURL.path],
+            ["-b", "com.apple.FinalCut", fcpxmlURL.path]
+        ] + finalCutProApplicationURLs().map { ["-a", $0.path, fcpxmlURL.path] } + [
+            [fcpxmlURL.path]
+        ]
 
-        var errorInfo: NSDictionary?
-        guard let script = NSAppleScript(source: source) else {
-            throw NSError(
-                domain: "SubForge.FinalCutProImport",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "无法创建 Final Cut Pro 导入脚本。"]
-            )
+        var failureMessages: [String] = []
+        for arguments in attempts {
+            do {
+                try runOpenCommand(arguments: arguments)
+                return
+            } catch {
+                failureMessages.append(error.localizedDescription)
+            }
         }
 
-        script.executeAndReturnError(&errorInfo)
+        throw NSError(
+            domain: "SubForge.FinalCutProImport",
+            code: 2,
+            userInfo: [
+                NSLocalizedDescriptionKey: failureMessages.last
+                    ?? "无法发现 Final Cut Pro 或打开 FCPXML。"
+            ]
+        )
+    }
 
-        if let errorInfo {
-            let message = errorInfo[NSAppleScript.errorMessage] as? String
-                ?? "无法打开 Final Cut Pro 或导入 FCPXML。"
-            throw NSError(
-                domain: "SubForge.FinalCutProImport",
-                code: 2,
-                userInfo: [NSLocalizedDescriptionKey: message]
-            )
+    private func finalCutProApplicationURLs() -> [URL] {
+        let workspace = NSWorkspace.shared
+        let bundleURLs = [
+            workspace.urlForApplication(withBundleIdentifier: "com.apple.FinalCutApp"),
+            workspace.urlForApplication(withBundleIdentifier: "com.apple.FinalCut")
+        ].compactMap(\.self)
+
+        let pathURLs = [
+            "/Applications/Final Cut Pro Creator Studio.app",
+            "/Applications/Final Cut Pro.app"
+        ].map { URL(fileURLWithPath: $0, isDirectory: true) }
+
+        var seen = Set<String>()
+        return (bundleURLs + pathURLs).filter { url in
+            guard FileManager.default.fileExists(atPath: url.path) else { return false }
+            return seen.insert(url.standardizedFileURL.path).inserted
         }
     }
 
-    private func escapeAppleScriptString(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+    private func runOpenCommand(arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = arguments
+
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let message = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(
+                domain: "SubForge.FinalCutProImport",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: message?.isEmpty == false ? message! : "无法打开 Final Cut Pro 或导入 FCPXML。"]
+            )
+        }
     }
 
     private func escapeXML(_ string: String) -> String {

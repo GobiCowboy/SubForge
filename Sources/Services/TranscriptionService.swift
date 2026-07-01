@@ -184,14 +184,7 @@ final class WhisperCppProvider: TranscriptionProvider {
     }
 
     private func resolveCLIPath() throws -> String {
-        let candidates = [
-            Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/whisper-cli").path,
-            WhisperModelStore.directory.deletingLastPathComponent().appendingPathComponent("whisper-cli").path,
-            "/opt/homebrew/opt/whisper-cpp/bin/whisper-cli",
-            "/opt/homebrew/bin/whisper-cli"
-        ]
-
-        if let path = candidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+        if let path = WhisperRuntime.cliCandidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
             return path
         }
 

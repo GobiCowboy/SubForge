@@ -316,7 +316,7 @@ struct SettingsPathField: View {
     }
 }
 
-func chooseDirectory(for path: Binding<String>) {
+func chooseDirectory(for path: Binding<String>, bookmarkData: Binding<Data?>? = nil) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
@@ -325,5 +325,6 @@ func chooseDirectory(for path: Binding<String>) {
 
     if panel.runModal() == .OK, let url = panel.url {
         path.wrappedValue = url.path
+        bookmarkData?.wrappedValue = SecurityScopedResourceAccess.bookmarkData(for: url)
     }
 }

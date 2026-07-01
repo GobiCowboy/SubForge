@@ -15,7 +15,6 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.title = "SubForge"
-        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
         AppLog.lifecycle.info("main window attached id=\(ObjectIdentifier(window).hashValue, privacy: .public)")
     }
 
@@ -25,26 +24,25 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             return false
         }
 
+        SubForgeAppDelegate.showDockIcon()
+
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
 
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
         AppLog.lifecycle.info("main window shown id=\(ObjectIdentifier(window).hashValue, privacy: .public) visible=\(window.isVisible, privacy: .public)")
         return true
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
-        AppLog.lifecycle.info("main window close intercepted, hidden instead")
+        if SettingsStore.load().showMenuBarIcon {
+            SubForgeAppDelegate.hideDockIconForMenuBarResidentMode()
+        }
+        AppLog.lifecycle.info("main window close intercepted, hidden to menu bar instead")
         return false
-    }
-
-    func windowWillMiniaturize(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow else { return }
-        window.deminiaturize(nil)
-        window.orderOut(nil)
-        AppLog.lifecycle.info("main window miniaturize intercepted, hidden instead")
     }
 }

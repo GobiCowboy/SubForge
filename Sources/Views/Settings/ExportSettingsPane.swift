@@ -44,7 +44,10 @@ struct ExportSettingsPane: View {
                                     .textFieldStyle(.roundedBorder)
 
                                 Button("选择…") {
-                                    chooseDirectory(for: $settings.exportSettings.customOutputPath)
+                                    chooseDirectory(
+                                        for: $settings.exportSettings.customOutputPath,
+                                        bookmarkData: $settings.exportSettings.customOutputBookmarkData
+                                    )
                                 }
                                 .buttonStyle(.bordered)
                             }

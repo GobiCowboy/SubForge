@@ -14,6 +14,8 @@
 - Release 日志：`./script/build_and_run.sh --release-logs`
 - Release 遥测：`./script/build_and_run.sh --release-telemetry`
 - 产物目录：`dist/SubForge.app`
+- 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
+- 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
 
 ## 3. 当前交付产物
 
@@ -36,6 +38,11 @@
 - 当前真实运行入口已经统一到 `script/build_and_run.sh`
 - SwiftUI GUI 应用不再建议直接运行 `.build/.../SubForge` 裸可执行文件，统一通过 `dist/SubForge.app` 或脚本启动
 - 本地 Whisper 依赖 `whisper-cli` 与模型文件，云端能力依赖用户自行配置 Key
+- App Store 准备文件已进入仓库：`Config/SubForge.entitlements`、`Resources/PrivacyInfo.xcprivacy`
+- App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问、Apple Events 与语音识别 entitlement
+- 云端 ASR / 校对 API Key 必须写入 Keychain，普通偏好才写入 UserDefaults
+- 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限
+- Bundle ID 使用 `com.jago.subforge`，App Store Connect 已按 macOS 应用创建
 
 ## 6. 后续重做建议
 

@@ -8,7 +8,7 @@
 | I-002 | `RootView` 主窗口组装层 | 已存在 | 首页 / 流水线 / 编辑页的根切换入口 |
 | I-003 | 首页工作区骨架 | 已存在 | `HomeView` + `ProjectSidebar` 组成首页导入与最近文件入口 |
 | I-004 | 设置中心分文件结构 | 已存在 | 设置页按通用 / 转写 / 校对 / 样式 / 导出 / 监听拆分 |
-| I-005 | 本地配置持久化 | 已存在 | `SettingsStore`、`RecentProjectsStore` 已独立 |
+| I-005 | 本地配置持久化 | 已存在 | `SettingsStore`、`RecentProjectsStore` 已独立；云端 API Key 通过 `KeychainStore` 保存，目录授权通过 security-scoped bookmark 保存 |
 | I-006 | 字幕基础工具 | 已存在 | `SRTCodec`、`TimeFormatting` 已独立 |
 | I-007 | 真实转写服务层 | 已存在 | `TranscriptionService` 已接入 Apple 语音 / 本地 Whisper / 云端 ASR |
 | I-008 | 模型纠正服务层 | 已存在 | `ProofreadingService` 已接入 OpenAI 兼容模型纠正链路 |

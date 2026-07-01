@@ -2,6 +2,7 @@ import Foundation
 
 enum SettingsStore {
     private static let key = "subforge.settings.v2"
+    private static let isKeychainPersistenceEnabled = false
 
     static func load() -> AppSettings {
         guard
@@ -11,6 +12,35 @@ enum SettingsStore {
             return AppSettings()
         }
 
+        normalize(&settings)
+
+        if isKeychainPersistenceEnabled {
+            let hadPlaintextASRKey = !settings.cloudASRKey.isEmpty
+            let hadPlaintextLLMKey = !settings.cloudLLMKey.isEmpty
+            migratePlaintextKeyIfNeeded(settings.cloudASRKey, account: .cloudASRKey)
+            migratePlaintextKeyIfNeeded(settings.cloudLLMKey, account: .cloudLLMKey)
+            settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? settings.cloudASRKey
+            settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? settings.cloudLLMKey
+
+            if hadPlaintextASRKey || hadPlaintextLLMKey {
+                persistPreferences(settings, includeSecrets: false)
+            }
+        }
+
+        return settings
+    }
+
+    static func save(_ settings: AppSettings) {
+        if isKeychainPersistenceEnabled {
+            KeychainStore.save(settings.cloudASRKey, account: .cloudASRKey)
+            KeychainStore.save(settings.cloudLLMKey, account: .cloudLLMKey)
+            persistPreferences(settings, includeSecrets: false)
+        } else {
+            persistPreferences(settings, includeSecrets: true)
+        }
+    }
+
+    private static func normalize(_ settings: inout AppSettings) {
         if settings.proofreadingEngine == .appleLocal {
             settings.proofreadingEngine = .cloudLLM
         }
@@ -37,12 +67,22 @@ enum SettingsStore {
            let firstAvailableModel = WhisperModelStore.availableModels().first {
             settings.whisperModel = firstAvailableModel
         }
-
-        return settings
     }
 
-    static func save(_ settings: AppSettings) {
-        guard let data = try? JSONEncoder().encode(settings) else { return }
+    private static func migratePlaintextKeyIfNeeded(_ value: String, account: KeychainStore.Account) {
+        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           KeychainStore.read(account) == nil {
+            KeychainStore.save(value, account: account)
+        }
+    }
+
+    private static func persistPreferences(_ settings: AppSettings, includeSecrets: Bool) {
+        var persisted = settings
+        if !includeSecrets {
+            persisted.cloudASRKey = ""
+            persisted.cloudLLMKey = ""
+        }
+        guard let data = try? JSONEncoder().encode(persisted) else { return }
         UserDefaults.standard.set(data, forKey: key)
     }
 }

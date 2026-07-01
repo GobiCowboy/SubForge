@@ -74,6 +74,7 @@ struct ExportSettings: Equatable, Codable {
     var namingRule = "{project_name}_{date}"
     var saveLocation: SaveLocation = .sameAsSource
     var customOutputPath: String = ""
+    var customOutputBookmarkData: Data?
     var overwriteExisting = false
     var includeLog = true
     var exportToFinalCutPro = false
@@ -86,6 +87,7 @@ struct ExportSettings: Equatable, Codable {
         case namingRule
         case saveLocation
         case customOutputPath
+        case customOutputBookmarkData
         case overwriteExisting
         case includeLog
         case exportToFinalCutPro
@@ -103,6 +105,7 @@ struct ExportSettings: Equatable, Codable {
         namingRule = try container.decodeIfPresent(String.self, forKey: .namingRule) ?? "{project_name}_{date}"
         saveLocation = try container.decodeIfPresent(SaveLocation.self, forKey: .saveLocation) ?? .sameAsSource
         customOutputPath = try container.decodeIfPresent(String.self, forKey: .customOutputPath) ?? ""
+        customOutputBookmarkData = try container.decodeIfPresent(Data.self, forKey: .customOutputBookmarkData)
         overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? false
         includeLog = try container.decodeIfPresent(Bool.self, forKey: .includeLog) ?? true
         exportToFinalCutPro = try container.decodeIfPresent(Bool.self, forKey: .exportToFinalCutPro) ?? false
@@ -128,6 +131,7 @@ enum SaveLocation: String, CaseIterable, Codable, Identifiable {
 
 struct WatchSettings: Equatable, Codable {
     var directoryPath: String = ""
+    var directoryBookmarkData: Data?
     var manualReviewBeforeExport = true
     var autoStart = false
     var newFileAction: WatchAction = .queue
