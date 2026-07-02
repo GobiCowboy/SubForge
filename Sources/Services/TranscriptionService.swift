@@ -323,6 +323,7 @@ final class WhisperCppProvider: TranscriptionProvider {
             "-l", language.hasPrefix("zh") ? "zh" : language,
             "-t", "4",
             "--max-len", "20",
+            "--no-gpu",
             "--no-prints"
         ]
 
@@ -337,9 +338,20 @@ final class WhisperCppProvider: TranscriptionProvider {
         let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         if process.terminationStatus != 0 {
             let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            throw TranscriptionError.whisperExecutionFailed(
-                cleanWhisperError(error, terminationStatus: process.terminationStatus)
+            let outputPreview = output
+                .components(separatedBy: .newlines)
+                .prefix(8)
+                .joined(separator: "\n")
+            let cleanedError = cleanWhisperError(
+                error,
+                output: outputPreview,
+                terminationStatus: process.terminationStatus,
+                terminationReason: process.terminationReason
             )
+            AppLog.transcription.error(
+                "whisperCLI failed status=\(process.terminationStatus, privacy: .public) reason=\(process.terminationReason.rawValue, privacy: .public) error=\(cleanedError, privacy: .public)"
+            )
+            throw TranscriptionError.whisperExecutionFailed(cleanedError)
         }
 
         return output
@@ -354,11 +366,17 @@ final class WhisperCppProvider: TranscriptionProvider {
         if FileManager.default.fileExists(atPath: backendURL.path) {
             environment["GGML_BACKEND_PATH"] = backendURL.path
         }
+        environment["GGML_BACKTRACE_LLDB"] = "0"
 
         return environment
     }
 
-    private static func cleanWhisperError(_ error: String, terminationStatus: Int32) -> String {
+    private static func cleanWhisperError(
+        _ error: String,
+        output: String,
+        terminationStatus: Int32,
+        terminationReason: Process.TerminationReason
+    ) -> String {
         let meaningfulLines = error
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -370,6 +388,18 @@ final class WhisperCppProvider: TranscriptionProvider {
 
         if !meaningfulLines.isEmpty {
             return meaningfulLines.joined(separator: "\n")
+        }
+
+        let outputLines = output
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !outputLines.isEmpty {
+            return outputLines.joined(separator: "\n")
+        }
+
+        if terminationReason == .uncaughtSignal {
+            return "whisper-cli 被运行库中断（信号 \(terminationStatus)）。已禁用 GPU 路径，请重新验证；如果仍出现，请把日志里的 whisperCLI failed 发给我。"
         }
 
         if terminationStatus == 133 || terminationStatus == 137 {

@@ -19,6 +19,8 @@ APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
+DEBUG_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.debug.entitlements"
+INHERIT_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.inherit.entitlements"
 
 usage() {
   echo "usage: $0 [run|release|--debug|--logs|--telemetry|--verify|--release-logs|--release-telemetry|--release-verify]" >&2
@@ -58,6 +60,7 @@ stage_bundle() {
 
   embed_whisper_runtime
   rewrite_runtime_library_paths
+  scrub_homebrew_backend_paths
   sign_nested_code_ad_hoc
 
   cat >"$INFO_PLIST" <<PLIST
@@ -128,7 +131,13 @@ sign_nested_code_ad_hoc() {
 
   find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
-    codesign --force --timestamp=none --sign - "$mach_o"
+    if [ "$(basename "$mach_o")" = "whisper-cli" ] && [ -f "$INHERIT_ENTITLEMENTS" ]; then
+      codesign --force --timestamp=none \
+        --entitlements "$INHERIT_ENTITLEMENTS" \
+        --sign - "$mach_o"
+    else
+      codesign --force --timestamp=none --sign - "$mach_o"
+    fi
   done
 }
 
@@ -159,7 +168,7 @@ embed_whisper_runtime() {
   fi
 
   if [ -n "$ggml_prefix" ] && [ -d "$ggml_prefix/libexec" ]; then
-    find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" -exec cp {} "$APP_FRAMEWORKS/" \;
+    find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" ! -name "libggml-metal.so" -exec cp {} "$APP_FRAMEWORKS/" \;
   fi
 
   if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/lib/libomp.dylib" ]; then
@@ -189,21 +198,37 @@ rewrite_runtime_library_paths() {
   done
 }
 
-sign_bundle_if_requested() {
-  if [ "${CODE_SIGN:-0}" != "1" ] && [ -z "${CODE_SIGN_IDENTITY:-}" ]; then
+scrub_homebrew_backend_paths() {
+  if [ ! -d "$APP_FRAMEWORKS" ]; then
     return
   fi
 
+  local old="/opt/homebrew/Cellar/ggml/0.15.1/libexec"
+  local replacement="/SubForgeNoBackendDirectory/unused_path_"
+
+  find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
+    file "$mach_o" | grep -q "Mach-O" || continue
+    if strings "$mach_o" | grep -q "$old"; then
+      perl -0pi -e "s|\\Q$old\\E|$replacement|g" "$mach_o"
+    fi
+  done
+}
+
+sign_bundle_if_requested() {
   local identity="${CODE_SIGN_IDENTITY:--}"
+  local entitlements="$ENTITLEMENTS"
   local timestamp_arg="--timestamp"
+  local options_arg="--options runtime"
   if [ "$identity" = "-" ]; then
     timestamp_arg="--timestamp=none"
+    options_arg=""
+    entitlements="$DEBUG_ENTITLEMENTS"
   fi
 
   codesign --force \
-    --options runtime \
+    ${options_arg:+--options runtime} \
     "$timestamp_arg" \
-    --entitlements "$ENTITLEMENTS" \
+    --entitlements "$entitlements" \
     --sign "$identity" \
     "$APP_BUNDLE"
 }

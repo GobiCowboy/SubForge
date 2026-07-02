@@ -19,6 +19,7 @@ APP_NOTICES="$APP_RESOURCES/ThirdPartyNotices"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
+DEBUG_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.debug.entitlements"
 INHERIT_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.inherit.entitlements"
 PKG_PATH="$DIST_DIR/$APP_NAME.pkg"
 
@@ -109,6 +110,7 @@ stage_bundle() {
   embed_whisper_runtime
   embed_third_party_notices
   rewrite_runtime_library_paths
+  scrub_homebrew_backend_paths
   clean_bundle_metadata
 
   cat >"$INFO_PLIST" <<PLIST
@@ -195,7 +197,7 @@ embed_whisper_runtime() {
 
   find "$whisper_prefix/lib" -maxdepth 1 -name "libwhisper*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
   find "$ggml_prefix/lib" -maxdepth 1 -name "libggml*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
-  find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" -exec cp {} "$APP_FRAMEWORKS/" \;
+  find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" ! -name "libggml-metal.so" -exec cp {} "$APP_FRAMEWORKS/" \;
 
   require_file "$libomp_prefix/lib/libomp.dylib"
   cp "$libomp_prefix/lib/libomp.dylib" "$APP_FRAMEWORKS/libomp.dylib"
@@ -244,6 +246,22 @@ rewrite_runtime_library_paths() {
         install_name_tool -change "$dependency" "@loader_path/$name" "$mach_o" 2>/dev/null || true
       fi
     done
+  done
+}
+
+scrub_homebrew_backend_paths() {
+  if [ ! -d "$APP_FRAMEWORKS" ]; then
+    return
+  fi
+
+  local old="/opt/homebrew/Cellar/ggml/0.15.1/libexec"
+  local replacement="/SubForgeNoBackendDirectory/unused_path_"
+
+  find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
+    file "$mach_o" | grep -q "Mach-O" || continue
+    if strings "$mach_o" | grep -q "$old"; then
+      perl -0pi -e "s|\\Q$old\\E|$replacement|g" "$mach_o"
+    fi
   done
 }
 
@@ -302,6 +320,13 @@ sign_app() {
     --sign "$identity" "$APP_BUNDLE"
 }
 
+sign_app_ad_hoc_for_testing() {
+  sign_nested_code "-"
+  codesign --force --timestamp=none \
+    --entitlements "$DEBUG_ENTITLEMENTS" \
+    --sign - "$APP_BUNDLE"
+}
+
 package_app() {
   local identity
   identity="$(find_identity "$INSTALLER_SIGN_IDENTITY" \
@@ -324,8 +349,9 @@ package_app() {
 
 verify_bundle() {
   require_file "$ENTITLEMENTS"
+  require_file "$DEBUG_ENTITLEMENTS"
   require_file "$INHERIT_ENTITLEMENTS"
-  plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
 
   if [ -f "$APP_RESOURCES/PrivacyInfo.xcprivacy" ]; then
     plutil -lint "$APP_RESOURCES/PrivacyInfo.xcprivacy"
@@ -362,7 +388,7 @@ main() {
   if [ "$MODE" = "--signed" ] || [ "$MODE" = "--package" ]; then
     sign_app
   else
-    sign_nested_code "-"
+    sign_app_ad_hoc_for_testing
   fi
 
   if [ "$MODE" = "--package" ]; then

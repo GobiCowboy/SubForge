@@ -94,6 +94,8 @@ App bundle 会嵌入：
 
 - 拷贝 `libomp.dylib`
 - 重写 Homebrew 绝对依赖路径为 bundle 内路径
+- 清除 `libggml` 中写死的 Homebrew backend 扫描路径，避免 App Sandbox 访问 `/opt/homebrew/.../libexec`
+- 不打包 Metal backend，Local Whisper 在 App Store 沙盒包中走 CPU 路径
 - 检查 `otool -L` 不再包含 `/opt/homebrew` 或 `/usr/local`
 - 打包第三方 license 到 `Contents/Resources/ThirdPartyNotices`
 
