@@ -172,11 +172,17 @@ final class WhisperCppProvider: TranscriptionProvider {
             try Self.convertToWAV(input: audioURL, output: wavURL)
         }.value
 
+        let leadingSilenceOffset = (try? Self.leadingAudibleOffset(in: wavURL)) ?? 0
+
         let output = try await Task.detached(priority: .userInitiated) {
             try Self.runWhisperCLI(cliPath: cliPath, modelPath: modelPath, wavURL: wavURL, language: language)
         }.value
 
-        let parsed = SubtitleSegmentationService.refine(parseWhisperOutput(output))
+        let rawSegments = alignLeadingSegmentStartIfNeeded(
+            parseWhisperOutput(output),
+            offset: leadingSilenceOffset
+        )
+        let parsed = SubtitleSegmentationService.refine(rawSegments)
         guard !parsed.isEmpty else {
             throw TranscriptionError.emptyResult
         }
@@ -223,6 +229,86 @@ final class WhisperCppProvider: TranscriptionProvider {
         }
     }
 
+    private static func leadingAudibleOffset(in wavURL: URL) throws -> TimeInterval {
+        let file = try AVAudioFile(forReading: wavURL)
+        let format = file.processingFormat
+        let sampleRate = format.sampleRate
+        guard sampleRate > 0 else { return 0 }
+
+        let windowFrames = max(1, Int(sampleRate * 0.08))
+        let chunkSize: AVAudioFrameCount = 4096
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkSize) else {
+            return 0
+        }
+
+        var windowEnergy: Double = 0
+        var windowFrameCount = 0
+        var windowRMSValues: [Double] = []
+
+        while file.framePosition < file.length {
+            try file.read(into: buffer, frameCount: chunkSize)
+            let frameLength = Int(buffer.frameLength)
+            guard frameLength > 0, let channels = buffer.floatChannelData else { break }
+            let channelCount = Int(format.channelCount)
+
+            for frameIndex in 0..<frameLength {
+                var sum: Double = 0
+                for channelIndex in 0..<channelCount {
+                    let sample = Double(channels[channelIndex][frameIndex])
+                    sum += sample * sample
+                }
+
+                windowEnergy += sum / Double(max(channelCount, 1))
+                windowFrameCount += 1
+
+                if windowFrameCount >= windowFrames {
+                    windowRMSValues.append(sqrt(windowEnergy / Double(windowFrameCount)))
+                    windowEnergy = 0
+                    windowFrameCount = 0
+                }
+            }
+        }
+
+        if windowFrameCount > 0 {
+            windowRMSValues.append(sqrt(windowEnergy / Double(windowFrameCount)))
+        }
+
+        guard !windowRMSValues.isEmpty else { return 0 }
+
+        let baselineWindowCount = min(windowRMSValues.count, max(1, Int(3.0 / 0.08)))
+        let baseline = Array(windowRMSValues.prefix(baselineWindowCount)).sorted()
+        let baselineRMS = baseline[baseline.count / 2]
+        let speechThreshold = max(0.012, baselineRMS * 5.0)
+        let requiredWindows = 3
+        var runLength = 0
+        var candidateIndex: Int?
+
+        for (index, rms) in windowRMSValues.enumerated() {
+            if rms >= speechThreshold {
+                if candidateIndex == nil {
+                    candidateIndex = index
+                }
+                runLength += 1
+
+                if runLength >= requiredWindows, let candidateIndex {
+                    let offset = Double(candidateIndex * windowFrames) / sampleRate
+                    AppLog.transcription.info(
+                        "whisperLeadingSpeechOffset offset=\(offset, privacy: .public) threshold=\(speechThreshold, privacy: .public) baseline=\(baselineRMS, privacy: .public)"
+                    )
+                    return max(0, offset)
+                }
+            } else {
+                candidateIndex = nil
+                runLength = 0
+            }
+        }
+
+        AppLog.transcription.info(
+            "whisperLeadingSpeechOffset offset=0 threshold=\(speechThreshold, privacy: .public) baseline=\(baselineRMS, privacy: .public)"
+        )
+        return 0
+    }
+
     private static func runWhisperCLI(
         cliPath: String,
         modelPath: String,
@@ -236,6 +322,7 @@ final class WhisperCppProvider: TranscriptionProvider {
             "-f", wavURL.path,
             "-l", language.hasPrefix("zh") ? "zh" : language,
             "-t", "4",
+            "--max-len", "20",
             "--no-prints"
         ]
 
@@ -243,22 +330,82 @@ final class WhisperCppProvider: TranscriptionProvider {
         let errorPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = errorPipe
+        process.environment = whisperEnvironment(for: cliPath)
         try process.run()
         process.waitUntilExit()
 
         let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         if process.terminationStatus != 0 {
             let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            throw TranscriptionError.whisperExecutionFailed(error.isEmpty ? "whisper-cli 执行失败" : error)
+            throw TranscriptionError.whisperExecutionFailed(
+                cleanWhisperError(error, terminationStatus: process.terminationStatus)
+            )
         }
 
         return output
+    }
+
+    private static func whisperEnvironment(for cliPath: String) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let cliURL = URL(fileURLWithPath: cliPath)
+        let frameworkDirectory = cliURL.deletingLastPathComponent()
+
+        let backendURL = frameworkDirectory.appendingPathComponent("libggml-blas.so")
+        if FileManager.default.fileExists(atPath: backendURL.path) {
+            environment["GGML_BACKEND_PATH"] = backendURL.path
+        }
+
+        return environment
+    }
+
+    private static func cleanWhisperError(_ error: String, terminationStatus: Int32) -> String {
+        let meaningfulLines = error
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { line in
+                !line.isEmpty
+                    && !line.hasPrefix("WARNING: Using native backtrace")
+                    && !line.hasPrefix("WARNING: GGML_BACKTRACE_LLDB")
+            }
+
+        if !meaningfulLines.isEmpty {
+            return meaningfulLines.joined(separator: "\n")
+        }
+
+        if terminationStatus == 133 || terminationStatus == 137 {
+            return "whisper-cli 被系统终止，请确认应用内置的 Whisper 运行库完整。"
+        }
+
+        return "whisper-cli 执行失败（退出码 \(terminationStatus)）"
     }
 
     private func parseWhisperOutput(_ output: String) -> [SubtitleSegment] {
         output
             .components(separatedBy: .newlines)
             .compactMap(parseWhisperLine)
+    }
+
+    private func alignLeadingSegmentStartIfNeeded(
+        _ segments: [SubtitleSegment],
+        offset: TimeInterval
+    ) -> [SubtitleSegment] {
+        guard offset > 0.4, let firstStart = segments.first?.start, firstStart < 0.5 else {
+            return segments
+        }
+
+        AppLog.transcription.info(
+            "whisperLeadingStartAligned offset=\(offset, privacy: .public) segmentCount=\(segments.count, privacy: .public)"
+        )
+
+        var aligned = segments
+        let first = aligned[0]
+        aligned[0] = SubtitleSegment(
+            id: first.id,
+            start: min(offset, max(first.start, first.end - 0.2)),
+            end: first.end,
+            text: first.text
+        )
+        return aligned
     }
 
     private func parseWhisperLine(_ line: String) -> SubtitleSegment? {

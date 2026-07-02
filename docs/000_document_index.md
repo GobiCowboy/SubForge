@@ -19,6 +19,7 @@
 - [204_quality_plan.md](./200_foundation/204_quality_plan.md)
 - [205_build_release.md](./200_foundation/205_build_release.md)
 - [206_logging_system.md](./200_foundation/206_logging_system.md)
+- [207_appstore_submission.md](./200_foundation/207_appstore_submission.md)
 
 ## 300 功能文档
 

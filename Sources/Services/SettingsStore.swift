@@ -2,7 +2,11 @@ import Foundation
 
 enum SettingsStore {
     private static let key = "subforge.settings.v2"
+    #if DEBUG
     private static let isKeychainPersistenceEnabled = false
+    #else
+    private static let isKeychainPersistenceEnabled = true
+    #endif
 
     static func load() -> AppSettings {
         guard
@@ -17,10 +21,18 @@ enum SettingsStore {
         if isKeychainPersistenceEnabled {
             let hadPlaintextASRKey = !settings.cloudASRKey.isEmpty
             let hadPlaintextLLMKey = !settings.cloudLLMKey.isEmpty
-            migratePlaintextKeyIfNeeded(settings.cloudASRKey, account: .cloudASRKey)
-            migratePlaintextKeyIfNeeded(settings.cloudLLMKey, account: .cloudLLMKey)
-            settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? settings.cloudASRKey
-            settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? settings.cloudLLMKey
+
+            if hadPlaintextASRKey {
+                KeychainStore.save(settings.cloudASRKey, account: .cloudASRKey)
+            } else {
+                settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? ""
+            }
+
+            if hadPlaintextLLMKey {
+                KeychainStore.save(settings.cloudLLMKey, account: .cloudLLMKey)
+            } else {
+                settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? ""
+            }
 
             if hadPlaintextASRKey || hadPlaintextLLMKey {
                 persistPreferences(settings, includeSecrets: false)
@@ -66,13 +78,6 @@ enum SettingsStore {
         if !WhisperModelStore.isAvailable(settings.whisperModel),
            let firstAvailableModel = WhisperModelStore.availableModels().first {
             settings.whisperModel = firstAvailableModel
-        }
-    }
-
-    private static func migratePlaintextKeyIfNeeded(_ value: String, account: KeychainStore.Account) {
-        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           KeychainStore.read(account) == nil {
-            KeychainStore.save(value, account: account)
         }
     }
 

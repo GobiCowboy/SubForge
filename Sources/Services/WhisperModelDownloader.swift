@@ -21,13 +21,17 @@ enum WhisperModelDownloader {
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
     ]
 
-    static func download(_ model: WhisperModel) async throws {
+    static func download(
+        _ model: WhisperModel,
+        progress: @escaping @Sendable (Double?) -> Void = { _ in }
+    ) async throws {
         let destination = WhisperModelStore.localPath(for: model)
         let temporaryURL = FileManager.default.temporaryDirectory.appendingPathComponent(model.fileName)
 
         for mirror in mirrors {
             do {
-                try await downloadViaCurl(from: mirror + model.fileName, to: temporaryURL)
+                progress(0)
+                try await downloadViaURLSession(from: mirror + model.fileName, to: temporaryURL, progress: progress)
 
                 let attributes = try FileManager.default.attributesOfItem(atPath: temporaryURL.path)
                 let fileSize = attributes[.size] as? Int64 ?? 0
@@ -40,38 +44,102 @@ enum WhisperModelDownloader {
                     try FileManager.default.removeItem(at: destination)
                 }
                 try FileManager.default.moveItem(at: temporaryURL, to: destination)
+                progress(1)
                 return
             } catch {
                 try? FileManager.default.removeItem(at: temporaryURL)
+                progress(nil)
             }
         }
 
         throw WhisperDownloadError.allMirrorsFailed
     }
 
-    private static func downloadViaCurl(from remoteURL: String, to localURL: URL) async throws {
-        try await Task.detached(priority: .utility) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            process.arguments = [
-                "-L",
-                "--fail",
-                "--connect-timeout", "15",
-                "--max-time", "1800",
-                "-o", localURL.path,
-                remoteURL
-            ]
+    private static func downloadViaURLSession(
+        from remoteURL: String,
+        to localURL: URL,
+        progress: @escaping @Sendable (Double?) -> Void
+    ) async throws {
+        guard let url = URL(string: remoteURL) else {
+            throw WhisperDownloadError.downloadFailed(remoteURL)
+        }
 
-            let errorPipe = Pipe()
-            process.standardError = errorPipe
-            try process.run()
-            process.waitUntilExit()
+        let delegate = WhisperDownloadDelegate(destination: localURL, progress: progress)
+        let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        try await delegate.start(url: url, session: session)
+    }
+}
 
-            guard process.terminationStatus == 0 else {
-                let message = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                throw WhisperDownloadError.downloadFailed(message.isEmpty ? remoteURL : message)
+private final class WhisperDownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    private let destination: URL
+    private let progress: @Sendable (Double?) -> Void
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var completionError: Error?
+    private var didResume = false
+
+    init(destination: URL, progress: @escaping @Sendable (Double?) -> Void) {
+        self.destination = destination
+        self.progress = progress
+    }
+
+    func start(url: URL, session: URLSession) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            session.downloadTask(with: url).resume()
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else {
+            progress(nil)
+            return
+        }
+
+        let fraction = min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+        progress(fraction)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
             }
-        }.value
+            try FileManager.default.moveItem(at: location, to: destination)
+        } catch {
+            completionError = error
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume, let continuation else { return }
+        didResume = true
+
+        if let error {
+            continuation.resume(throwing: error)
+        } else if let completionError {
+            continuation.resume(throwing: completionError)
+        } else {
+            continuation.resume()
+        }
     }
 }
 

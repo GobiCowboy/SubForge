@@ -5,6 +5,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     static let shared = MainWindowController()
 
     private weak var window: NSWindow?
+    private var hidesDockOnClose = true
 
     private override init() {
         super.init()
@@ -37,9 +38,13 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         return true
     }
 
+    func setHidesDockOnClose(_ hidesDockOnClose: Bool) {
+        self.hidesDockOnClose = hidesDockOnClose
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
-        if SettingsStore.load().showMenuBarIcon {
+        if hidesDockOnClose {
             SubForgeAppDelegate.hideDockIconForMenuBarResidentMode()
         }
         AppLog.lifecycle.info("main window close intercepted, hidden to menu bar instead")

@@ -67,7 +67,7 @@ struct ToastMessage: Identifiable, Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var mode: WorkspaceMode = .home
-    @Published var settings: AppSettings = SettingsStore.load()
+    @Published var settings = AppSettings()
     @Published var recentProjects: [RecentProject] = RecentProjectsStore.load()
     @Published var currentDocumentURL: URL?
     @Published var segments: [SubtitleSegment] = []
@@ -108,12 +108,14 @@ final class AppModel: ObservableObject {
         menuBarController.bind(model: self)
         SubForgeAppDelegate.applyActivationPolicy(for: initialSettings)
         menuBarController.setVisible(initialSettings.showMenuBarIcon)
+        MainWindowController.shared.setHidesDockOnClose(initialSettings.showMenuBarIcon)
 
         $settings
             .dropFirst()
             .sink { [weak self] settings in
                 SettingsStore.save(settings)
                 SubForgeAppDelegate.applyActivationPolicy(for: settings)
+                MainWindowController.shared.setHidesDockOnClose(settings.showMenuBarIcon)
                 self?.menuBarController.setVisible(settings.showMenuBarIcon)
                 self?.menuBarController.refreshMenu()
                 self?.applyWatchSettings(settings)

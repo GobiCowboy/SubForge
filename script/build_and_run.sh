@@ -46,6 +46,7 @@ stage_bundle() {
   if [ -f "$ROOT_DIR/BAK/test_audio.m4a" ]; then
     cp "$ROOT_DIR/BAK/test_audio.m4a" "$APP_RESOURCES/test_audio.m4a"
   fi
+  embed_bundled_base_model
 
   if [ -f "$ROOT_DIR/Resources/AppIcon.icns" ]; then
     cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_RESOURCES/AppIcon.icns"
@@ -55,12 +56,9 @@ stage_bundle() {
     cp "$ROOT_DIR/Resources/PrivacyInfo.xcprivacy" "$APP_RESOURCES/PrivacyInfo.xcprivacy"
   fi
 
-  if [ -d "$ROOT_DIR/BAK/SubForge.app/Contents/Frameworks" ]; then
-    ditto "$ROOT_DIR/BAK/SubForge.app/Contents/Frameworks" "$APP_FRAMEWORKS"
-    if [ -f "$APP_FRAMEWORKS/whisper-cli" ]; then
-      chmod +x "$APP_FRAMEWORKS/whisper-cli"
-    fi
-  fi
+  embed_whisper_runtime
+  rewrite_runtime_library_paths
+  sign_nested_code_ad_hoc
 
   cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -94,6 +92,101 @@ stage_bundle() {
 </dict>
 </plist>
 PLIST
+}
+
+embed_bundled_base_model() {
+  local source="${BASE_MODEL_SOURCE:-}"
+  local candidates=(
+    "$ROOT_DIR/Resources/ggml-base.bin"
+    "$ROOT_DIR/BAK/models/ggml-base.bin"
+    "$HOME/Library/Application Support/SubForge/models/ggml-base.bin"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/ggml-base.bin"
+  )
+
+  if [ -z "$source" ]; then
+    local candidate
+    for candidate in "${candidates[@]}"; do
+      if [ -f "$candidate" ]; then
+        source="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [ -z "$source" ] || [ ! -f "$source" ]; then
+    echo "missing bundled Base model; set BASE_MODEL_SOURCE=/path/to/ggml-base.bin" >&2
+    exit 1
+  fi
+
+  cp "$source" "$APP_RESOURCES/ggml-base.bin"
+}
+
+sign_nested_code_ad_hoc() {
+  if [ ! -d "$APP_FRAMEWORKS" ]; then
+    return
+  fi
+
+  find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
+    file "$mach_o" | grep -q "Mach-O" || continue
+    codesign --force --timestamp=none --sign - "$mach_o"
+  done
+}
+
+embed_whisper_runtime() {
+  if ! command -v brew >/dev/null 2>&1; then
+    return
+  fi
+
+  local whisper_prefix ggml_prefix libomp_prefix
+  whisper_prefix="$(brew --prefix whisper-cpp 2>/dev/null || true)"
+  ggml_prefix="$(brew --prefix ggml 2>/dev/null || true)"
+  libomp_prefix="$(brew --prefix libomp 2>/dev/null || true)"
+  [ -n "$whisper_prefix" ] && whisper_prefix="$(realpath "$whisper_prefix")"
+  [ -n "$ggml_prefix" ] && ggml_prefix="$(realpath "$ggml_prefix")"
+  [ -n "$libomp_prefix" ] && libomp_prefix="$(realpath "$libomp_prefix")"
+
+  if [ -n "$whisper_prefix" ] && [ -x "$whisper_prefix/bin/whisper-cli" ]; then
+    cp "$whisper_prefix/bin/whisper-cli" "$APP_FRAMEWORKS/whisper-cli"
+    chmod +x "$APP_FRAMEWORKS/whisper-cli"
+  fi
+
+  if [ -n "$whisper_prefix" ] && [ -d "$whisper_prefix/lib" ]; then
+    find "$whisper_prefix/lib" -maxdepth 1 -name "libwhisper*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
+  fi
+
+  if [ -n "$ggml_prefix" ] && [ -d "$ggml_prefix/lib" ]; then
+    find "$ggml_prefix/lib" -maxdepth 1 -name "libggml*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
+  fi
+
+  if [ -n "$ggml_prefix" ] && [ -d "$ggml_prefix/libexec" ]; then
+    find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" -exec cp {} "$APP_FRAMEWORKS/" \;
+  fi
+
+  if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/lib/libomp.dylib" ]; then
+    cp "$libomp_prefix/lib/libomp.dylib" "$APP_FRAMEWORKS/libomp.dylib"
+  fi
+}
+
+rewrite_runtime_library_paths() {
+  if [ ! -d "$APP_FRAMEWORKS" ]; then
+    return
+  fi
+
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" \) -print0 | while IFS= read -r -d '' mach_o; do
+    file "$mach_o" | grep -q "Mach-O" || continue
+
+    if [[ "$(basename "$mach_o")" == *.dylib ]]; then
+      install_name_tool -id "@loader_path/$(basename "$mach_o")" "$mach_o" 2>/dev/null || true
+    fi
+
+    otool -L "$mach_o" 2>/dev/null | awk '/@rpath\/|\/opt\/homebrew|\/usr\/local/ {print $1}' | while read -r dependency; do
+      local name
+      name="$(basename "$dependency")"
+      if [ -f "$APP_FRAMEWORKS/$name" ]; then
+        install_name_tool -change "$dependency" "@loader_path/$name" "$mach_o" 2>/dev/null || true
+      fi
+    done
+  done
 }
 
 sign_bundle_if_requested() {

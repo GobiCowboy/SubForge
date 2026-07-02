@@ -69,9 +69,19 @@ enum WhisperModelStore {
             .appendingPathComponent("BAK/models/\(model.fileName)")
     }
 
+    static func bundledResourcePath(for model: WhisperModel) -> URL {
+        Bundle.main.resourceURL?.appendingPathComponent(model.fileName)
+            ?? Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(model.fileName)")
+    }
+
+    static func isBundled(_ model: WhisperModel) -> Bool {
+        FileManager.default.fileExists(atPath: bundledResourcePath(for: model).path)
+    }
+
     static func existingPath(for model: WhisperModel) -> URL? {
         let candidates = [
             localPath(for: model),
+            bundledResourcePath(for: model),
             bundledDevelopmentPath(for: model)
         ]
 

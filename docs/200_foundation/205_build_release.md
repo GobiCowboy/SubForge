@@ -14,6 +14,9 @@
 - Release 日志：`./script/build_and_run.sh --release-logs`
 - Release 遥测：`./script/build_and_run.sh --release-telemetry`
 - 产物目录：`dist/SubForge.app`
+- App Store 结构检查：`./script/release_appstore.sh --unsigned`
+- App Store 签名构建：`./script/release_appstore.sh --signed`
+- App Store 上传包：`./script/release_appstore.sh --package`
 - 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
 - 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
 
@@ -39,10 +42,12 @@
 - SwiftUI GUI 应用不再建议直接运行 `.build/.../SubForge` 裸可执行文件，统一通过 `dist/SubForge.app` 或脚本启动
 - 本地 Whisper 依赖 `whisper-cli` 与模型文件，云端能力依赖用户自行配置 Key
 - App Store 准备文件已进入仓库：`Config/SubForge.entitlements`、`Resources/PrivacyInfo.xcprivacy`
-- App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问、Apple Events 与语音识别 entitlement
+- App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问与 Apple Events entitlement；语音识别使用 `NSSpeechRecognitionUsageDescription`，不在签名 entitlement 中声明
 - 云端 ASR / 校对 API Key 必须写入 Keychain，普通偏好才写入 UserDefaults
 - 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限
 - Bundle ID 使用 `com.jago.subforge`，App Store Connect 已按 macOS 应用创建
+- App Store release 脚本会嵌入 `whisper-cli`、`libwhisper`、`libggml`、`libggml-base`、`libomp`，并检查不残留 `/opt/homebrew` 或 `/usr/local` 绝对动态库依赖
+- 当前本机缺少 Mac App Store app / installer signing identity，不能直接生成可上传包
 
 ## 6. 后续重做建议
 

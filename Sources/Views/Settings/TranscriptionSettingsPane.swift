@@ -11,6 +11,7 @@ struct TranscriptionSettingsPane: View {
     @State private var audioPlayer: AVAudioPlayer?
     @State private var audioDelegate: SettingsAudioPlayDelegate?
     @State private var downloadingModel: WhisperModel?
+    @State private var downloadProgress: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
@@ -172,10 +173,18 @@ struct TranscriptionSettingsPane: View {
             Spacer()
 
             if WhisperModelStore.isAvailable(candidate) {
-                SettingsPill(text: "已下载", tint: .green)
+                SettingsPill(
+                    text: WhisperModelStore.isBundled(candidate) ? "已内置" : "已下载",
+                    tint: .green
+                )
             } else if downloadingModel == candidate {
-                ProgressView()
-                    .controlSize(.small)
+                VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: downloadProgress ?? 0)
+                        .frame(width: 96)
+                    Text(downloadProgressText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Button("下载 \(candidate.sizeMB)MB") {
                     downloadModel(candidate)
@@ -317,22 +326,38 @@ struct TranscriptionSettingsPane: View {
 
     private func downloadModel(_ candidate: WhisperModel) {
         downloadingModel = candidate
+        downloadProgress = 0
 
         Task {
             do {
-                try await WhisperModelDownloader.download(candidate)
+                try await WhisperModelDownloader.download(candidate) { progress in
+                    Task { @MainActor in
+                        if downloadingModel == candidate {
+                            downloadProgress = progress
+                        }
+                    }
+                }
                 await MainActor.run {
                     settings.whisperModel = candidate
                     downloadingModel = nil
+                    downloadProgress = nil
                     model.toast = ToastMessage(text: "\(candidate.displayName) 下载完成", level: .success)
                 }
             } catch {
                 await MainActor.run {
                     downloadingModel = nil
+                    downloadProgress = nil
                     model.toast = ToastMessage(text: error.localizedDescription, level: .error)
                 }
             }
         }
+    }
+
+    private var downloadProgressText: String {
+        guard let downloadProgress else {
+            return "下载中..."
+        }
+        return "下载中 \(Int(downloadProgress * 100))%"
     }
 }
 

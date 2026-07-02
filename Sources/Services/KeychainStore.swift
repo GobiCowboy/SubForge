@@ -36,13 +36,19 @@ enum KeychainStore {
         var updateQuery = baseQuery(account)
         applyNonInteractiveAuthenticationContext(to: &updateQuery)
         let status = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var query = baseQuery(account)
-            query[kSecValueData as String] = data
-            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            applyNonInteractiveAuthenticationContext(to: &query)
-            SecItemAdd(query as CFDictionary, nil)
+        if status == errSecSuccess {
+            return
         }
+
+        if status != errSecItemNotFound {
+            SecItemDelete(baseQuery(account) as CFDictionary)
+        }
+
+        var query = baseQuery(account)
+        query[kSecValueData as String] = data
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        applyNonInteractiveAuthenticationContext(to: &query)
+        SecItemAdd(query as CFDictionary, nil)
     }
 
     static func delete(_ account: Account) {
