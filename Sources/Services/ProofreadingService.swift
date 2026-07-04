@@ -113,7 +113,8 @@ final class CloudLLMProvider: ProofreadingProvider {
         3. 每行保留原始序号，不跳号。
         4. 不允许合并、删除、拆分任意字幕行。
         5. 每一行都必须输出非空文本。
-        6. 只输出“序号 + 文本”，不要解释。
+        6. 字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。
+        7. 只输出“序号 + 文本”，不要解释。
 
         额外提示：
         \(prompt)
@@ -127,7 +128,7 @@ final class CloudLLMProvider: ProofreadingProvider {
             "messages": [
                 [
                     "role": "system",
-                    "content": "你是字幕校对助手，只输出修正后的字幕，每行一条，保持序号格式。不要输出其他内容。"
+                    "content": "你是字幕校对助手，只输出修正后的字幕，每行一条，保持序号格式。遵守字幕标点风格，不要输出其他内容。"
                 ],
                 [
                     "role": "user",
@@ -166,7 +167,7 @@ final class CloudLLMProvider: ProofreadingProvider {
 
         for (index, segment) in segments.enumerated() {
             var corrected = segment
-            let normalizedText = correctedLines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedText = normalizeSubtitlePunctuation(correctedLines[index])
             corrected.text = normalizedText.isEmpty ? segment.text : normalizedText
 
             results.append(corrected)
@@ -204,6 +205,18 @@ final class CloudLLMProvider: ProofreadingProvider {
 
         return result
     }
+
+    private func normalizeSubtitlePunctuation(_ text: String) -> String {
+        var normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let removableLineEndPunctuation: Set<Character> = ["。", "．", ".", "，", ",", "、", "；", ";", "：", ":"]
+
+        while let last = normalized.last, removableLineEndPunctuation.contains(last) {
+            normalized.removeLast()
+            normalized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return normalized
+    }
 }
 
 enum ProofreadingError: LocalizedError {
@@ -225,14 +238,16 @@ enum ProofreadingError: LocalizedError {
 
 enum ProofreadingService {
     static func createProvider(settings: AppSettings) -> ProofreadingProvider? {
-        guard settings.proofreadingEnabled else { return nil }
+        var resolvedSettings = settings
+        guard resolvedSettings.proofreadingEnabled else { return nil }
 
-        switch settings.proofreadingEngine {
+        switch resolvedSettings.proofreadingEngine {
         case .cloudLLM:
+            SettingsStore.hydrateSecrets(into: &resolvedSettings, includeASR: false, includeLLM: true)
             return CloudLLMProvider(
-                apiURL: settings.effectiveLLMURL,
-                apiKey: settings.cloudLLMKey,
-                model: settings.effectiveLLMModel
+                apiURL: resolvedSettings.effectiveLLMURL,
+                apiKey: resolvedSettings.cloudLLMKey,
+                model: resolvedSettings.effectiveLLMModel
             )
         case .appleLocal:
             return nil

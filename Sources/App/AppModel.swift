@@ -66,6 +66,10 @@ struct ToastMessage: Identifiable, Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    private static let supportedAudioExtensions: Set<String> = ["m4a", "mp3", "wav", "aac", "aif", "aiff"]
+    private static let supportedSubtitleExtensions: Set<String> = ["srt"]
+    private static let supportedImportExtensions = supportedAudioExtensions.union(supportedSubtitleExtensions)
+
     @Published var mode: WorkspaceMode = .home
     @Published var settings = AppSettings()
     @Published var recentProjects: [RecentProject] = RecentProjectsStore.load()
@@ -265,6 +269,12 @@ final class AppModel: ObservableObject {
 
     func importDocument(at url: URL) {
         let ext = url.pathExtension.lowercased()
+        guard Self.supportedImportExtensions.contains(ext) else {
+            showToast("不支持该文件格式，请导入音频文件或 SRT", level: .error)
+            AppLog.import.warning("unsupported import extension=\(ext, privacy: .public) file=\(url.lastPathComponent, privacy: .public)")
+            return
+        }
+
         if ext == "srt" {
             importSRT(from: url)
         } else {
@@ -503,11 +513,7 @@ final class AppModel: ObservableObject {
     }
 
     private func mediaKind(for url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        if ["mp4", "mov", "mkv"].contains(ext) {
-            return "video"
-        }
-        return "audio"
+        Self.supportedSubtitleExtensions.contains(url.pathExtension.lowercased()) ? "srt" : "audio"
     }
 
     private func importSRT(from url: URL) {
@@ -1003,7 +1009,9 @@ final class AppModel: ObservableObject {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.audio, .movie, UTType(filenameExtension: "srt") ?? .plainText]
+        panel.allowedContentTypes = Self.supportedImportExtensions.compactMap {
+            UTType(filenameExtension: $0)
+        }
         panel.prompt = "打开"
         if panel.runModal() == .OK, let url = panel.url {
             importDocument(at: url)

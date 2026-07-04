@@ -123,7 +123,7 @@ final class WatchFolderService {
     }
 
     private func listAudioFiles(in directory: URL) -> [URL] {
-        let audioExtensions: Set<String> = ["m4a", "mp3", "wav", "aac", "aif", "aiff", "mp4"]
+        let audioExtensions: Set<String> = ["m4a", "mp3", "wav", "aac", "aif", "aiff"]
         var result: [URL] = []
 
         guard let enumerator = FileManager.default.enumerator(

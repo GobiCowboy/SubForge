@@ -129,7 +129,7 @@ final class AppleSpeechProvider: TranscriptionProvider {
                 continue
             }
 
-            if gapFromPrevious > 0.65 || currentText.count >= 25 {
+            if gapFromPrevious > 0.65 || currentText.count >= 44 {
                 results.append(
                     SubtitleSegment(
                         start: currentStart,
@@ -322,7 +322,6 @@ final class WhisperCppProvider: TranscriptionProvider {
             "-f", wavURL.path,
             "-l", language.hasPrefix("zh") ? "zh" : language,
             "-t", "4",
-            "--max-len", "20",
             "--no-gpu",
             "--no-prints"
         ]
@@ -514,7 +513,7 @@ final class CloudASRProvider: TranscriptionProvider {
     private func transcribeDashScopeCompatible(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let audioData = try Data(contentsOf: audioURL)
         let mimeType = switch audioURL.pathExtension.lowercased() {
-        case "m4a", "mp4": "audio/mp4"
+        case "m4a": "audio/mp4"
         case "mp3": "audio/mpeg"
         default: "audio/wav"
         }
@@ -569,7 +568,7 @@ final class CloudASRProvider: TranscriptionProvider {
     private func transcribeDashScopeAsync(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let audioData = try Data(contentsOf: audioURL)
         let mimeType = switch audioURL.pathExtension.lowercased() {
-        case "m4a", "mp4": "audio/mp4"
+        case "m4a": "audio/mp4"
         case "mp3": "audio/mpeg"
         default: "audio/wav"
         }
@@ -1013,16 +1012,19 @@ enum TranscriptionError: LocalizedError {
 
 enum TranscriptionService {
     static func createProvider(settings: AppSettings) -> TranscriptionProvider {
-        switch settings.transcriptionEngine {
+        var resolvedSettings = settings
+
+        switch resolvedSettings.transcriptionEngine {
         case .whisperLocal:
-            WhisperCppProvider(model: settings.whisperModel)
+            return WhisperCppProvider(model: resolvedSettings.whisperModel)
         case .appleSpeech:
-            AppleSpeechProvider()
+            return AppleSpeechProvider()
         case .cloudASR:
-            CloudASRProvider(
-                apiURL: settings.effectiveASRURL,
-                apiKey: settings.cloudASRKey,
-                model: settings.effectiveASRModel
+            SettingsStore.hydrateSecrets(into: &resolvedSettings, includeASR: true, includeLLM: false)
+            return CloudASRProvider(
+                apiURL: resolvedSettings.effectiveASRURL,
+                apiKey: resolvedSettings.cloudASRKey,
+                model: resolvedSettings.effectiveASRModel
             )
         }
     }

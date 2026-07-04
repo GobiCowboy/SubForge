@@ -11,7 +11,7 @@
 
 ## 2. 本地资源
 
-- 输入素材：音频、视频、SRT
+- 输入素材：音频、SRT；不支持 MP4、MOV、MKV 等视频文件
 - 输出文件：SRT、FCPXML
 - 日志目录：用户本地 Application Support
 - 模型资源：本地 Whisper 模型按需下载到 `Application Support/SubForge/models`

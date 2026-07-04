@@ -78,7 +78,7 @@ struct ProjectSidebar: View {
 
             navigationRow(
                 title: "开始页",
-                detail: "导入音频、视频或 srt",
+                detail: "导入音频或 srt",
                 systemImage: "house",
                 isSelected: model.mode == .home
             )
@@ -218,8 +218,6 @@ struct ProjectSidebar: View {
 
     private func iconName(for kind: String) -> String {
         switch kind {
-        case "video":
-            return "film"
         case "audio":
             return "waveform"
         default:

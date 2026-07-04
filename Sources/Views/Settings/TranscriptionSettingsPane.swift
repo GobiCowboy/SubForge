@@ -79,7 +79,18 @@ struct TranscriptionSettingsPane: View {
             }
         }
         .onAppear {
+            hydrateCloudASRKeyIfNeeded()
             validationState = settings.transcriptionValidationState
+        }
+        .onChange(of: settings.transcriptionEngine) { _, engine in
+            if engine == .cloudASR {
+                hydrateCloudASRKeyIfNeeded()
+            }
+        }
+        .onChange(of: settings.cloudASRKey) { oldValue, newValue in
+            if !oldValue.isEmpty, newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                SettingsStore.deleteASRKey()
+            }
         }
     }
 
@@ -265,9 +276,11 @@ struct TranscriptionSettingsPane: View {
         validationState.resultText = "正在调用当前转写链路..."
 
         Task {
-            let provider = TranscriptionService.createProvider(settings: settings)
+            var testSettings = settings
+            SettingsStore.hydrateSecrets(into: &testSettings, includeASR: true, includeLLM: false)
+            let provider = TranscriptionService.createProvider(settings: testSettings)
             do {
-                let segments = try await provider.transcribe(audioURL: audioURL, language: settings.language)
+                let segments = try await provider.transcribe(audioURL: audioURL, language: testSettings.language)
                 let result = segments.map(\.text).joined(separator: "\n")
                 await MainActor.run {
                     let state = SettingsValidationState(
@@ -289,6 +302,15 @@ struct TranscriptionSettingsPane: View {
                     isTesting = false
                 }
             }
+        }
+    }
+
+    private func hydrateCloudASRKeyIfNeeded() {
+        guard settings.transcriptionEngine == .cloudASR else { return }
+        var hydratedSettings = settings
+        SettingsStore.hydrateSecrets(into: &hydratedSettings, includeASR: true, includeLLM: false)
+        if hydratedSettings.cloudASRKey != settings.cloudASRKey {
+            settings.cloudASRKey = hydratedSettings.cloudASRKey
         }
     }
 

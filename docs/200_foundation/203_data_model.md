@@ -34,7 +34,7 @@
 关键字段：
 
 - `path`
-- `type`：audio / video / srt
+- `type`：audio / srt
 - `name`
 - `duration`
 - `origin`

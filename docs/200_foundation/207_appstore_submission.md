@@ -101,7 +101,7 @@ App bundle 会嵌入：
 
 ## 7. App Review Notes 草稿
 
-SubForge is a macOS utility for turning user-selected audio or video into editable subtitles, then exporting SRT and Final Cut Pro XML files. The app can optionally watch a user-selected folder for new audio exported from Final Cut Pro. Folder watching is off by default and only starts after the user selects a folder.
+SubForge is a macOS utility for turning user-selected audio files into editable subtitles, importing existing SRT files, then exporting SRT and Final Cut Pro XML files. The app can optionally watch a user-selected folder for new audio exported from Final Cut Pro. Folder watching is off by default and only starts after the user selects a folder.
 
 The app uses Apple Speech Recognition by default. Local Whisper transcription is optional and runs on-device using bundled whisper.cpp components. Cloud proofreading is off by default; if the user enables it and enters their own API key, subtitle text is sent to the configured provider for proofreading.
 
@@ -113,7 +113,7 @@ No account is required. No sample login credentials are needed.
 
 隐私政策必须覆盖：
 
-- 用户选择的音频、视频和字幕文件只在本机处理，除非用户显式启用云端服务。
+- 用户选择的音频和字幕文件只在本机处理，除非用户显式启用云端服务。
 - Apple 语音识别由系统能力处理。
 - 本地 Whisper 不上传音频。
 - 云端校对默认关闭；启用后，字幕文本会发送到用户配置的服务商。

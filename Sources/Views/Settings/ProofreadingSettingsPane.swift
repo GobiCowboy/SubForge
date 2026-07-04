@@ -111,7 +111,18 @@ struct ProofreadingSettingsPane: View {
             if settings.proofreadingEngine == .appleLocal {
                 settings.proofreadingEngine = .cloudLLM
             }
+            hydrateCloudLLMKeyIfNeeded()
             validationState = settings.proofreadingValidationState
+        }
+        .onChange(of: settings.proofreadingEnabled) { _, enabled in
+            if enabled {
+                hydrateCloudLLMKeyIfNeeded()
+            }
+        }
+        .onChange(of: settings.cloudLLMKey) { oldValue, newValue in
+            if !oldValue.isEmpty, newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                SettingsStore.deleteLLMKey()
+            }
         }
     }
 
@@ -121,10 +132,12 @@ struct ProofreadingSettingsPane: View {
         settings.proofreadingEngine = .cloudLLM
 
         Task {
+            var testSettings = settings
+            SettingsStore.hydrateSecrets(into: &testSettings, includeASR: false, includeLLM: true)
             let provider = CloudLLMProvider(
-                apiURL: settings.effectiveLLMURL,
-                apiKey: settings.cloudLLMKey,
-                model: settings.effectiveLLMModel
+                apiURL: testSettings.effectiveLLMURL,
+                apiKey: testSettings.cloudLLMKey,
+                model: testSettings.effectiveLLMModel
             )
 
             do {
@@ -155,6 +168,15 @@ struct ProofreadingSettingsPane: View {
                     isTesting = false
                 }
             }
+        }
+    }
+
+    private func hydrateCloudLLMKeyIfNeeded() {
+        guard settings.proofreadingEnabled else { return }
+        var hydratedSettings = settings
+        SettingsStore.hydrateSecrets(into: &hydratedSettings, includeASR: false, includeLLM: true)
+        if hydratedSettings.cloudLLMKey != settings.cloudLLMKey {
+            settings.cloudLLMKey = hydratedSettings.cloudLLMKey
         }
     }
 

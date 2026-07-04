@@ -2,11 +2,7 @@ import Foundation
 
 enum SettingsStore {
     private static let key = "subforge.settings.v2"
-    #if DEBUG
-    private static let isKeychainPersistenceEnabled = false
-    #else
     private static let isKeychainPersistenceEnabled = true
-    #endif
 
     static func load() -> AppSettings {
         guard
@@ -24,18 +20,16 @@ enum SettingsStore {
 
             if hadPlaintextASRKey {
                 KeychainStore.save(settings.cloudASRKey, account: .cloudASRKey)
-            } else {
-                settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? ""
             }
 
             if hadPlaintextLLMKey {
                 KeychainStore.save(settings.cloudLLMKey, account: .cloudLLMKey)
-            } else {
-                settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? ""
             }
 
             if hadPlaintextASRKey || hadPlaintextLLMKey {
                 persistPreferences(settings, includeSecrets: false)
+                settings.cloudASRKey = ""
+                settings.cloudLLMKey = ""
             }
         }
 
@@ -44,12 +38,33 @@ enum SettingsStore {
 
     static func save(_ settings: AppSettings) {
         if isKeychainPersistenceEnabled {
-            KeychainStore.save(settings.cloudASRKey, account: .cloudASRKey)
-            KeychainStore.save(settings.cloudLLMKey, account: .cloudLLMKey)
+            saveNonEmptySecrets(settings)
             persistPreferences(settings, includeSecrets: false)
         } else {
             persistPreferences(settings, includeSecrets: true)
         }
+    }
+
+    static func hydrateSecrets(into settings: inout AppSettings, includeASR: Bool = true, includeLLM: Bool = true) {
+        guard isKeychainPersistenceEnabled else { return }
+
+        if includeASR, settings.cloudASRKey.isEmpty {
+            settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? ""
+        }
+
+        if includeLLM, settings.cloudLLMKey.isEmpty {
+            settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? ""
+        }
+    }
+
+    static func deleteASRKey() {
+        guard isKeychainPersistenceEnabled else { return }
+        KeychainStore.delete(.cloudASRKey)
+    }
+
+    static func deleteLLMKey() {
+        guard isKeychainPersistenceEnabled else { return }
+        KeychainStore.delete(.cloudLLMKey)
     }
 
     private static func normalize(_ settings: inout AppSettings) {
@@ -89,5 +104,15 @@ enum SettingsStore {
         }
         guard let data = try? JSONEncoder().encode(persisted) else { return }
         UserDefaults.standard.set(data, forKey: key)
+    }
+
+    private static func saveNonEmptySecrets(_ settings: AppSettings) {
+        if !settings.cloudASRKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            KeychainStore.save(settings.cloudASRKey, account: .cloudASRKey)
+        }
+
+        if !settings.cloudLLMKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            KeychainStore.save(settings.cloudLLMKey, account: .cloudLLMKey)
+        }
     }
 }

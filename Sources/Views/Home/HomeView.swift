@@ -32,9 +32,9 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 24) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("导入音频或视频")
+                    Text("导入音频或 SRT")
                         .font(.system(size: 30, weight: .semibold))
-                    Text("把文件拖到这里，或者直接选择本地素材开始生成字幕。")
+                    Text("把音频或字幕文件拖到这里，或者直接选择本地文件开始处理。")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 }
@@ -57,9 +57,9 @@ struct HomeView: View {
                     .foregroundStyle(Color.accentColor)
 
                 VStack(spacing: 6) {
-                    Text("拖入媒体文件即可开始")
+                    Text("拖入音频或 SRT 即可开始")
                         .font(.system(size: 22, weight: .semibold))
-                    Text("支持 .mp4、.mov、.mkv、.mp3、.wav、.srt")
+                    Text("支持 .m4a、.mp3、.wav、.aac、.aif、.aiff、.srt")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -247,8 +247,6 @@ struct HomeView: View {
 
     private func iconName(for kind: String) -> String {
         switch kind {
-        case "video":
-            return "film"
         case "audio":
             return "waveform"
         default:

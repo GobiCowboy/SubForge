@@ -29,9 +29,9 @@ struct RecentProject: Identifiable, Codable, Equatable {
 
     static let samples: [RecentProject] = [
         .init(
-            name: "Marketing_Campaign_v2_Final.mp4",
-            path: "/tmp/Marketing_Campaign_v2_Final.mp4",
-            kind: "video",
+            name: "Marketing_Campaign_v2_Final.m4a",
+            path: "/tmp/Marketing_Campaign_v2_Final.m4a",
+            kind: "audio",
             durationLabel: "24:00",
             modifiedLabel: "今天",
             subtitleCount: 132

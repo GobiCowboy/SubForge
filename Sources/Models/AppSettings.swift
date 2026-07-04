@@ -27,7 +27,7 @@ struct AppSettings: Equatable, Codable {
     var cloudLLMURL: String = CloudLLMPreset.deepseek.defaultURL
     var cloudLLMKey: String = ""
     var cloudLLMModel: String = CloudLLMPreset.deepseek.defaultModel
-    var proofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。"
+    var proofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。"
     var proofreadingStrictCorrections = true
     var proofreadingValidationState = SettingsValidationState()
 
