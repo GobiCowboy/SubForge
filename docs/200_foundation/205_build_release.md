@@ -17,6 +17,7 @@
 - App Store 结构检查：`./script/release_appstore.sh --unsigned`
 - App Store 签名构建：`./script/release_appstore.sh --signed`
 - App Store 上传包：`./script/release_appstore.sh --package`
+- App Store 打包并上传：`./script/release_appstore.sh --upload`
 - 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
 - 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
 
@@ -47,7 +48,10 @@
 - 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限
 - Bundle ID 使用 `com.jago.subforge`，App Store Connect 已按 macOS 应用创建
 - App Store release 脚本会嵌入 `whisper-cli`、`libwhisper`、`libggml`、`libggml-base`、`libomp`，并检查不残留 `/opt/homebrew` 或 `/usr/local` 绝对动态库依赖
-- 当前本机缺少 Mac App Store app / installer signing identity，不能直接生成可上传包
+- App Store release 脚本默认使用时间戳 `APP_BUILD`，避免重复上传已存在的 `CFBundleVersion`
+- App Store release 脚本会自动查找 `SubForge_Mac_App_Store.provisionprofile`，优先路径包括项目目录、`Config/`、`~/Downloads/`、Xcode provisioning profile 目录
+- App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
+- 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
 
 ## 6. 后续重做建议
 

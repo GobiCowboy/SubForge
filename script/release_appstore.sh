@@ -5,7 +5,7 @@ APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 TEAM_ID="${TEAM_ID:-4UNNXY925R}"
 APP_VERSION="${APP_VERSION:-1.0}"
-APP_BUILD="${APP_BUILD:-1}"
+APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,30 +29,33 @@ PROVISIONING_PROFILE="${PROVISIONING_PROFILE:-}"
 
 usage() {
   cat >&2 <<EOF
-usage: $0 [--unsigned|--signed|--package]
+usage: $0 [--unsigned|--signed|--package|--upload]
 
 Modes:
   --unsigned  Build a release .app and run local structural checks.
   --signed    Build and sign the .app for Mac App Store distribution.
   --package   Build, sign, and create a signed .pkg for App Store upload.
+  --upload    Build, sign, package, and upload the .pkg to App Store Connect.
 
 Optional environment:
   APP_VERSION=1.0
-  APP_BUILD=1
+  APP_BUILD=$(date +%Y%m%d%H%M%S)
   TEAM_ID=$TEAM_ID
-  APP_SIGN_IDENTITY="3rd Party Mac Developer Application: ..."
+  APP_SIGN_IDENTITY="Apple Distribution: ..."
   INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: ..."
   PROVISIONING_PROFILE="/path/to/SubForge_Mac_App_Store.provisionprofile"
+  APP_STORE_USER="apple-id@example.com"
+  APP_STORE_PASSWORD="app-specific-password"
 EOF
 }
 
 MODE="${1:---unsigned}"
 case "$MODE" in
-  --unsigned|--signed|--package) ;;
+  --unsigned|--signed|--package|--upload) ;;
   *) usage; exit 2 ;;
 esac
 
-find_identity() {
+find_codesigning_identity() {
   local explicit="$1"
   shift
   if [ -n "$explicit" ]; then
@@ -64,6 +67,27 @@ find_identity() {
   for pattern in "$@"; do
     local match
     match="$(security find-identity -p codesigning -v 2>/dev/null | sed -n "s/.*\"\($pattern[^\"]*\)\".*/\1/p" | head -n 1)"
+    if [ -n "$match" ]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+find_certificate_label() {
+  local explicit="$1"
+  shift
+  if [ -n "$explicit" ]; then
+    printf '%s\n' "$explicit"
+    return 0
+  fi
+
+  local labels pattern match
+  labels="$(security find-certificate -a -Z 2>/dev/null | sed -n 's/.*"labl"<blob>="\([^"]*\)".*/\1/p')"
+  for pattern in "$@"; do
+    match="$(printf '%s\n' "$labels" | grep -E "$pattern" | head -n 1)"
     if [ -n "$match" ]; then
       printf '%s\n' "$match"
       return 0
@@ -150,12 +174,79 @@ PLIST
 }
 
 embed_provisioning_profile() {
-  if [ -z "$PROVISIONING_PROFILE" ]; then
-    return
+  local profile="$PROVISIONING_PROFILE"
+
+  if [ -z "$profile" ]; then
+    profile="$(find_provisioning_profile || true)"
   fi
 
-  require_file "$PROVISIONING_PROFILE"
-  cp "$PROVISIONING_PROFILE" "$APP_CONTENTS/embedded.provisionprofile"
+  if [ -z "$profile" ]; then
+    if [ "$MODE" = "--unsigned" ]; then
+      return
+    fi
+
+    echo "missing Mac App Store provisioning profile for $BUNDLE_ID" >&2
+    echo "Set PROVISIONING_PROFILE=/path/to/SubForge_Mac_App_Store.provisionprofile." >&2
+    exit 1
+  fi
+
+  require_file "$profile"
+  if ! provisioning_profile_matches_bundle "$profile"; then
+    echo "provisioning profile does not match $TEAM_ID.$BUNDLE_ID: $profile" >&2
+    exit 1
+  fi
+
+  echo "Using provisioning profile: $profile"
+  cp "$profile" "$APP_CONTENTS/embedded.provisionprofile"
+}
+
+find_provisioning_profile() {
+  local direct_candidates=(
+    "$ROOT_DIR/Config/SubForge_Mac_App_Store.provisionprofile"
+    "$ROOT_DIR/SubForge_Mac_App_Store.provisionprofile"
+    "$HOME/Downloads/SubForge_Mac_App_Store.provisionprofile"
+  )
+
+  local profile
+  for profile in "${direct_candidates[@]}"; do
+    if [ -f "$profile" ] && provisioning_profile_matches_bundle "$profile"; then
+      printf '%s\n' "$profile"
+      return 0
+    fi
+  done
+
+  local search_dirs=(
+    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+    "$HOME/Library/MobileDevice/Provisioning Profiles"
+  )
+
+  local dir
+  for dir in "${search_dirs[@]}"; do
+    [ -d "$dir" ] || continue
+    while IFS= read -r profile; do
+      if provisioning_profile_matches_bundle "$profile"; then
+        printf '%s\n' "$profile"
+        return 0
+      fi
+    done < <(find "$dir" -type f \( -name "*.provisionprofile" -o -name "*.mobileprovision" \) 2>/dev/null)
+  done
+
+  return 1
+}
+
+provisioning_profile_matches_bundle() {
+  local profile="$1"
+  local temp_plist app_identifier
+  temp_plist="$(mktemp)"
+  if ! security cms -D -i "$profile" >"$temp_plist" 2>/dev/null; then
+    rm -f "$temp_plist"
+    return 1
+  fi
+
+  app_identifier="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$temp_plist" 2>/dev/null || true)"
+  rm -f "$temp_plist"
+
+  [ "$app_identifier" = "$TEAM_ID.$BUNDLE_ID" ]
 }
 
 embed_bundled_base_model() {
@@ -306,7 +397,7 @@ sign_nested_code() {
 
 sign_app() {
   local identity
-  identity="$(find_identity "$APP_SIGN_IDENTITY" \
+  identity="$(find_codesigning_identity "$APP_SIGN_IDENTITY" \
     "3rd Party Mac Developer Application: .*($TEAM_ID)" \
     "Apple Distribution: .*($TEAM_ID)")" || {
       echo "missing Mac App Store app signing identity for team $TEAM_ID" >&2
@@ -329,10 +420,11 @@ sign_app_ad_hoc_for_testing() {
 
 package_app() {
   local identity
-  identity="$(find_identity "$INSTALLER_SIGN_IDENTITY" \
+  identity="$(find_certificate_label "$INSTALLER_SIGN_IDENTITY" \
     "3rd Party Mac Developer Installer: .*($TEAM_ID)" \
     "Mac Installer Distribution: .*($TEAM_ID)")" || {
       echo "missing Mac App Store installer signing identity for team $TEAM_ID" >&2
+      echo "Note: installer certificates are not listed by 'security find-identity -p codesigning'." >&2
       echo "Install a Mac Installer Distribution certificate, or set INSTALLER_SIGN_IDENTITY." >&2
       exit 1
     }
@@ -345,6 +437,21 @@ package_app() {
     --component "$APP_BUNDLE" /Applications \
     --sign "$identity" \
     "$PKG_PATH"
+}
+
+upload_app() {
+  require_file "$PKG_PATH"
+
+  if [ -z "${APP_STORE_USER:-}" ] || [ -z "${APP_STORE_PASSWORD:-}" ]; then
+    echo "missing APP_STORE_USER or APP_STORE_PASSWORD for App Store Connect upload" >&2
+    exit 1
+  fi
+
+  xcrun altool --upload-app \
+    -f "$PKG_PATH" \
+    --type osx \
+    -u "$APP_STORE_USER" \
+    -p "$APP_STORE_PASSWORD"
 }
 
 verify_bundle() {
@@ -391,14 +498,18 @@ main() {
     sign_app_ad_hoc_for_testing
   fi
 
-  if [ "$MODE" = "--package" ]; then
+  if [ "$MODE" = "--package" ] || [ "$MODE" = "--upload" ]; then
     package_app
   fi
 
   verify_bundle
   echo "App Store artifact prepared: $APP_BUNDLE"
-  if [ "$MODE" = "--package" ]; then
+  if [ "$MODE" = "--package" ] || [ "$MODE" = "--upload" ]; then
     echo "Package prepared: $PKG_PATH"
+  fi
+
+  if [ "$MODE" = "--upload" ]; then
+    upload_app
   fi
 }
 

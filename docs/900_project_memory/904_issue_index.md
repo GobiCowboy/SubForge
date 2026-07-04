@@ -4,7 +4,7 @@
 |------|--------|------|------|------|
 | ISSUE-001 | P1 | 已解决 | `swift build` 失败 | 已移除错误的测试目标声明，当前 `swift build` 与 `swift build -c release` 可通过 |
 | ISSUE-002 | P1 | 已规避 | 直接运行裸可执行文件导致 GUI 行为不稳定 | SwiftUI GUI 统一通过 `script/build_and_run.sh` 或 `dist/SubForge.app` 启动，不再直接运行 `.build/.../SubForge` |
-| ISSUE-003 | P0 | 待外部处理 | 缺少 Mac App Store 分发证书 | 当前本机只有 Apple Development 和 Developer ID Application，`script/release_appstore.sh --signed` 会停止，需安装 Mac App Store app / installer signing identity |
+| ISSUE-003 | P1 | 已解决 | App Store 脚本未自动找到 installer 证书和 provisioning profile | Installer 证书不能用 `security find-identity -p codesigning` 查找；脚本已改用 `security find-certificate`，并自动查找 `SubForge_Mac_App_Store.provisionprofile` |
 | ISSUE-004 | P1 | 已解决 | 字幕被硬切到词语中间 | 本地 Whisper 移除 `--max-len 20` 预切分，公共分段器先合并相邻续句再按标点重切，避免 `Synima / mode`、`让整 / 个` 这类断句 |
 
 ## 使用规则
