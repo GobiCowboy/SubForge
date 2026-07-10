@@ -161,7 +161,7 @@ embed_whisper_runtime() {
 
   find "$whisper_prefix/lib" -maxdepth 1 -name "libwhisper*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
   find "$ggml_prefix/lib" -maxdepth 1 -name "libggml*.dylib" -exec cp {} "$APP_FRAMEWORKS/" \;
-  find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" ! -name "libggml-metal.so" -exec cp {} "$APP_FRAMEWORKS/" \;
+  find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" -exec cp {} "$APP_FRAMEWORKS/" \;
 
   require_file "$libomp_prefix/lib/libomp.dylib"
   cp "$libomp_prefix/lib/libomp.dylib" "$APP_FRAMEWORKS/libomp.dylib"

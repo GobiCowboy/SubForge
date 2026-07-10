@@ -107,7 +107,11 @@ enum CloudASRPreset: String, CaseIterable, Codable, Identifiable {
     var defaultURL: String {
         switch self {
         case .dashscope:
-            "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/asr/transcription"
+            // 与 Git 一致：异步 transcription 端点 + filetrans。
+            // 使用官方仍支持的 dashscope 域名，避免 {WorkspaceId} 占位导致无法验证。
+            // 若有业务空间专属域名，可在设置里改成：
+            // https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/asr/transcription
+            "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
         case .siliconFlow:
             "https://api.siliconflow.cn/v1/audio/transcriptions"
         case .custom:

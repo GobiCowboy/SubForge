@@ -11,5 +11,10 @@ let package = Package(
             name: "SubForge",
             path: "Sources"
         ),
+        .testTarget(
+            name: "SubForgeTests",
+            dependencies: ["SubForge"],
+            path: "Tests"
+        ),
     ]
 )

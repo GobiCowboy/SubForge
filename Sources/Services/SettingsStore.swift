@@ -5,10 +5,17 @@ enum SettingsStore {
     private static let isKeychainPersistenceEnabled = true
 
     static func load() -> AppSettings {
-        guard
-            let data = UserDefaults.standard.data(forKey: key),
-            var settings = try? JSONDecoder().decode(AppSettings.self, from: data)
-        else {
+        guard let data = UserDefaults.standard.data(forKey: key) else {
+            return AppSettings()
+        }
+
+        var settings: AppSettings
+        do {
+            settings = try JSONDecoder().decode(AppSettings.self, from: data)
+        } catch {
+            AppLog.settings.error(
+                "settingsDecodeFailed error=\(error.localizedDescription, privacy: .public)"
+            )
             return AppSettings()
         }
 
@@ -28,9 +35,10 @@ enum SettingsStore {
 
             if hadPlaintextASRKey || hadPlaintextLLMKey {
                 persistPreferences(settings, includeSecrets: false)
-                settings.cloudASRKey = ""
-                settings.cloudLLMKey = ""
             }
+
+            settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? settings.cloudASRKey
+            settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? settings.cloudLLMKey
         }
 
         return settings
@@ -68,6 +76,8 @@ enum SettingsStore {
     }
 
     private static func normalize(_ settings: inout AppSettings) {
+        settings.maxSubtitleLength = settings.effectiveMaxSubtitleLength
+
         if settings.proofreadingEngine == .appleLocal {
             settings.proofreadingEngine = .cloudLLM
         }
@@ -78,6 +88,24 @@ enum SettingsStore {
 
         if settings.cloudASRModel.isEmpty, settings.cloudASRPreset != .custom {
             settings.cloudASRModel = settings.cloudASRPreset.defaultModel
+        }
+
+        // filetrans 只能走异步 transcription；纠正误存的 compatible-mode URL（会导致 404 model_not_supported）
+        let asrURL = settings.cloudASRURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let asrModel = settings.cloudASRModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if asrModel.lowercased().contains("filetrans"),
+           asrURL.contains("/compatible-mode/") {
+            if let url = URL(string: asrURL), let host = url.host, !host.isEmpty, !host.contains("{") {
+                let scheme = url.scheme ?? "https"
+                settings.cloudASRURL = "\(scheme)://\(host)/api/v1/services/audio/asr/transcription"
+            } else {
+                settings.cloudASRURL = "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
+            }
+        }
+
+        if settings.cloudASRPreset == .dashscope,
+           settings.cloudASRModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            settings.cloudASRModel = CloudASRPreset.dashscope.defaultModel
         }
 
         if settings.cloudLLMURL.isEmpty, settings.cloudLLMPreset != .custom {

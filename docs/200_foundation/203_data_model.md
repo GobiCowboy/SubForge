@@ -49,6 +49,7 @@
 - `start`
 - `end`
 - `text`
+- `words`：本地 Whisper 可选的词级起止时间，旧项目允许缺失
 - `order`
 - `isEmpty`
 
@@ -79,6 +80,7 @@
 - `showMenuBarIcon`: 开启
 - `transcriptionEngine`: Apple 语音
 - `language`: 中文
+- `maxSubtitleLength`: 24
 - `proofreadingEnabled`: 关闭
 - `subtitleStyle`: 横屏、内白外黑
 - `exportSettings.format`: SRT + FCPXML

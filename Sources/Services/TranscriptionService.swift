@@ -13,6 +13,12 @@ struct TranscriptionTestResult {
 }
 
 final class AppleSpeechProvider: TranscriptionProvider {
+    private let segmentationConfiguration: SubtitleSegmentationConfiguration
+
+    init(segmentationConfiguration: SubtitleSegmentationConfiguration) {
+        self.segmentationConfiguration = segmentationConfiguration
+    }
+
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let status = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -51,16 +57,41 @@ final class AppleSpeechProvider: TranscriptionProvider {
                 }
 
                 guard let result else { return }
-                let rawSegments = result.bestTranscription.segments.map { segment in
-                    SubtitleSegment(
+                let appleSegments = result.bestTranscription.segments
+                let timedWords = appleSegments.enumerated().map { index, segment in
+                    let nextStart = appleSegments.indices.contains(index + 1)
+                        ? appleSegments[index + 1].timestamp
+                        : segment.timestamp + segment.duration
+                    let end = Self.normalizedSegmentEnd(
                         start: segment.timestamp,
-                        end: segment.timestamp + segment.duration,
+                        duration: segment.duration,
+                        characterCount: segment.substring.count,
+                        nextStart: nextStart
+                    )
+                    if segment.duration > 5.2 {
+                        AppLog.transcription.warning(
+                            "appleSpeech abnormalSegmentDuration raw=\(segment.duration, privacy: .public) clamped=\(end - segment.timestamp, privacy: .public) characterCount=\(segment.substring.count, privacy: .public)"
+                        )
+                    }
+                    return SubtitleWord(
+                        start: segment.timestamp,
+                        end: max(end, segment.timestamp + 0.1),
                         text: segment.substring
                     )
                 }
-                latestSegments = SubtitleSegmentationService.refine(self.mergeIntoSentences(rawSegments))
+                latestSegments = TimedSubtitleSegmenter.segment(
+                    timedWords,
+                    configuration: self.segmentationConfiguration
+                )
 
                 if result.isFinal && !hasResumed {
+                    let rawStart = timedWords.first?.start ?? 0
+                    let rawEnd = timedWords.last?.end ?? 0
+                    let outputStart = latestSegments.first?.start ?? 0
+                    let outputEnd = latestSegments.last?.end ?? 0
+                    AppLog.transcription.info(
+                        "appleSpeech final rawSegments=\(timedWords.count, privacy: .public) rawRange=\(rawStart, privacy: .public)-\(rawEnd, privacy: .public) outputSegments=\(latestSegments.count, privacy: .public) outputRange=\(outputStart, privacy: .public)-\(outputEnd, privacy: .public) maxCharacters=\(self.segmentationConfiguration.maxCharacters, privacy: .public)"
+                    )
                     hasResumed = true
                     continuation.resume(returning: latestSegments)
                 }
@@ -80,86 +111,29 @@ final class AppleSpeechProvider: TranscriptionProvider {
         }
     }
 
-    private func mergeIntoSentences(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
-        guard !segments.isEmpty else { return [] }
-
-        let sentenceEnders: Set<Character> = ["。", "！", "？", "!", "?", ".", "；", ";", "\n"]
-        let clauseEnders: Set<Character> = ["，", ",", "、", "：", ":", "—", "–"]
-
-        var results: [SubtitleSegment] = []
-        var currentText = ""
-        var currentStart: TimeInterval = 0
-        var currentEnd: TimeInterval = 0
-
-        for segment in segments {
-            let trimmed = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-
-            let gapFromPrevious = currentText.isEmpty ? 0 : max(0, segment.start - currentEnd)
-
-            if currentText.isEmpty {
-                currentStart = segment.start
-            }
-
-            currentText += trimmed
-            currentEnd = segment.end
-
-            let lastCharacter = trimmed.last ?? Character(" ")
-            if sentenceEnders.contains(lastCharacter) {
-                results.append(
-                    SubtitleSegment(
-                        start: currentStart,
-                        end: currentEnd,
-                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    )
-                )
-                currentText = ""
-                continue
-            }
-
-            if clauseEnders.contains(lastCharacter) && currentText.count >= 15 {
-                results.append(
-                    SubtitleSegment(
-                        start: currentStart,
-                        end: currentEnd,
-                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    )
-                )
-                currentText = ""
-                continue
-            }
-
-            if gapFromPrevious > 0.65 || currentText.count >= 44 {
-                results.append(
-                    SubtitleSegment(
-                        start: currentStart,
-                        end: currentEnd,
-                        text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    )
-                )
-                currentText = ""
-            }
+    static func normalizedSegmentEnd(
+        start: TimeInterval,
+        duration: TimeInterval,
+        characterCount: Int,
+        nextStart: TimeInterval
+    ) -> TimeInterval {
+        let rawEnd = start + duration
+        if duration > 5.2 {
+            let readableDuration = max(1.2, min(3.0, Double(characterCount) * 0.45 + 0.6))
+            return max(start + 0.1, min(min(rawEnd, start + readableDuration), nextStart))
         }
-
-        if !currentText.isEmpty {
-            results.append(
-                SubtitleSegment(
-                    start: currentStart,
-                    end: currentEnd,
-                    text: currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
-            )
-        }
-
-        return results
+        return max(start + 0.1, min(rawEnd, max(nextStart, start + 0.1)))
     }
+
 }
 
 final class WhisperCppProvider: TranscriptionProvider {
     private let model: WhisperModel
+    private let segmentationConfiguration: SubtitleSegmentationConfiguration
 
-    init(model: WhisperModel) {
+    init(model: WhisperModel, segmentationConfiguration: SubtitleSegmentationConfiguration) {
         self.model = model
+        self.segmentationConfiguration = segmentationConfiguration
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
@@ -172,17 +146,23 @@ final class WhisperCppProvider: TranscriptionProvider {
             try Self.convertToWAV(input: audioURL, output: wavURL)
         }.value
 
-        let leadingSilenceOffset = (try? Self.leadingAudibleOffset(in: wavURL)) ?? 0
+        let dtwPreset = model.rawValue
 
-        let output = try await Task.detached(priority: .userInitiated) {
-            try Self.runWhisperCLI(cliPath: cliPath, modelPath: modelPath, wavURL: wavURL, language: language)
+        let whisperResult = try await Task.detached(priority: .userInitiated) {
+            try Self.runWhisperCLI(
+                cliPath: cliPath,
+                modelPath: modelPath,
+                wavURL: wavURL,
+                language: language,
+                dtwPreset: dtwPreset
+            )
         }.value
 
-        let rawSegments = alignLeadingSegmentStartIfNeeded(
-            parseWhisperOutput(output),
-            offset: leadingSilenceOffset
-        )
-        let parsed = SubtitleSegmentationService.refine(rawSegments)
+        let rawSegments = whisperResult.segments
+        let timedWords = rawSegments.flatMap { $0.words ?? [] }
+        let parsed = timedWords.isEmpty
+            ? TimedSubtitleSegmenter.segmentEstimated(rawSegments, configuration: segmentationConfiguration)
+            : TimedSubtitleSegmenter.segment(timedWords, configuration: segmentationConfiguration)
         guard !parsed.isEmpty else {
             throw TranscriptionError.emptyResult
         }
@@ -313,8 +293,52 @@ final class WhisperCppProvider: TranscriptionProvider {
         cliPath: String,
         modelPath: String,
         wavURL: URL,
-        language: String
-    ) throws -> String {
+        language: String,
+        dtwPreset: String
+    ) throws -> WhisperTranscriptionResult {
+        do {
+            let result = try executeWhisperCLI(
+                cliPath: cliPath,
+                modelPath: modelPath,
+                wavURL: wavURL,
+                language: language,
+                dtwPreset: dtwPreset,
+                disableGPU: false
+            )
+            AppLog.transcription.info(
+                "whisperCLI wordTimestamps=true dtwAligned=\(result.dtwAligned, privacy: .public) gpuRequested=true metalAvailable=\(result.metalAvailable, privacy: .public)"
+            )
+            return result
+        } catch {
+            AppLog.transcription.warning(
+                "whisperCLI GPU path failed; retrying on CPU error=\(error.localizedDescription, privacy: .public)"
+            )
+            let result = try executeWhisperCLI(
+                cliPath: cliPath,
+                modelPath: modelPath,
+                wavURL: wavURL,
+                language: language,
+                dtwPreset: dtwPreset,
+                disableGPU: true
+            )
+            AppLog.transcription.info("whisperCLI wordTimestamps=true gpuRequested=false cpuFallback=true")
+            return result
+        }
+    }
+
+    private static func executeWhisperCLI(
+        cliPath: String,
+        modelPath: String,
+        wavURL: URL,
+        language: String,
+        dtwPreset: String,
+        disableGPU: Bool
+    ) throws -> WhisperTranscriptionResult {
+        let outputBaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("subforge_whisper_words_\(UUID().uuidString)")
+        let jsonURL = outputBaseURL.appendingPathExtension("json")
+        defer { try? FileManager.default.removeItem(at: jsonURL) }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: cliPath)
         process.arguments = [
@@ -322,9 +346,15 @@ final class WhisperCppProvider: TranscriptionProvider {
             "-f", wavURL.path,
             "-l", language.hasPrefix("zh") ? "zh" : language,
             "-t", "4",
-            "--no-gpu",
-            "--no-prints"
+            "--no-prints",
+            "--dtw", dtwPreset,
+            "--no-flash-attn",
+            "--output-json-full",
+            "--output-file", outputBaseURL.path
         ]
+        if disableGPU {
+            process.arguments?.append("--no-gpu")
+        }
 
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -353,7 +383,21 @@ final class WhisperCppProvider: TranscriptionProvider {
             throw TranscriptionError.whisperExecutionFailed(cleanedError)
         }
 
-        return output
+        do {
+            let jsonData = try Data(contentsOf: jsonURL)
+            return try WhisperJSONParser.parse(jsonData)
+        } catch {
+            AppLog.transcription.error(
+                "whisperCLI word timestamp JSON invalid error=\(error.localizedDescription, privacy: .public)"
+            )
+            let fallbackSegments = parseWhisperOutput(output)
+            guard !fallbackSegments.isEmpty else { throw error }
+            return WhisperTranscriptionResult(
+                segments: fallbackSegments,
+                metalAvailable: false,
+                dtwAligned: false
+            )
+        }
     }
 
     private static func whisperEnvironment(for cliPath: String) -> [String: String] {
@@ -408,7 +452,7 @@ final class WhisperCppProvider: TranscriptionProvider {
         return "whisper-cli 执行失败（退出码 \(terminationStatus)）"
     }
 
-    private func parseWhisperOutput(_ output: String) -> [SubtitleSegment] {
+    private static func parseWhisperOutput(_ output: String) -> [SubtitleSegment] {
         output
             .components(separatedBy: .newlines)
             .compactMap(parseWhisperLine)
@@ -432,12 +476,13 @@ final class WhisperCppProvider: TranscriptionProvider {
             id: first.id,
             start: min(offset, max(first.start, first.end - 0.2)),
             end: first.end,
-            text: first.text
+            text: first.text,
+            words: nil
         )
         return aligned
     }
 
-    private func parseWhisperLine(_ line: String) -> SubtitleSegment? {
+    private static func parseWhisperLine(_ line: String) -> SubtitleSegment? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("["),
               let closeBracket = trimmed.firstIndex(of: "]")
@@ -457,7 +502,7 @@ final class WhisperCppProvider: TranscriptionProvider {
         return SubtitleSegment(start: start, end: max(end, start + 0.1), text: text)
     }
 
-    private func parseWhisperTime(_ string: String) -> TimeInterval {
+    private static func parseWhisperTime(_ string: String) -> TimeInterval {
         let parts = string.components(separatedBy: ":")
         guard parts.count == 3,
               let hours = Double(parts[0]),
@@ -471,21 +516,41 @@ final class WhisperCppProvider: TranscriptionProvider {
 }
 
 final class CloudASRProvider: TranscriptionProvider {
-    private let preferredSegmentDuration: TimeInterval = 3.8
-    private let hardSegmentDuration: TimeInterval = 5.2
-
     private let apiURL: String
     private let apiKey: String
     private let model: String
+    private let segmentationConfiguration: SubtitleSegmentationConfiguration
 
-    init(apiURL: String, apiKey: String, model: String) {
+    init(
+        apiURL: String,
+        apiKey: String,
+        model: String,
+        segmentationConfiguration: SubtitleSegmentationConfiguration
+    ) {
         self.apiURL = apiURL
         self.apiKey = apiKey
         self.model = model
+        self.segmentationConfiguration = segmentationConfiguration
     }
 
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
-        guard !apiURL.isEmpty, !apiKey.isEmpty else {
+        AppLog.transcription.info(
+            "cloudASR configuration urlValid=\(Self.validatedEndpoint(self.apiURL) != nil, privacy: .public) keyPresent=\(!self.apiKey.isEmpty, privacy: .public) modelPresent=\(!self.model.isEmpty, privacy: .public) model=\(self.model, privacy: .public)"
+        )
+        guard !apiKey.isEmpty else {
+            throw TranscriptionError.cloudNotConfigured
+        }
+
+        // 与 Git 一致：qwen3-asr-flash-filetrans / transcription 端点 → 异步 filetrans
+        // filetrans 不能走 OpenAI compatible-mode（会 404 model_not_supported）
+        if usesFiletransModel || isDashScopeAsyncURL {
+            guard Self.validatedEndpoint(asyncTranscriptionURL) != nil else {
+                throw TranscriptionError.cloudNotConfigured
+            }
+            return try await transcribeDashScopeAsync(audioURL: audioURL, language: language)
+        }
+
+        guard Self.validatedEndpoint(apiURL) != nil else {
             throw TranscriptionError.cloudNotConfigured
         }
 
@@ -493,11 +558,27 @@ final class CloudASRProvider: TranscriptionProvider {
             return try await transcribeDashScopeCompatible(audioURL: audioURL, language: language)
         }
 
-        if isDashScopeAsyncURL {
-            return try await transcribeDashScopeAsync(audioURL: audioURL, language: language)
-        }
-
         return try await transcribeWhisperCompatible(audioURL: audioURL, language: language)
+    }
+
+    static func validatedEndpoint(_ rawValue: String) -> URL? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.contains("{WorkspaceId}"),
+              !trimmed.contains("{workspaceId}"),
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              let host = url.host,
+              !host.isEmpty,
+              !host.contains("{"),
+              !host.contains("}") else {
+            return nil
+        }
+        return url
+    }
+
+    private var usesFiletransModel: Bool {
+        model.lowercased().contains("filetrans")
     }
 
     private var isDashScopeCompatibleModeURL: Bool {
@@ -508,6 +589,19 @@ final class CloudASRProvider: TranscriptionProvider {
     private var isDashScopeAsyncURL: Bool {
         guard let url = URL(string: apiURL) else { return false }
         return url.path.hasSuffix("/api/v1/services/audio/asr/transcription")
+    }
+
+    /// Git 异步端点：.../api/v1/services/audio/asr/transcription
+    /// 若设置里误填了 compatible-mode，按同 host 改回 transcription 路径。
+    private var asyncTranscriptionURL: String {
+        if isDashScopeAsyncURL {
+            return apiURL
+        }
+        if let url = URL(string: apiURL), let host = url.host, !host.isEmpty {
+            let scheme = (url.scheme?.isEmpty == false) ? url.scheme! : "https"
+            return "\(scheme)://\(host)/api/v1/services/audio/asr/transcription"
+        }
+        return "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription"
     }
 
     private func transcribeDashScopeCompatible(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
@@ -538,7 +632,10 @@ final class CloudASRProvider: TranscriptionProvider {
         ]
 
         let bodyData = try JSONSerialization.data(withJSONObject: body)
-        var request = URLRequest(url: URL(string: apiURL)!)
+        guard let endpoint = Self.validatedEndpoint(apiURL) else {
+            throw TranscriptionError.cloudNotConfigured
+        }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -562,10 +659,14 @@ final class CloudASRProvider: TranscriptionProvider {
         }
 
         let duration = await audioDuration(url: audioURL)
-        return approximateSegments(from: content, duration: duration)
+        return TimedSubtitleSegmenter.segmentEstimated(
+            approximateSegments(from: content, duration: duration),
+            configuration: segmentationConfiguration
+        )
     }
 
     private func transcribeDashScopeAsync(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        // Git 原逻辑：本地音频 → data URI 作为 file_url，异步提交 filetrans
         let audioData = try Data(contentsOf: audioURL)
         let mimeType = switch audioURL.pathExtension.lowercased() {
         case "m4a": "audio/mp4"
@@ -581,13 +682,20 @@ final class CloudASRProvider: TranscriptionProvider {
         ]
 
         let bodyData = try JSONSerialization.data(withJSONObject: body)
-        var request = URLRequest(url: URL(string: apiURL)!)
+        guard let endpoint = Self.validatedEndpoint(asyncTranscriptionURL) else {
+            throw TranscriptionError.cloudNotConfigured
+        }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
         request.httpBody = bodyData
         request.timeoutInterval = 120
+
+        AppLog.transcription.info(
+            "cloudASR asyncSubmit endpoint=\(endpoint.absoluteString, privacy: .public) model=\(self.model, privacy: .public)"
+        )
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
@@ -631,6 +739,10 @@ final class CloudASRProvider: TranscriptionProvider {
                    let transcriptionURL = result["transcription_url"] {
                     return transcriptionURL
                 }
+                if let result = output["result"] as? [String: Any],
+                   let transcriptionURL = result["transcription_url"] as? String {
+                    return transcriptionURL
+                }
                 throw TranscriptionError.cloudResponseInvalid
             case "FAILED":
                 let message = output["message"] as? String ?? "未知错误"
@@ -644,7 +756,7 @@ final class CloudASRProvider: TranscriptionProvider {
     }
 
     private func dashScopeTaskPollingURL(taskID: String) -> URL? {
-        guard let requestURL = URL(string: apiURL),
+        guard let requestURL = URL(string: asyncTranscriptionURL),
               var components = URLComponents(url: requestURL, resolvingAgainstBaseURL: false)
         else {
             return nil
@@ -744,11 +856,11 @@ final class CloudASRProvider: TranscriptionProvider {
         if let transcripts = json["transcripts"] as? [[String: Any]],
            let first = transcripts.first,
            let sentences = first["sentences"] as? [[String: Any]] {
-            var segments: [SubtitleSegment] = []
+            var timedWords: [SubtitleWord] = []
 
             for sentence in sentences {
-                if let splitFromWords = splitDashScopeSentenceWords(sentence), !splitFromWords.isEmpty {
-                    segments.append(contentsOf: splitFromWords)
+                if let words = dashScopeSentenceWords(sentence), !words.isEmpty {
+                    timedWords.append(contentsOf: words)
                     continue
                 }
 
@@ -759,11 +871,16 @@ final class CloudASRProvider: TranscriptionProvider {
 
                 let start = (sentence["begin_time"] as? Double ?? 0) / 1000.0
                 let end = (sentence["end_time"] as? Double ?? 0) / 1000.0
-                segments.append(contentsOf: splitLongSegment(SubtitleSegment(start: start, end: max(end, start + 0.1), text: text)))
+                timedWords.append(
+                    SubtitleWord(start: start, end: max(end, start + 0.1), text: text)
+                )
             }
 
-            if !segments.isEmpty {
-                return SubtitleSegmentationService.refine(segments)
+            if !timedWords.isEmpty {
+                return TimedSubtitleSegmenter.segment(
+                    timedWords,
+                    configuration: segmentationConfiguration
+                )
             }
         }
 
@@ -772,109 +889,32 @@ final class CloudASRProvider: TranscriptionProvider {
            let text = first["text"] as? String,
            !text.isEmpty {
             let duration = await audioDuration(url: audioURL)
-            return SubtitleSegmentationService.refine(approximateSegments(from: text, duration: duration))
+            return TimedSubtitleSegmenter.segmentEstimated(
+                approximateSegments(from: text, duration: duration),
+                configuration: segmentationConfiguration
+            )
         }
 
         throw TranscriptionError.cloudResponseInvalid
     }
 
-    private func splitDashScopeSentenceWords(_ sentence: [String: Any]) -> [SubtitleSegment]? {
+    private func dashScopeSentenceWords(_ sentence: [String: Any]) -> [SubtitleWord]? {
         guard let words = sentence["words"] as? [[String: Any]], !words.isEmpty else {
             return nil
         }
 
-        var results: [SubtitleSegment] = []
-        var currentText = ""
-        var currentStart: TimeInterval?
-        var currentEnd: TimeInterval = 0
-
-        func flush() {
-            let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let start = currentStart, !text.isEmpty else { return }
-            results.append(
-                SubtitleSegment(
-                    start: start,
-                    end: max(currentEnd, start + 0.1),
-                    text: text
-                )
-            )
-            currentText = ""
-            currentStart = nil
-            currentEnd = 0
-        }
-
-        for word in words {
-            guard let token = word["text"] as? String else { continue }
+        let results = words.compactMap { word -> SubtitleWord? in
+            guard let token = word["text"] as? String else { return nil }
             let punctuation = word["punctuation"] as? String ?? ""
             let start = (word["begin_time"] as? Double ?? 0) / 1000.0
             let end = (word["end_time"] as? Double ?? start * 1000) / 1000.0
-
-            if currentStart == nil {
-                currentStart = start
-            }
-
-            currentText += token + punctuation
-            currentEnd = max(currentEnd, end)
-
-            let duration = currentEnd - (currentStart ?? start)
-            let strongBreak = ["。", "！", "？", "!", "?"].contains(punctuation)
-            let softBreak = ["，", "、", "；", ";", "：", ":"].contains(punctuation)
-
-            if strongBreak || duration >= hardSegmentDuration || (softBreak && duration >= preferredSegmentDuration) {
-                flush()
-            }
+            return SubtitleWord(
+                start: start,
+                end: max(end, start + 0.1),
+                text: token + punctuation
+            )
         }
-
-        flush()
-
         return results.isEmpty ? nil : results
-    }
-
-    private func splitLongSegment(_ segment: SubtitleSegment) -> [SubtitleSegment] {
-        let duration = segment.end - segment.start
-        let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard duration > hardSegmentDuration, !text.isEmpty else {
-            return [segment]
-        }
-
-        let delimiters = CharacterSet(charactersIn: "，。、；：！？,.;:!?")
-        var chunks: [String] = []
-        var current = ""
-
-        for scalar in text.unicodeScalars {
-            current.unicodeScalars.append(scalar)
-            if delimiters.contains(scalar), current.count >= 6 {
-                let chunk = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !chunk.isEmpty {
-                    chunks.append(chunk)
-                }
-                current = ""
-            }
-        }
-
-        let tail = current.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tail.isEmpty {
-            chunks.append(tail)
-        }
-
-        guard chunks.count > 1 else {
-            return [segment]
-        }
-
-        let totalUnits = max(chunks.reduce(0) { $0 + max($1.count, 1) }, 1)
-        var cursor = segment.start
-
-        return chunks.enumerated().map { index, chunk in
-            let weight = Double(max(chunk.count, 1)) / Double(totalUnits)
-            let chunkDuration = index == chunks.count - 1
-                ? max(segment.end - cursor, 0.1)
-                : max(duration * weight, 0.35)
-            let start = cursor
-            let end = min(segment.end, cursor + chunkDuration)
-            cursor = end
-            return SubtitleSegment(start: start, end: max(end, start + 0.1), text: chunk)
-        }
     }
 
     private func resolvedDashScopeResultURL(from rawURL: String) -> URL? {
@@ -944,14 +984,20 @@ final class CloudASRProvider: TranscriptionProvider {
             }
 
             if !segments.isEmpty {
-                return SubtitleSegmentationService.refine(segments)
+                return TimedSubtitleSegmenter.segmentEstimated(
+                    segments,
+                    configuration: segmentationConfiguration
+                )
             }
         }
 
         if let text = json["text"] as? String,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let duration = await audioDuration(url: audioURL)
-            return SubtitleSegmentationService.refine(approximateSegments(from: text, duration: duration))
+            return TimedSubtitleSegmenter.segmentEstimated(
+                approximateSegments(from: text, duration: duration),
+                configuration: segmentationConfiguration
+            )
         }
 
         throw TranscriptionError.cloudResponseInvalid
@@ -1013,18 +1059,25 @@ enum TranscriptionError: LocalizedError {
 enum TranscriptionService {
     static func createProvider(settings: AppSettings) -> TranscriptionProvider {
         var resolvedSettings = settings
+        let segmentationConfiguration = SubtitleSegmentationConfiguration(
+            maxCharacters: resolvedSettings.effectiveMaxSubtitleLength
+        )
 
         switch resolvedSettings.transcriptionEngine {
         case .whisperLocal:
-            return WhisperCppProvider(model: resolvedSettings.whisperModel)
+            return WhisperCppProvider(
+                model: resolvedSettings.whisperModel,
+                segmentationConfiguration: segmentationConfiguration
+            )
         case .appleSpeech:
-            return AppleSpeechProvider()
+            return AppleSpeechProvider(segmentationConfiguration: segmentationConfiguration)
         case .cloudASR:
             SettingsStore.hydrateSecrets(into: &resolvedSettings, includeASR: true, includeLLM: false)
             return CloudASRProvider(
                 apiURL: resolvedSettings.effectiveASRURL,
                 apiKey: resolvedSettings.cloudASRKey,
-                model: resolvedSettings.effectiveASRModel
+                model: resolvedSettings.effectiveASRModel,
+                segmentationConfiguration: segmentationConfiguration
             )
         }
     }

@@ -55,8 +55,24 @@ enum SubtitleSegmentationService {
 
         let totalUnits = max(parts.reduce(0) { $0 + max($1.count, 1) }, 1)
         var cursor = segment.start
+        var searchStart = segment.text.startIndex
 
         return parts.enumerated().map { index, part in
+            let partRange = segment.text.range(of: part, range: searchStart..<segment.text.endIndex)
+            let characterOffset = partRange.map { segment.text.distance(from: segment.text.startIndex, to: $0.lowerBound) }
+            if let partRange {
+                searchStart = partRange.upperBound
+            }
+            let matchedWords = words(in: segment, for: part, startingAt: characterOffset)
+            if let first = matchedWords.first, let last = matchedWords.last {
+                return SubtitleSegment(
+                    start: first.start,
+                    end: max(last.end, first.start + 0.1),
+                    text: part,
+                    words: matchedWords
+                )
+            }
+
             let weight = Double(max(part.count, 1)) / Double(totalUnits)
             let partDuration = index == parts.count - 1
                 ? max(segment.end - cursor, 0.1)
@@ -65,6 +81,29 @@ enum SubtitleSegmentationService {
             let end = min(segment.end, cursor + partDuration)
             cursor = end
             return SubtitleSegment(start: start, end: max(end, start + 0.1), text: part)
+        }
+    }
+
+    private static func words(
+        in segment: SubtitleSegment,
+        for part: String,
+        startingAt characterOffset: Int?
+    ) -> [SubtitleWord] {
+        guard let words = segment.words, !words.isEmpty, let characterOffset else { return [] }
+
+        let partStart = characterOffset
+        let partEnd = characterOffset + part.count
+        var cursor = 0
+
+        return words.filter { word in
+            let normalized = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cursor > 0, word.text.first?.isWhitespace == true {
+                cursor += 1
+            }
+            let wordStart = cursor
+            let wordEnd = cursor + normalized.count
+            cursor = wordEnd
+            return wordEnd > partStart && wordStart < partEnd
         }
     }
 
@@ -144,6 +183,7 @@ enum SubtitleSegmentationService {
                shouldMergeContinuation(last: last, next: normalized) {
                 last.end = max(last.end, normalized.end)
                 last.text = joinedText(last.text, normalized.text)
+                last.words = mergedWords(last.words, normalized.words)
                 merged[merged.count - 1] = last
                 continue
             }
@@ -189,6 +229,7 @@ enum SubtitleSegmentationService {
                shouldMerge(last: last, next: normalized) {
                 last.end = max(last.end, normalized.end)
                 last.text = joinedText(last.text, normalized.text)
+                last.words = mergedWords(last.words, normalized.words)
                 merged[merged.count - 1] = last
                 continue
             }
@@ -197,6 +238,7 @@ enum SubtitleSegmentationService {
                 var last = merged.removeLast()
                 last.end = max(last.end, normalized.end)
                 last.text = joinedText(last.text, normalized.text)
+                last.words = mergedWords(last.words, normalized.words)
                 merged.append(last)
                 continue
             }
@@ -253,6 +295,11 @@ enum SubtitleSegmentationService {
         }
 
         return trimmedLeft + trimmedRight
+    }
+
+    private static func mergedWords(_ left: [SubtitleWord]?, _ right: [SubtitleWord]?) -> [SubtitleWord]? {
+        let merged = (left ?? []) + (right ?? [])
+        return merged.isEmpty ? nil : merged
     }
 
     private static func shouldInsertSpaceBetween(_ left: Character?, _ right: Character?) -> Bool {

@@ -1,5 +1,4 @@
 import Foundation
-import LocalAuthentication
 import Security
 
 enum KeychainStore {
@@ -14,11 +13,13 @@ enum KeychainStore {
         var query = baseQuery(account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        applyNonInteractiveAuthenticationContext(to: &query)
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else {
+            AppLog.settings.error(
+                "keychainReadFailed account=\(account.rawValue, privacy: .public) status=\(status, privacy: .public)"
+            )
             return nil
         }
 
@@ -33,8 +34,7 @@ enum KeychainStore {
         }
 
         let attributes = [kSecValueData as String: data]
-        var updateQuery = baseQuery(account)
-        applyNonInteractiveAuthenticationContext(to: &updateQuery)
+        let updateQuery = baseQuery(account)
         let status = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
             return
@@ -47,20 +47,11 @@ enum KeychainStore {
         var query = baseQuery(account)
         query[kSecValueData as String] = data
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        applyNonInteractiveAuthenticationContext(to: &query)
         SecItemAdd(query as CFDictionary, nil)
     }
 
     static func delete(_ account: Account) {
-        var query = baseQuery(account)
-        applyNonInteractiveAuthenticationContext(to: &query)
-        SecItemDelete(query as CFDictionary)
-    }
-
-    private static func applyNonInteractiveAuthenticationContext(to query: inout [String: Any]) {
-        let context = LAContext()
-        context.interactionNotAllowed = true
-        query[kSecUseAuthenticationContext as String] = context
+        SecItemDelete(baseQuery(account) as CFDictionary)
     }
 
     private static func baseQuery(_ account: Account) -> [String: Any] {

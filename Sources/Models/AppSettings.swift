@@ -18,6 +18,7 @@ struct AppSettings: Equatable, Codable {
     var cloudASRModel: String = CloudASRPreset.dashscope.defaultModel
     var language: String = "zh-CN"
     var sentenceSplitStrategy: SentenceSplitStrategy = .punctuation
+    var maxSubtitleLength: Int? = 24
     var keepFillerWords = false
     var transcriptionValidationState = SettingsValidationState()
 
@@ -36,11 +37,17 @@ struct AppSettings: Equatable, Codable {
     var watchSettings = WatchSettings()
 
     var effectiveASRURL: String {
-        return cloudASRURL.isEmpty ? cloudASRPreset.defaultURL : cloudASRURL
+        let trimmed = cloudASRURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? cloudASRPreset.defaultURL : trimmed
     }
 
     var effectiveASRModel: String {
-        cloudASRModel.isEmpty ? cloudASRPreset.defaultModel : cloudASRModel
+        let trimmed = cloudASRModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? cloudASRPreset.defaultModel : trimmed
+    }
+
+    var effectiveMaxSubtitleLength: Int {
+        min(max(maxSubtitleLength ?? 24, 10), 50)
     }
 
     var effectiveLLMURL: String {

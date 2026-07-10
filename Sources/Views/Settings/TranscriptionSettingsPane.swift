@@ -18,6 +18,7 @@ struct TranscriptionSettingsPane: View {
             SettingsGroup(title: "转写配置") {
                 SettingsListSection {
                     transcriptionHeaderControls
+                    subtitleSegmentationControls
 
                     switch settings.transcriptionEngine {
                     case .whisperLocal:
@@ -127,7 +128,9 @@ struct TranscriptionSettingsPane: View {
         case .whisperLocal:
             return !WhisperRuntime.isCLIAvailable || !WhisperModelStore.isAvailable(settings.whisperModel)
         case .cloudASR:
-            if settings.cloudASRKey.isEmpty {
+            var hydratedSettings = settings
+            SettingsStore.hydrateSecrets(into: &hydratedSettings, includeASR: true, includeLLM: false)
+            if hydratedSettings.cloudASRKey.isEmpty {
                 return true
             }
 
@@ -136,6 +139,27 @@ struct TranscriptionSettingsPane: View {
         case .appleSpeech:
             return false
         }
+    }
+
+    private var subtitleSegmentationControls: some View {
+        SettingsListRow(
+            title: "单条字幕最大字数",
+            description: "适用于 Apple 语音、本地 Whisper 和云端 ASR。"
+        ) {
+            Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
+                Text("\(settings.effectiveMaxSubtitleLength) 字")
+                    .monospacedDigit()
+                    .frame(width: 48, alignment: .trailing)
+            }
+            .frame(width: 156)
+        }
+    }
+
+    private var maxSubtitleLengthBinding: Binding<Int> {
+        Binding(
+            get: { settings.effectiveMaxSubtitleLength },
+            set: { settings.maxSubtitleLength = $0 }
+        )
     }
 
     private var whisperSection: some View {
@@ -221,7 +245,7 @@ struct TranscriptionSettingsPane: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("云端 ASR")
                     .font(.system(size: 13, weight: .semibold))
-                Text("需要服务地址和 API Key，适合正式批量转写。")
+                Text("阿里默认：异步 transcription + qwen3-asr-flash-filetrans。Base URL 须以 /api/v1/services/audio/asr/transcription 结尾，不要填 compatible-mode。")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

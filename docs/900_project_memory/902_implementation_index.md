@@ -21,3 +21,4 @@
 | I-015 | 应用日志入口 | 已存在 | `AppLog` 已收口 editor / proofreading 等分类日志 |
 | I-016 | FCP 目录监听服务 | 已存在 | `WatchFolderService` 负责轮询监听目录、稳定检测、FCP 元数据识别，并通过 `AppModel.importDocument(at:)` 接入现有处理链路 |
 | I-017 | 菜单栏入口 | 已存在 | `MenuBarController` 持有 `NSStatusItem`，由通用设置控制显隐；`SubForgeAppDelegate` 同步 Dock/菜单栏模式，`MainWindowCloseBehavior` 将主窗口关闭改为隐藏 |
+| I-018 | 带时间词元公共分段器 | 已存在 | `TimedSubtitleSegmenter` 统一处理 Apple segment、Whisper DTW token、DashScope word 的标点、字数、时长、英文边界与时间重叠 |

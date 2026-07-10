@@ -168,7 +168,7 @@ embed_whisper_runtime() {
   fi
 
   if [ -n "$ggml_prefix" ] && [ -d "$ggml_prefix/libexec" ]; then
-    find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" ! -name "libggml-metal.so" -exec cp {} "$APP_FRAMEWORKS/" \;
+    find "$ggml_prefix/libexec" -maxdepth 1 -name "libggml*.so" -exec cp {} "$APP_FRAMEWORKS/" \;
   fi
 
   if [ -n "$libomp_prefix" ] && [ -f "$libomp_prefix/lib/libomp.dylib" ]; then
