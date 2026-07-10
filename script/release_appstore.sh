@@ -492,7 +492,8 @@ main() {
   build_app
   stage_bundle
 
-  if [ "$MODE" = "--signed" ] || [ "$MODE" = "--package" ]; then
+  # --upload 也必须正式签名；此前漏掉导致 ad-hoc 包上传被 App Store 拒绝
+  if [ "$MODE" = "--signed" ] || [ "$MODE" = "--package" ] || [ "$MODE" = "--upload" ]; then
     sign_app
   else
     sign_app_ad_hoc_for_testing
