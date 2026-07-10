@@ -39,9 +39,32 @@
 - `duration`
 - `origin`
 
-### 2.3 SubtitleSegment
+### 2.3 SubtitleWord（转写中间结果）
 
-表示一条字幕。
+表示带时间的最小听写单元，是「转写 → 公共分段」之间的契约。
+
+关键字段：
+
+- `start`
+- `end`
+- `text`
+
+来源示例：
+
+- Apple Speech 的 segment（先做异常 duration 收敛，再当作词元）
+- Whisper JSON 的 token / DTW 词边界
+- DashScope 等云端返回的 `words`
+- 无可靠词时间时，由粗段落文本按字/词权重估算出来的伪词元
+
+关键规则：
+
+- `start < end`
+- 空文本词元不参与分段
+- 引擎只负责产出词元；**不在此层做产品级切句**
+
+### 2.4 SubtitleSegment
+
+表示一条可编辑字幕（公共分段器输出，也是编辑 / 导出单元）。
 
 关键字段：
 
@@ -49,7 +72,7 @@
 - `start`
 - `end`
 - `text`
-- `words`：本地 Whisper 可选的词级起止时间，旧项目允许缺失
+- `words`：可选，生成该条时用到的词元；旧项目或估算路径允许缺失
 - `order`
 - `isEmpty`
 
@@ -58,8 +81,9 @@
 - `start < end`
 - 空文本字幕允许存在，但不应成为最终输出重点
 - 顺序可调整，但必须保持可导出
+- 相邻字幕不应时间重叠（由公共分段器保证）
 
-### 2.4 AppSettings
+### 2.5 AppSettings
 
 表示应用级配置。
 
@@ -70,7 +94,7 @@
 - `proofreadingEnabled`
 - `proofreadingEngine`
 - `subtitleStyle`
-- `maxSubtitleLength`
+- `maxSubtitleLength`：单条字幕最大字数，**统一注入公共分段器**，不按引擎分叉
 - `exportSettings`
 - `watchSettings`
 
@@ -89,7 +113,7 @@
 - `exportSettings.saveLocation`: 与源文件同目录
 - `watchSettings.autoStart`: 关闭
 
-### 2.5 ExportSettings
+### 2.6 ExportSettings
 
 表示导出阶段所需参数。
 
@@ -102,7 +126,7 @@
 - `customOutputPath`
 - `targetFormat`
 
-### 2.6 WatchTask
+### 2.7 WatchTask
 
 表示目录监听中的单次处理任务。
 
@@ -120,9 +144,11 @@
 - `PipelineProgress`
 - `ExportArtifact`
 - `LogEntry`
+- `SubtitleSegmentationConfiguration`：分段参数（最大字数、优选/最大时长等），由设置派生后注入公共分段器
 
 ## 4. 数据边界
 
 - 不要求引入数据库
 - 默认以本地内存状态和本地配置持久化为主
 - 只要数据模型稳定，后续存储实现可替换
+- 转写中间结果（词元）与可编辑字幕片段分层；不要把引擎原始 JSON 直接当编辑模型

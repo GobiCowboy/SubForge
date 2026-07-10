@@ -13,9 +13,12 @@
 | `Sources/Views/Editor/` | 字幕编辑工作台 |
 | `Sources/Views/Settings/` | 设置中心及其分组页面 |
 | `Sources/Views/Shared/` | 流水线进度、侧边栏、Toast、快捷键说明等共享视图 |
+| `Config/` | 签名与沙盒 entitlement：App Store / 调试 / inherit / Developer ID 分文件 |
 | `docs/` | 产品、基础、功能和项目记忆文档 |
-| `script/` | 本地构建运行入口 |
-| `dist/` | 构建产物暂存 |
+| `script/` | 本地构建运行、App Store 打包上传、Developer ID 公证分发入口 |
+| `dist/` | 构建产物暂存（`SubForge.app` / `appstore/` / `developer-id/`） |
+| `Tests/` | 单元测试（如 Whisper 词级时间戳） |
+| `Resources/` | 应用图标、隐私清单、可打包模型等资源 |
 
 ## 2. 文档目录规范
 

@@ -2,11 +2,12 @@
 
 ## 1. 当前结论
 
-SubForge 已进入 App Store 提交准备阶段，但当前本机还不能直接上传：
+SubForge 已具备 App Store 打包与上传链路；历史上已有成功上传构建 `1.0 (2026070403)`。
 
-- 当前本机缺少 Mac App Store 分发签名身份。
-- `script/release_appstore.sh --signed` 会因缺少 app signing identity 停止，这是预期保护。
-- `script/release_appstore.sh --unsigned` 可生成 release app bundle，用于结构检查。
+- `script/release_appstore.sh --unsigned`：生成 release app bundle，仅做结构检查，使用 ad-hoc 调试签名。
+- `script/release_appstore.sh --signed` / `--package` / `--upload`：都会调用 `sign_app`，使用 Mac App Store 分发证书正式签名。
+- 若缺少 app signing identity，上述正式签名模式会主动停止，这是预期保护。
+- 注意：`--upload` 必须走正式签名；漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会拒绝上传。
 
 ## 2. 构建入口
 
@@ -22,7 +23,17 @@ App Store 发布准备使用：
 ./script/release_appstore.sh --unsigned
 ./script/release_appstore.sh --signed
 ./script/release_appstore.sh --package
+./script/release_appstore.sh --upload
 ```
+
+模式说明：
+
+| 模式 | 签名 | 产物 / 行为 |
+|------|------|-------------|
+| `--unsigned` | ad-hoc（调试） | `dist/appstore/SubForge.app` 结构检查 |
+| `--signed` | Mac App Store 分发 | 已签名 `.app` |
+| `--package` | Mac App Store 分发 + Installer | 已签名 `.app` + `.pkg` |
+| `--upload` | 与 `--package` 相同 | 生成 `.pkg` 后上传 App Store Connect |
 
 可配置环境变量：
 
@@ -32,39 +43,51 @@ APP_BUILD=1
 TEAM_ID=4UNNXY925R
 APP_SIGN_IDENTITY="3rd Party Mac Developer Application: ..."
 INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: ..."
+APP_STORE_USER="apple-id@example.com"
+APP_STORE_PASSWORD="app-specific-password"
 ```
 
 ## 3. 签名要求
 
 需要安装或配置：
 
-- Mac App Store app signing identity
-- Mac App Store installer signing identity
+- Mac App Store app signing identity（脚本自动查找 `Apple Distribution` / `3rd Party Mac Developer Application`）
+- Mac App Store installer signing identity（脚本用 `security find-certificate` 查找，不会出现在 `security find-identity -p codesigning`）
 - Bundle ID: `com.jago.subforge`
 - Team ID: `4UNNXY925R`
+- 上传时还需 `APP_STORE_USER` + `APP_STORE_PASSWORD`（app-specific password）
 
-当前本机只检测到：
+注意区分证书用途：
 
-- `Apple Development`
-- `Developer ID Application`
+| 证书类型 | 用途 |
+|----------|------|
+| `Apple Development` | 本地开发调试 |
+| `Developer ID Application` | 站外分发 + 公证（`release_developer_id.sh`） |
+| `Apple Distribution` / `3rd Party Mac Developer Application` | Mac App Store `.app` 签名 |
+| `3rd Party Mac Developer Installer` | Mac App Store `.pkg` 签名 |
 
-这两个不能替代 Mac App Store 上传签名。
+站外 Developer ID 包与 App Store 包的 entitlements 也不同：前者用 `Config/SubForge.developer-id.entitlements`（无 Sandbox），后者用 `Config/SubForge.entitlements`（有 Sandbox），不可混用。
 
-## 4. Entitlements
+## 4. Entitlements（仅 App Store 渠道）
 
-主 app 使用：
+本文件只描述 **App Store** 包。站外 Developer ID 包见 `205` 与 `Config/SubForge.developer-id.entitlements`（无 Sandbox；嵌套二进制也不用 inherit）。
+
+主 app（`Config/SubForge.entitlements`）使用：
 
 - `com.apple.security.app-sandbox`
 - `com.apple.security.network.client`
 - `com.apple.security.files.user-selected.read-write`
 - `com.apple.security.automation.apple-events`
+- 以及 application-identifier / team-identifier / keychain-access-groups
 
 语音识别只保留 `NSSpeechRecognitionUsageDescription` 权限说明。Apple 远端校验不接受 macOS app bundle 签名中包含 `com.apple.security.personal-information.speech-recognition` entitlement。
 
-嵌入命令行工具使用继承 entitlement：
+嵌入命令行工具（`Config/SubForge.inherit.entitlements`，**仅 App Store 沙盒包**）使用继承 entitlement：
 
 - `com.apple.security.app-sandbox`
 - `com.apple.security.inherit`
+
+不要把这套 inherit 签名套到 Developer ID 的 `whisper-cli` 上：站外主程序无 Sandbox，子进程再签 sandbox+inherit 会被系统以信号 5 杀掉。
 
 ## 5. 隐私清单
 
@@ -127,6 +150,7 @@ No account is required. No sample login credentials are needed.
 - `./script/build_and_run.sh --verify`
 - `./script/release_appstore.sh --unsigned`
 - 安装 Mac App Store 分发证书后运行 `./script/release_appstore.sh --package`
+- 需要直传 App Store Connect 时运行 `./script/release_appstore.sh --upload`（必须能找到分发证书与 Installer 证书；不要期望 ad-hoc 包可通过审核上传）
 - 在干净机器或新用户账户测试首次启动、文件选择、Apple Speech、导出 SRT、导出 FCPXML
 - 在安装 Final Cut Pro 的机器测试“导出到 FCP”
 - 在未安装 Final Cut Pro 的机器确认错误提示清楚

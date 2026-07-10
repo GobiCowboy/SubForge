@@ -9,6 +9,9 @@
 | ISSUE-005 | P0 | 待验收 | 无效云端 ASR URL 导致应用崩溃 | 移除 `URL(...)!` 强制解包，所有云端入口先验证 HTTP(S) endpoint，无效配置返回可读错误 |
 | ISSUE-006 | P1 | 待验收 | Whisper 公共分段后丢失第一句 | 旧前导静音检测误判并清空首段词元；DTW 链路已移除该旧修正，完整保留首段 tokens |
 | ISSUE-007 | P1 | 待验收 | Apple 短字幕跨越长停顿 | 对超过 5.2 秒的异常单 segment duration 按文本长度收敛，不让短词覆盖十几秒静音 |
+| ISSUE-008 | P0 | 已解决 | App Store `--upload` 误用 ad-hoc 签名 | `release_appstore.sh` 原先只对 `--signed` / `--package` 调 `sign_app`，`--upload` 落到 ad-hoc；App Store Connect 拒绝。现已让三种正式发布模式统一走分发签名 |
+| ISSUE-009 | P0 | 已解决 | Developer ID 包启用 App Sandbox 无法启动 | 站外公证包若套用 App Store sandbox entitlements，launchd 会以 RBSRequestError / POSIX 163 拒绝启动。现已使用独立的 `Config/SubForge.developer-id.entitlements`（无 Sandbox） |
+| ISSUE-010 | P0 | 已解决 | Developer ID 嵌套 `whisper-cli` 被信号 5 杀掉 | 主程序无 Sandbox 时，对 `Frameworks/whisper-cli` 使用 sandbox+inherit 会 SIGTRAP。现与主程序同用 developer-id entitlements 签名 |
 
 ## 使用规则
 

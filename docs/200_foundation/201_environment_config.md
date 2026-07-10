@@ -44,6 +44,19 @@
 - 本地构建 / 运行入口：`./script/build_and_run.sh`
 - 运行校验入口：`./script/build_and_run.sh --verify`
 - GUI 产物目录：`dist/SubForge.app`
+- App Store 打包 / 上传：`./script/release_appstore.sh`（`--unsigned` / `--signed` / `--package` / `--upload`）
+- 站外 Developer ID 公证分发：`./script/release_developer_id.sh`
+- App Store 产物目录：`dist/appstore/`
+- 站外分发产物目录：`dist/developer-id/`
+
+签名与 entitlement 文件在 `Config/`：
+
+| 文件 | 用途 |
+|------|------|
+| `SubForge.entitlements` | App Store 主程序（含 App Sandbox） |
+| `SubForge.debug.entitlements` | 本地 ad-hoc 调试签名 |
+| `SubForge.inherit.entitlements` | App Store 嵌套 `whisper-cli`（sandbox + inherit） |
+| `SubForge.developer-id.entitlements` | 站外分发主程序与嵌套二进制（**无** Sandbox） |
 
 ## 6. 文档约束
 

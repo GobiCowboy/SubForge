@@ -18,6 +18,8 @@
 - App Store 签名构建：`./script/release_appstore.sh --signed`
 - App Store 上传包：`./script/release_appstore.sh --package`
 - App Store 打包并上传：`./script/release_appstore.sh --upload`
+- App Store 签名分流：`--signed` / `--package` / `--upload` 都会走 `sign_app`（Mac App Store 分发证书）；只有 `--unsigned` 才走 ad-hoc 调试签名
+- 站外 Developer ID 公证分发：`./script/release_developer_id.sh` → `dist/developer-id/SubForge-x.y.z.zip`
 - 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
 - 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
 
@@ -42,7 +44,7 @@
 - 当前真实运行入口已经统一到 `script/build_and_run.sh`
 - SwiftUI GUI 应用不再建议直接运行 `.build/.../SubForge` 裸可执行文件，统一通过 `dist/SubForge.app` 或脚本启动
 - 本地 Whisper 依赖 `whisper-cli` 与模型文件，云端能力依赖用户自行配置 Key
-- App Store 准备文件已进入仓库：`Config/SubForge.entitlements`、`Resources/PrivacyInfo.xcprivacy`
+- 签名准备文件已进入仓库：`Config/SubForge.entitlements`（App Store）、`Config/SubForge.developer-id.entitlements`（站外）、`Config/SubForge.debug.entitlements`、`Config/SubForge.inherit.entitlements`，以及 `Resources/PrivacyInfo.xcprivacy`
 - App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问与 Apple Events entitlement；语音识别使用 `NSSpeechRecognitionUsageDescription`，不在签名 entitlement 中声明
 - 云端 ASR / 校对 API Key 必须写入 Keychain，普通偏好才写入 UserDefaults
 - 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限
@@ -55,6 +57,7 @@
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出
+- App Store `--upload` 必须与 `--signed` / `--package` 一样调用 `sign_app`；历史上漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会直接拒绝
 
 ## 6. 后续重做建议
 
