@@ -54,6 +54,7 @@
 - App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
+- Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出
 
 ## 6. 后续重做建议
 

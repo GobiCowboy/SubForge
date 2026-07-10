@@ -239,11 +239,14 @@ clean_bundle_metadata() {
 sign_nested_code() {
   local identity="$1"
 
+  # 站外主程序无 App Sandbox。子进程 whisper-cli 若再签 sandbox+inherit，
+  # 会被系统以信号 5 (SIGTRAP) 杀掉（用户可见：whisper-cli 被运行库中断）。
+  # 因此 nested code 与主 app 使用同一套 developer-id entitlements。
   if [ -d "$APP_FRAMEWORKS" ]; then
     find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
       file "$mach_o" | grep -q "Mach-O" || continue
       codesign --force --timestamp --options runtime \
-        --entitlements "$INHERIT_ENTITLEMENTS" \
+        --entitlements "$ENTITLEMENTS" \
         --sign "$identity" "$mach_o"
     done
   fi
