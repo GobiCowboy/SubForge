@@ -22,7 +22,8 @@ APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_NOTICES="$APP_RESOURCES/ThirdPartyNotices"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
-ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
+# 站外分发专用：不要用 App Store 的 sandbox entitlements，否则无法启动。
+ENTITLEMENTS="$ROOT_DIR/Config/SubForge.developer-id.entitlements"
 INHERIT_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.inherit.entitlements"
 ZIP_PATH="$DIST_DIR/$APP_NAME-$APP_VERSION.zip"
 

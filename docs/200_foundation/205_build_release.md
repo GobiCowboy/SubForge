@@ -53,6 +53,7 @@
 - App Store release 脚本会自动查找 `SubForge_Mac_App_Store.provisionprofile`，优先路径包括项目目录、`Config/`、`~/Downloads/`、Xcode provisioning profile 目录
 - App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
+- Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 
 ## 6. 后续重做建议
 

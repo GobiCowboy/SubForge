@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Developer ID 站外分发：不启用 App Sandbox。
+    启用 sandbox 会导致 launchd 无法 spawn（RBSRequestError / POSIX 163），
+    表现为 “The application SubForge.app can’t be opened.”
+    App Store 继续使用 Config/SubForge.entitlements（含 sandbox）。
+  -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
+</dict>
+</plist>
