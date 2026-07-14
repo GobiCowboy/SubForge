@@ -245,7 +245,7 @@ struct TranscriptionSettingsPane: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("云端 ASR")
                     .font(.system(size: 13, weight: .semibold))
-                Text("阿里默认：异步 transcription + qwen3-asr-flash-filetrans。Base URL 须以 /api/v1/services/audio/asr/transcription 结尾，不要填 compatible-mode。")
+                Text("阿里默认：异步 transcription + qwen3-asr-flash-filetrans。本地音频会先走百炼临时上传再转写，无需自建 OSS。Base URL 须以 /api/v1/services/audio/asr/transcription 结尾，不要填 compatible-mode。")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

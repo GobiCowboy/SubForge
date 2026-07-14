@@ -60,6 +60,7 @@
 - **Apple 语音**：拿到系统 segment，做异常超长 duration 收敛，映射为词元后交给公共分段器
 - **本地 Whisper**：跑 whisper-cli，解析 JSON（含 DTW 词级时间）；有词元走真实边界，无词元走估算路径
 - **云端 ASR**：兼容模式 / DashScope 异步任务等协议细节留在云端适配器；有 `words` 用真实词时间，否则估算
+- **DashScope filetrans**：本地音频先上传至百炼临时存储（`oss://` 短链，约 48 小时），再提交异步转写；禁止整文件 Base64 塞进请求体（会触发 HTTP 413 RequestTooLarge）
 
 ### 4.2 公共分段规则
 
