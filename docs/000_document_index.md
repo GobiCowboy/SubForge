@@ -30,6 +30,7 @@
 - [305_export_delivery.md](./300_features/305_export_delivery.md)
 - [306_settings_center.md](./300_features/306_settings_center.md)
 - [307_watch_folder_workflow.md](./300_features/307_watch_folder_workflow.md)
+- [308_funasr_local_engine.md](./300_features/308_funasr_local_engine.md)
 
 ## 900 项目记忆
 

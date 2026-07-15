@@ -2,6 +2,7 @@ import Foundation
 
 enum TranscriptionEngine: String, CaseIterable, Codable, Identifiable {
     case whisperLocal = "本地 Whisper"
+    case funASRLocal = "本地 FunASR"
     case appleSpeech = "Apple 语音"
     case cloudASR = "云端 ASR"
 
@@ -94,6 +95,69 @@ enum WhisperModelStore {
 
     static func availableModels() -> [WhisperModel] {
         WhisperModel.allCases.filter(isAvailable)
+    }
+}
+
+/// SenseVoice GGUF 模型（一期仅 q8）。
+enum FunASRModel: String, CaseIterable, Identifiable, Codable {
+    case sensevoiceSmallQ8 = "sensevoice-small-q8"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        "SenseVoice Small q8 (~254MB)"
+    }
+
+    var detail: String {
+        "中日韩英多语本地识别；需同时下载 FSMN-VAD"
+    }
+
+    var fileName: String {
+        "sensevoice-small-q8.gguf"
+    }
+
+    /// Hugging Face 仓库路径片段，用于拼接 resolve URL。
+    var repository: String {
+        "FunAudioLLM/SenseVoiceSmall-GGUF"
+    }
+
+    var sizeMB: Int { 254 }
+}
+
+enum FunASRModelStore {
+    static let directory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = appSupport.appendingPathComponent("SubForge/models/funasr")
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }()
+
+    static let vadFileName = "fsmn-vad.gguf"
+    static let vadRepository = "FunAudioLLM/fsmn-vad-GGUF"
+    static let vadSizeMB = 2
+
+    static func localPath(for model: FunASRModel) -> URL {
+        directory.appendingPathComponent(model.fileName)
+    }
+
+    static var vadPath: URL {
+        directory.appendingPathComponent(vadFileName)
+    }
+
+    static func isModelAvailable(_ model: FunASRModel = .sensevoiceSmallQ8) -> Bool {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: localPath(for: model).path)
+        let size = attributes?[.size] as? Int64 ?? 0
+        return size > 10_000_000
+    }
+
+    static var isVADAvailable: Bool {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: vadPath.path)
+        let size = attributes?[.size] as? Int64 ?? 0
+        return size > 50_000
+    }
+
+    static func isReady(_ model: FunASRModel = .sensevoiceSmallQ8) -> Bool {
+        isModelAvailable(model) && isVADAvailable
     }
 }
 

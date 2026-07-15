@@ -399,6 +399,12 @@ final class AppModel: ObservableObject {
                     self.settings = transcriptionSettings
                     self.showToast("未检测到 Whisper 运行组件，已切换到 Apple 语音继续转写", level: .error)
                 }
+                if transcriptionSettings.transcriptionEngine == .funASRLocal,
+                   !FunASRRuntime.isCLIAvailable {
+                    transcriptionSettings.transcriptionEngine = .appleSpeech
+                    self.settings = transcriptionSettings
+                    self.showToast("未检测到 FunASR 运行组件，已切换到 Apple 语音继续转写", level: .error)
+                }
 
                 let provider = TranscriptionService.createProvider(settings: transcriptionSettings)
                 let engineName = transcriptionSettings.transcriptionEngine.rawValue

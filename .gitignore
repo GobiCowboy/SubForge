@@ -8,3 +8,8 @@ config.json
 BAK/
 *.xcuserstate
 .DS_Store
+
+# FunASR runtime binaries (download via script/download_funasr_runtime.sh)
+vendor/funasr/llama-funasr-*
+vendor/funasr/*.tar.gz
+vendor/funasr/_extract_*/

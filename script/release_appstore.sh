@@ -132,6 +132,7 @@ stage_bundle() {
 
   embed_provisioning_profile
   embed_whisper_runtime
+  embed_funasr_runtime
   embed_third_party_notices
   rewrite_runtime_library_paths
   scrub_homebrew_backend_paths
@@ -294,6 +295,16 @@ embed_whisper_runtime() {
   cp "$libomp_prefix/lib/libomp.dylib" "$APP_FRAMEWORKS/libomp.dylib"
 }
 
+embed_funasr_runtime() {
+  local source="${FUNASR_CLI_SOURCE:-$ROOT_DIR/vendor/funasr/llama-funasr-sensevoice}"
+  if [ ! -f "$source" ]; then
+    echo "note: FunASR runtime missing at $source (optional for App Store build; run script/download_funasr_runtime.sh)" >&2
+    return 0
+  fi
+  cp "$source" "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+  chmod +x "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+}
+
 embed_third_party_notices() {
   if [ ! -d "$APP_FRAMEWORKS" ] || [ ! -f "$APP_FRAMEWORKS/whisper-cli" ]; then
     return
@@ -323,7 +334,7 @@ rewrite_runtime_library_paths() {
     return
   fi
 
-  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" \) -print0 | while IFS= read -r -d '' mach_o; do
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" \) -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
 
     if [[ "$(basename "$mach_o")" == *.dylib ]]; then

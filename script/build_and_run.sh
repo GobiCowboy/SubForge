@@ -59,6 +59,7 @@ stage_bundle() {
   fi
 
   embed_whisper_runtime
+  embed_funasr_runtime
   rewrite_runtime_library_paths
   scrub_homebrew_backend_paths
   sign_nested_code_ad_hoc
@@ -131,7 +132,9 @@ sign_nested_code_ad_hoc() {
 
   find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
-    if [ "$(basename "$mach_o")" = "whisper-cli" ] && [ -f "$INHERIT_ENTITLEMENTS" ]; then
+    local base
+    base="$(basename "$mach_o")"
+    if { [ "$base" = "whisper-cli" ] || [ "$base" = "llama-funasr-sensevoice" ]; } && [ -f "$INHERIT_ENTITLEMENTS" ]; then
       codesign --force --timestamp=none \
         --entitlements "$INHERIT_ENTITLEMENTS" \
         --sign - "$mach_o"
@@ -176,12 +179,36 @@ embed_whisper_runtime() {
   fi
 }
 
+embed_funasr_runtime() {
+  local candidates=(
+    "${FUNASR_CLI_SOURCE:-}"
+    "$ROOT_DIR/vendor/funasr/llama-funasr-sensevoice"
+    "$HOME/Library/Application Support/SubForge/bin/llama-funasr-sensevoice"
+  )
+  local source=""
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+      source="$candidate"
+      break
+    fi
+  done
+
+  if [ -z "$source" ]; then
+    echo "note: FunASR runtime not found; skip embedding llama-funasr-sensevoice (run script/download_funasr_runtime.sh)" >&2
+    return 0
+  fi
+
+  cp "$source" "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+  chmod +x "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+}
+
 rewrite_runtime_library_paths() {
   if [ ! -d "$APP_FRAMEWORKS" ]; then
     return
   fi
 
-  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" \) -print0 | while IFS= read -r -d '' mach_o; do
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" \) -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
 
     if [[ "$(basename "$mach_o")" == *.dylib ]]; then

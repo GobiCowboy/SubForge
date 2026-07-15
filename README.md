@@ -16,7 +16,7 @@ SubForge 是一个面向 Final Cut Pro（FCP）的字幕工作流应用：可监
 ## 功能
 
 - **素材导入**：打开文件、拖放文件、最近项目。
-- **本地字幕生成**：基于本地 Whisper（whisper.cpp）转写，音频不出本机。
+- **本地字幕生成**：基于本地 Whisper（whisper.cpp）或本地 FunASR / SenseVoice 转写，音频不出本机；支持中日韩英（SenseVoice auto）。
 - **AI 校对**：对转写结果做可选的文本修正（增强项，不阻塞主流程）。
 - **字幕编辑工作台**：逐条编辑文本、入点、出点，支持插入与合并。
 - **导出与交付**：输出 SRT、FCPXML，并可将字幕 XML 自动传回 FCP（需在设置中开启相关配置）。
@@ -51,6 +51,15 @@ brew install whisper-cpp ggml libomp
 - `Resources/ggml-base.bin`
 - `BAK/models/ggml-base.bin`
 - `~/Library/Application Support/SubForge/models/ggml-base.bin`
+
+### 本地 FunASR（SenseVoice，可选）
+
+```bash
+# 下载 macOS arm64 CLI 到 vendor/funasr/
+bash script/download_funasr_runtime.sh
+```
+
+SenseVoice q8 与 FSMN-VAD 模型在应用「设置 → 转写」中选择「本地 FunASR」后下载（约 256MB）。详见 `docs/300_features/308_funasr_local_engine.md`。
 
 ### 构建（未签名 / 本地调试）
 

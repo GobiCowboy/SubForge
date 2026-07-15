@@ -14,14 +14,14 @@
 - 用户导入音频后等待生成字幕
 - 用户想知道当前是准备中、转写中还是已完成
 - 用户遇到失败时需要立即知道原因
-- 用户切换 Apple / Whisper / 云端 ASR 后，字幕切分规则保持一致
+- 用户切换 Apple / Whisper / FunASR / 云端 ASR 后，字幕切分规则保持一致
 
 ## 3. 功能范围
 
 包含：
 
 - 文件准备
-- 调用转写引擎（Apple 语音 / 本地 Whisper / 云端 ASR）
+- 调用转写引擎（Apple 语音 / 本地 Whisper / 本地 FunASR / 云端 ASR）
 - 引擎结果归一为带时间词元
 - 公共分段（标点、字数、时长、停顿、英文边界、去重叠）
 - 展示阶段状态与总体进度
@@ -39,7 +39,8 @@
 ```
 音频
   ├─ AppleSpeechProvider      ─┐
-  ├─ WhisperCppProvider       ─┼─→ [SubtitleWord] 或粗 segment
+  ├─ WhisperCppProvider       ─┤
+  ├─ FunASRSenseVoiceProvider ─┼─→ [SubtitleWord] 或粗 segment
   └─ CloudASRProvider         ─┘
                 │
                 ▼
@@ -59,6 +60,7 @@
 
 - **Apple 语音**：拿到系统 segment，做异常超长 duration 收敛，映射为词元后交给公共分段器
 - **本地 Whisper**：跑 whisper-cli，解析 JSON（含 DTW 词级时间）；有词元走真实边界，无词元走估算路径
+- **本地 FunASR（SenseVoice）**：跑 `llama-funasr-sensevoice` + VAD GGUF；stdout 文本清洗后按音频时长估算词元（一期 CLI 无字级时间戳）；语言 auto（中日韩英）
 - **云端 ASR**：兼容模式 / DashScope 异步任务等协议细节留在云端适配器；有 `words` 用真实词时间，否则估算
 - **DashScope filetrans**：本地音频先上传至百炼临时存储（`oss://` 短链，约 48 小时），再提交异步转写；禁止整文件 Base64 塞进请求体（会触发 HTTP 413 RequestTooLarge）
 
@@ -96,6 +98,6 @@
 - 过程有阶段性反馈
 - 成功后生成字幕并进入编辑
 - 失败时用户能知道下一步该检查什么
-- 切换三种引擎后，单条字幕最大字数等分段参数表现一致
+- 切换各引擎后，单条字幕最大字数等分段参数表现一致
 - 有词级时间的结果不会被硬切到英文单词中间
 - 无词级时间的接口仍能产出合理字幕（估算路径），而不是各引擎各切一套

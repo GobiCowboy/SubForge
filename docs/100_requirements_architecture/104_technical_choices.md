@@ -18,8 +18,9 @@
 
 ## 3. 引擎策略
 
-- 转写引擎支持本地与云端并存（Apple 语音 / 本地 Whisper / 云端 ASR）
+- 转写引擎支持本地与云端并存（Apple 语音 / 本地 Whisper / 本地 FunASR SenseVoice / 云端 ASR）
 - 默认优先本地方案
+- 中日韩英多语本地优先可选 **SenseVoice GGUF**（`llama-funasr-sensevoice`）；中文词级时间更强时可继续用 Whisper DTW 或云端 words
 - 当本地不可用或质量不足时，允许切到云端
 - AI 校对是增强能力，不应成为唯一通路
 

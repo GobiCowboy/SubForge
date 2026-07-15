@@ -1192,6 +1192,10 @@ enum TranscriptionError: LocalizedError {
     case recognizerUnavailable(String)
     case cliUnavailable
     case modelUnavailable
+    case funASRCLIUnavailable
+    case funASRModelUnavailable
+    case funASRVADUnavailable
+    case funASRExecutionFailed(String)
     case audioConversionFailed
     case whisperExecutionFailed(String)
     case cloudNotConfigured
@@ -1210,6 +1214,14 @@ enum TranscriptionError: LocalizedError {
             "whisper-cli 未安装，请先在本机安装 whisper-cpp"
         case .modelUnavailable:
             "Whisper 模型未下载，请先在设置中下载模型"
+        case .funASRCLIUnavailable:
+            "未检测到 llama-funasr-sensevoice。请通过 script/download_funasr_runtime.sh 安装，或重新打包应用。"
+        case .funASRModelUnavailable:
+            "FunASR SenseVoice 模型未下载，请先在设置中下载模型"
+        case .funASRVADUnavailable:
+            "FunASR VAD 模型未下载，请先在设置中下载 SenseVoice（会同时下载 VAD）"
+        case .funASRExecutionFailed(let message):
+            "FunASR 执行失败：\(message)"
         case .audioConversionFailed:
             "音频转换失败（afconvert）"
         case .whisperExecutionFailed(let message):
@@ -1239,6 +1251,11 @@ enum TranscriptionService {
         case .whisperLocal:
             return WhisperCppProvider(
                 model: resolvedSettings.whisperModel,
+                segmentationConfiguration: segmentationConfiguration
+            )
+        case .funASRLocal:
+            return FunASRSenseVoiceProvider(
+                model: .sensevoiceSmallQ8,
                 segmentationConfiguration: segmentationConfiguration
             )
         case .appleSpeech:

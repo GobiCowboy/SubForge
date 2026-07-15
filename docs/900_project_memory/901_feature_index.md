@@ -9,6 +9,7 @@
 | 305 | 导出与交付 | 已实现 | SRT、FCPXML、SRT + FCPXML 导出、Finder 定位与可选导入 Final Cut Pro 已接入 |
 | 306 | 设置中心 | 已实现 | 分页设置、验证结果持久化、样例区已接入 |
 | 307 | 目录监听工作流 | 已实现 | 监听 FCP 导出音频、前台拉起应用并接入现有转写/校对链路；队列与自动导出作为后续扩展 |
+| 308 | 本地 FunASR 转写 | 已实现 | SenseVoice GGUF + llama-funasr-sensevoice；中日韩英 auto；时间戳走估算分段；待本机 CLI/模型冒烟 |
 
 ## 备注
 

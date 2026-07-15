@@ -12,6 +12,8 @@ struct TranscriptionSettingsPane: View {
     @State private var audioDelegate: SettingsAudioPlayDelegate?
     @State private var downloadingModel: WhisperModel?
     @State private var downloadProgress: Double?
+    @State private var isDownloadingFunASR = false
+    @State private var funASRDownloadProgress: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
@@ -23,6 +25,8 @@ struct TranscriptionSettingsPane: View {
                     switch settings.transcriptionEngine {
                     case .whisperLocal:
                         whisperSection
+                    case .funASRLocal:
+                        funASRSection
                     case .cloudASR:
                         cloudASRSection
                     case .appleSpeech:
@@ -114,6 +118,7 @@ struct TranscriptionSettingsPane: View {
                     Text("中英混合").tag("zh-CN,en-US")
                     Text("English").tag("en-US")
                     Text("日本語").tag("ja-JP")
+                    Text("한국어").tag("ko-KR")
                 }
                 .labelsHidden()
                 .frame(width: 168)
@@ -127,6 +132,8 @@ struct TranscriptionSettingsPane: View {
         switch settings.transcriptionEngine {
         case .whisperLocal:
             return !WhisperRuntime.isCLIAvailable || !WhisperModelStore.isAvailable(settings.whisperModel)
+        case .funASRLocal:
+            return !FunASRRuntime.isCLIAvailable || !FunASRModelStore.isReady()
         case .cloudASR:
             var hydratedSettings = settings
             SettingsStore.hydrateSecrets(into: &hydratedSettings, includeASR: true, includeLLM: false)
@@ -144,7 +151,7 @@ struct TranscriptionSettingsPane: View {
     private var subtitleSegmentationControls: some View {
         SettingsListRow(
             title: "单条字幕最大字数",
-            description: "适用于 Apple 语音、本地 Whisper 和云端 ASR。"
+            description: "适用于 Apple 语音、本地 Whisper、本地 FunASR 和云端 ASR。"
         ) {
             Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
                 Text("\(settings.effectiveMaxSubtitleLength) 字")
@@ -185,6 +192,80 @@ struct TranscriptionSettingsPane: View {
                 ForEach(WhisperModel.allCases) { candidate in
                     whisperModelRow(candidate)
                 }
+            }
+        }
+    }
+
+    private var funASRSection: some View {
+        SettingsInsetPanel {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("本地 FunASR / SenseVoice")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("中日韩英多语本地识别。语言由模型自动判定；时间戳一期走估算分段。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                SettingsPill(
+                    text: FunASRRuntime.isCLIAvailable ? "运行时已检测" : "运行时缺失",
+                    tint: FunASRRuntime.isCLIAvailable ? .green : .red
+                )
+            }
+
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(FunASRModel.sensevoiceSmallQ8.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(FunASRModel.sensevoiceSmallQ8.detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Text(
+                        FunASRModelStore.isVADAvailable
+                            ? "VAD：已就绪"
+                            : "VAD：未下载（下载模型时会一并获取）"
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(FunASRModelStore.isVADAvailable ? Color.secondary : Color.orange)
+                }
+
+                Spacer()
+
+                if FunASRModelStore.isReady() {
+                    SettingsPill(text: "已就绪", tint: .green)
+                } else if isDownloadingFunASR {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        ProgressView(value: funASRDownloadProgress ?? 0)
+                            .frame(width: 96)
+                        Text(funASRDownloadProgressText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button("下载 \(FunASRModel.sensevoiceSmallQ8.sizeMB + FunASRModelStore.vadSizeMB)MB") {
+                        downloadFunASRModel()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.08))
+            )
+
+            if !FunASRRuntime.isCLIAvailable {
+                Text("缺少 llama-funasr-sensevoice。开发环境请运行 script/download_funasr_runtime.sh，正式包需重新构建以嵌入运行时。")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
             }
         }
     }
@@ -399,11 +480,46 @@ struct TranscriptionSettingsPane: View {
         }
     }
 
+    private func downloadFunASRModel() {
+        isDownloadingFunASR = true
+        funASRDownloadProgress = 0
+
+        Task {
+            do {
+                try await FunASRModelDownloader.download(.sensevoiceSmallQ8) { progress in
+                    Task { @MainActor in
+                        if isDownloadingFunASR {
+                            funASRDownloadProgress = progress
+                        }
+                    }
+                }
+                await MainActor.run {
+                    isDownloadingFunASR = false
+                    funASRDownloadProgress = nil
+                    model.toast = ToastMessage(text: "SenseVoice + VAD 下载完成", level: .success)
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloadingFunASR = false
+                    funASRDownloadProgress = nil
+                    model.toast = ToastMessage(text: error.localizedDescription, level: .error)
+                }
+            }
+        }
+    }
+
     private var downloadProgressText: String {
         guard let downloadProgress else {
             return "下载中..."
         }
         return "下载中 \(Int(downloadProgress * 100))%"
+    }
+
+    private var funASRDownloadProgressText: String {
+        guard let funASRDownloadProgress else {
+            return "下载中..."
+        }
+        return "下载中 \(Int(funASRDownloadProgress * 100))%"
     }
 }
 
