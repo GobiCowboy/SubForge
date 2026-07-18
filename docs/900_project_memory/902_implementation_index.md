@@ -27,3 +27,6 @@
 | I-019 | 双渠道发布脚本 | 已存在 | `script/release_appstore.sh`（MAS：unsigned/signed/package/upload，正式模式统一 `sign_app`）与 `script/release_developer_id.sh`（站外：Developer ID + 公证）；entitlements 分文件，不可混用 |
 | I-020 | Whisper JSON 词级解析 | 已存在 | `WhisperJSONParser` 解析 whisper-cli JSON 词元时间戳，供公共分段器使用 |
 | I-021 | 旧版字幕 refine 工具 | 遗留 / 测试用 | `SubtitleSegmentationService.refine` 仍在测试中出现；主转写链路已改走 `TimedSubtitleSegmenter`，新增逻辑不要再分叉回旧 refine |
+| I-023 | 官方智能字幕客户端 | 已存在 | `OfficialSmartServiceClient` + `OSSMultipartUploader`；钱包、Policy直传、异步任务与中国区路由 |
+| I-024 | StoreKit购买与钱包状态 | 已存在 | `SmartServiceStore`；下单、Keychain、`appAccountToken`、购买和到账轮询 |
+| I-025 | 智能服务设置页 | 已存在 | `SmartServiceSettingsPane`；余额、价格、购买、刷新和隐私路径 |

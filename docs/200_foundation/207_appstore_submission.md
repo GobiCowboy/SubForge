@@ -98,7 +98,7 @@ APP_STORE_PASSWORD="app-specific-password"
 当前声明：
 
 - 不追踪用户
-- 不收集隐私数据类型
+- 官方智能字幕开启时收集`Audio Data`和`Other User Content`，用途仅为App Functionality，不关联身份且不用于追踪
 - Required Reason API:
   - UserDefaults
   - File Timestamp
@@ -126,7 +126,9 @@ App bundle 会嵌入：
 
 SubForge is a macOS utility for turning user-selected audio files into editable subtitles, importing existing SRT files, then exporting SRT and Final Cut Pro XML files. The app can optionally watch a user-selected folder for new audio exported from Final Cut Pro. Folder watching is off by default and only starts after the user selects a folder.
 
-The app uses Apple Speech Recognition by default. Local Whisper transcription is optional and runs on-device using bundled whisper.cpp components. Cloud proofreading is off by default; if the user enables it and enters their own API key, subtitle text is sent to the configured provider for proofreading.
+The app uses an on-device FunASR engine by default. Local Whisper and Apple Speech are optional transcription engines. Cloud proofreading is off by default; if the user enables it and enters their own API key, subtitle text is sent to the configured provider for proofreading.
+
+The optional Smart Subtitle consumable provides 300 minutes of managed cloud transcription and AI proofreading. Audio is uploaded directly from the Mac to temporary Alibaba Cloud OSS storage using a short-lived upload policy issued by our server. The app never contains our permanent cloud API key. Credits are granted only after our server verifies an App Store Server Notification V2; a client-side successful purchase does not grant credits.
 
 The app requests Apple Events permission only for the user-triggered “Export to Final Cut Pro” action, which opens Final Cut Pro with the generated FCPXML file.
 
@@ -136,11 +138,12 @@ No account is required. No sample login credentials are needed.
 
 隐私政策必须覆盖：
 
-- 用户选择的音频和字幕文件只在本机处理，除非用户显式启用云端服务。
+- 用户选择的音频和字幕文件只在本机处理，除非用户显式选择自备Key云服务或官方智能字幕。
 - Apple 语音识别由系统能力处理。
 - 本地 Whisper 不上传音频。
 - 云端校对默认关闭；启用后，字幕文本会发送到用户配置的服务商。
 - API Key 存储在 macOS Keychain。
+- 官方智能字幕会将音频直传阿里临时OSS，用于ASR与AI校对；需说明临时存储与删除政策。
 - 目录监听默认关闭，只监听用户选择的目录。
 - 不收集分析数据，不追踪用户。
 
@@ -155,3 +158,6 @@ No account is required. No sample login credentials are needed.
 - 在安装 Final Cut Pro 的机器测试“导出到 FCP”
 - 在未安装 Final Cut Pro 的机器确认错误提示清楚
 - 在开启和关闭菜单栏图标时测试 Dock / Command-Tab / 关闭窗口行为
+- 在App Store Connect创建`com.jago.subforge.smart.300min`消耗型商品，价格和本地化状态可销售。
+- 使用StoreKit Sandbox验证购买、取消、pending、Server Notifications V2、只发放一次额度和到账轮询。
+- App Store Connect隐私问卷与`PrivacyInfo.xcprivacy`一致，声明Audio Data和Other User Content用于App Functionality。

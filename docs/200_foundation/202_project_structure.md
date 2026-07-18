@@ -55,4 +55,5 @@
 
 - 首页、编辑页、设置页必须继续保持拆分，不允许重新回到单文件堆叠
 - 设置页的每个主分区继续独立成文件，避免把所有配置重新塞回一个视图
+- 官方智能服务继续保持`SmartServiceStore`、`OfficialSmartServiceClient`、`OSSMultipartUploader`和`SmartServiceSettingsPane`四个责任边界，不把StoreKit或multipart上传堆入`AppModel`。
 - 如果后续首页继续扩展，侧边栏行、状态条 badge、卡片样式应继续抽象，而不是直接堆到 `HomeView.swift`

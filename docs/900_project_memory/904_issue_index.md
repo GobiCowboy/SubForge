@@ -13,6 +13,8 @@
 | ISSUE-009 | P0 | 已解决 | Developer ID 包启用 App Sandbox 无法启动 | 站外公证包若套用 App Store sandbox entitlements，launchd 会以 RBSRequestError / POSIX 163 拒绝启动。现已使用独立的 `Config/SubForge.developer-id.entitlements`（无 Sandbox） |
 | ISSUE-010 | P0 | 已解决 | Developer ID 嵌套 `whisper-cli` 被信号 5 杀掉 | 主程序无 Sandbox 时，对 `Frameworks/whisper-cli` 使用 sandbox+inherit 会 SIGTRAP。现与主程序同用 developer-id entitlements 签名 |
 | ISSUE-011 | P0 | 已解决 | DashScope filetrans 长音频 413 RequestTooLarge | 原实现把整文件 Base64 塞进 `file_url` 导致请求体超限。现改为百炼临时上传拿 `oss://` URL，提交时带 `X-DashScope-OssResourceResolve: enable` |
+| ISSUE-012 | P0 | 发布前联调 | 智能字幕尚未经StoreKit Sandbox与阿里真实云端到端验收 | 需验证商品、Server Notification、pending Key激活、Policy直传、ASR、AI校对和按秒结算 |
+| ISSUE-013 | P1 | 预期限制 | Developer ID站外包不能完成Mac App Store消耗型内购 | 购买入口以StoreKit商品可用性为准；正式付费能力在Mac App Store包验收 |
 
 ## 使用规则
 

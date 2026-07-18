@@ -61,12 +61,13 @@
 ### 3.8 智能字幕与购买
 
 - StoreKit商品不可用时显示可恢复错误，不展示硬编码价格。
-- 恢复或重复提交购买不重复发放智能秒数。
+- 重复Apple通知或履约重试不重复发放智能秒数；消耗型商品不展示恢复购买。
 - 官方API Key只存Keychain，日志不打印Key、上传签名、完整`oss://`或字幕正文。
 - 智能任务首版只发送`processingRegion=china`。
 - 音频请求目标必须是Model API签发的阿里`upload_host`，不上传到Billing或Model API。
 - 任务成功按服务端`actualSeconds`刷新余额；失败显示返还结果。
 - 本地转写、自定义云Provider和既有导出流程不因官方服务不可用而阻塞。
+- 隐私清单声明Audio Data和Other User Content只用于App Functionality，不关联身份且不追踪。
 
 ## 4. 文档检查清单
 

@@ -1,6 +1,6 @@
 # 309 智能字幕与购买
 
-状态：开发前检查完成
+状态：基础实现已验收，待App Store Sandbox和阿里真实云联调
 
 ## 目标
 
@@ -13,8 +13,8 @@
 - 当前处理区域：中国大陆（首版不可切换）。
 - 剩余智能分钟与刷新状态。
 - `300分钟`商品卡片；Mac App Store价格从StoreKit读取。
-- 购买、恢复购买、管理购买问题入口。
-- 数据路径和48小时临时存储说明。
+- 购买、到账等待和手动刷新入口；消耗型商品不提供“恢复购买”。
+- 数据路径、临时存储与按秒计费说明。
 - 官方智能模式开关与高级自定义Provider入口分离。
 
 ## 客户端流程
@@ -30,7 +30,8 @@
 - Product ID：`com.jago.subforge.smart.300min`。
 - 商品类型：消耗型内购，发放18,000智能秒且余额不在客户端过期。
 - 价格、货币和名称只使用StoreKit本地化Product。
-- 签名交易提交Billing验证；Billing履约成功后才刷新钱包。
+- StoreKit本地验证只用于客户端状态；真正入账只信任Apple Server Notifications V2的服务端签名通知。
+- Billing履约成功后客户端才刷新钱包，客户端purchase success不自行增加额度。
 - 用户取消不报错；pending、失败和未验证交易给出明确状态。
 
 ## 区域扩展
@@ -44,3 +45,12 @@
 - 复用KeychainStore、AppLog、Settings系统原生UI、现有流水线进度和TimedSubtitleSegmenter。
 - 新增独立SmartService客户端、StoreKit购买服务和设置Pane，不继续堆入TranscriptionService。
 - 官方服务与现有BYOK设置隔离，避免覆盖用户自定义Key。
+
+## 实现与验证
+
+- `SmartServiceStore`：StoreKit商品、pending Key入Keychain、`appAccountToken`购买、Billing轮询和钱包刷新。
+- `OfficialSmartServiceClient`：中国区钱包、上传会话、任务提交与轮询；官方Key与BYOK Key分开。
+- `OSSMultipartUploader`：将音频写入沙箱临时multipart文件后流式直传阿里HTTPS Host，请求完成后删除临时副本。
+- 智能服务设置Pane已接入剩余时长、官方区域、购买、刷新和设为当前引擎。
+- `swift build`通过；`swift test`共18项通过，其中3项固定中国区、语言映射和三端商品ID契约。
+- 待联调：StoreKit Sandbox真实商品与Server Notification、阿里上传Policy、长音频直传、ASR、校对和实际秒数。
