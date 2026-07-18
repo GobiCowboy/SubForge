@@ -93,6 +93,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var isWatchingDirectory = false
     @Published private(set) var watchStatusMessage = "未启动"
     @Published private(set) var watchedFileCount = 0
+    let smartService = SmartServiceStore()
 
     private var cancellables = Set<AnyCancellable>()
     private var playbackTimer: Timer?
@@ -118,7 +119,9 @@ final class AppModel: ObservableObject {
     init() {
         let initialSettings = SettingsStore.load()
         settings = initialSettings
-        pipelineStages = Self.makePipelineStages(proofreadingEnabled: initialSettings.proofreadingEnabled)
+        pipelineStages = Self.makePipelineStages(
+            proofreadingEnabled: initialSettings.proofreadingEnabled || initialSettings.transcriptionEngine == .officialSmart
+        )
         menuBarController.bind(model: self)
         SubForgeAppDelegate.applyActivationPolicy(for: initialSettings)
         menuBarController.setVisible(initialSettings.showMenuBarIcon)
@@ -264,6 +267,8 @@ final class AppModel: ObservableObject {
             return "Whisper"
         case .appleSpeech:
             return "Apple 语音"
+        case .officialSmart:
+            return "智能字幕"
         case .cloudASR:
             return "云端 ASR"
         }
@@ -361,7 +366,9 @@ final class AppModel: ObservableObject {
             await FunASRCLIRunner.shared.cancelActive()
         }
         mode = .home
-        pipelineStages = Self.makePipelineStages(proofreadingEnabled: settings.proofreadingEnabled)
+        pipelineStages = Self.makePipelineStages(
+            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart
+        )
         pipelineProgress = 0
         pipelineMessage = "等待开始"
         currentDocumentURL = nil
@@ -514,7 +521,9 @@ final class AppModel: ObservableObject {
         selectedSegmentID = nil
         currentTime = 0
         playbackDuration = 0
-        pipelineStages = Self.makePipelineStages(proofreadingEnabled: settings.proofreadingEnabled)
+        pipelineStages = Self.makePipelineStages(
+            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart
+        )
         pipelineProgress = 0
         pipelineMessage = "准备中 · 0s"
 
@@ -537,6 +546,10 @@ final class AppModel: ObservableObject {
                         throw TranscriptionError.cloudNotConfigured
                     }
                     transcriptionSettings = hydrated
+                }
+                if transcriptionSettings.transcriptionEngine == .officialSmart,
+                   KeychainStore.read(.officialServiceKey) == nil {
+                    throw OfficialSmartServiceError.keyMissing
                 }
 
                 let engine = transcriptionSettings.transcriptionEngine
@@ -562,18 +575,27 @@ final class AppModel: ObservableObject {
                 self.setPipelinePhase("转写中", progress: 0.36)
 
                 var transcribedSegments = try await provider.transcribe(audioURL: url, language: transcriptionSettings.language)
+                if engine == .officialSmart {
+                    await self.smartService.refreshWallet()
+                }
                 transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
                 guard !Task.isCancelled else {
                     self.stopPipelineClock()
                     return
                 }
 
-                let willAttemptProofread = self.settings.proofreadingEnabled
+                let usesOfficialProofreading = engine == .officialSmart
+                let willAttemptProofread = usesOfficialProofreading || self.settings.proofreadingEnabled
                 self.markStageDone(.transcribe, progress: willAttemptProofread ? 0.72 : 0.92)
 
                 var finalSegments = transcribedSegments
                 var proofreadingNote: String?
-                if willAttemptProofread {
+                if usesOfficialProofreading {
+                    self.markStageActive(.proofread, progress: 0.84, message: "")
+                    self.setPipelinePhase("AI 校对已完成", progress: 0.92)
+                    self.markStageDone(.proofread, progress: 0.92)
+                    proofreadingNote = "官方 AI 校对已完成"
+                } else if willAttemptProofread {
                     var proofSettings = self.settings
                     SettingsStore.hydrateSecrets(into: &proofSettings, includeASR: false, includeLLM: true)
                     if let warning = proofSettings.proofreadingConfigWarning {
@@ -635,6 +657,9 @@ final class AppModel: ObservableObject {
                 self.showToast("已生成 \(finalSegments.count) 条字幕", level: .success)
                 self.pipelineTask = nil
             } catch {
+                if self.settings.transcriptionEngine == .officialSmart {
+                    await self.smartService.refreshWallet()
+                }
                 let failedSeconds = self.pipelineElapsedSeconds()
                 self.stopPipelineClock()
                 self.pipelineTask = nil
@@ -688,7 +713,7 @@ final class AppModel: ObservableObject {
                     "已回退：FunASR 模型或 VAD 未就绪，改用 Apple 语音"
                 )
             }
-        case .cloudASR, .appleSpeech:
+        case .officialSmart, .cloudASR, .appleSpeech:
             break
         }
         return (resolved, false, nil)

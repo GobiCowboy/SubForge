@@ -13,7 +13,7 @@ enum LocalEngineUsageHint {
             "subforge.hint.firstFormalUse.whisperLocal"
         case .appleSpeech:
             "subforge.hint.firstFormalUse.appleSpeech"
-        case .cloudASR:
+        case .officialSmart, .cloudASR:
             nil
         }
     }
@@ -38,7 +38,7 @@ enum LocalEngineUsageHint {
             engineLabel = "本地 Whisper"
         case .appleSpeech:
             engineLabel = "Apple 语音"
-        case .cloudASR:
+        case .officialSmart, .cloudASR:
             return true
         }
 

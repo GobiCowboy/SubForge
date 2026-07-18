@@ -30,6 +30,12 @@ struct TranscriptionSettingsPane: View {
                         funASRSection
                     case .cloudASR:
                         cloudASRSection
+                    case .officialSmart:
+                        SettingsListRow(title: "智能字幕") {
+                            Text("在「智能服务」中购买与查看额度")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        }
                     case .appleSpeech:
                         SettingsListRow(title: "Apple 语音") {
                             Text("已启用")
@@ -143,6 +149,9 @@ struct TranscriptionSettingsPane: View {
             return baseURL.isEmpty || baseURL.contains("{WorkspaceId}")
         case .appleSpeech:
             return false
+        case .officialSmart:
+            // 官方服务按实际秒数扣费，不用设置页测试音频隐式消耗。
+            return true
         }
     }
 

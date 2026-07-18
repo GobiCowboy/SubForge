@@ -1267,6 +1267,8 @@ enum TranscriptionService {
             )
         case .appleSpeech:
             return AppleSpeechProvider(segmentationConfiguration: segmentationConfiguration)
+        case .officialSmart:
+            return OfficialSmartSubtitleProvider()
         case .cloudASR:
             SettingsStore.hydrateSecrets(into: &resolvedSettings, includeASR: true, includeLLM: false)
             return CloudASRProvider(

@@ -5,6 +5,7 @@ enum KeychainStore {
     enum Account: String {
         case cloudASRKey = "cloud-asr-key"
         case cloudLLMKey = "cloud-llm-key"
+        case officialServiceKey = "official-service-key"
     }
 
     private static let service = Bundle.main.bundleIdentifier ?? "com.jago.subforge"
@@ -16,6 +17,7 @@ enum KeychainStore {
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let data = item as? Data else {
             AppLog.settings.error(
                 "keychainReadFailed account=\(account.rawValue, privacy: .public) status=\(status, privacy: .public)"
@@ -26,18 +28,19 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func save(_ value: String, account: Account) {
+    @discardableResult
+    static func save(_ value: String, account: Account) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else {
             delete(account)
-            return
+            return false
         }
 
         let attributes = [kSecValueData as String: data]
         let updateQuery = baseQuery(account)
         let status = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
-            return
+            return true
         }
 
         if status != errSecItemNotFound {
@@ -47,7 +50,13 @@ enum KeychainStore {
         var query = baseQuery(account)
         query[kSecValueData as String] = data
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            AppLog.settings.error(
+                "keychainSaveFailed account=\(account.rawValue, privacy: .public) status=\(addStatus, privacy: .public)"
+            )
+        }
+        return addStatus == errSecSuccess
     }
 
     static func delete(_ account: Account) {

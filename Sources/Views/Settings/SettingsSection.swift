@@ -2,6 +2,7 @@ import Foundation
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "通用"
+    case smartService = "智能服务"
     case transcription = "转写"
     case proofreading = "校对"
     case subtitle = "基本样式"
@@ -13,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: "gearshape"
+        case .smartService: "sparkles.rectangle.stack"
         case .transcription: "waveform"
         case .proofreading: "text.badge.checkmark"
         case .subtitle: "captions.bubble"
@@ -25,6 +27,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general:
             "界面语言与基础入口"
+        case .smartService:
+            "购买官方智能字幕时长，查看额度和中国区服务状态"
         case .transcription:
             "决定素材如何被识别成可编辑字幕"
         case .proofreading:

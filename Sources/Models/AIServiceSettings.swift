@@ -6,9 +6,61 @@ enum TranscriptionEngine: String, CaseIterable, Codable, Identifiable {
     /// 备选；模型不内置，设置中下载。
     case whisperLocal = "本地 Whisper"
     case appleSpeech = "Apple 语音"
+    /// 官方付费能力：中国区云端ASR + AI校对。
+    case officialSmart = "智能字幕"
+    /// 用户自备Key的专家入口。
     case cloudASR = "云端 ASR"
 
     var id: String { rawValue }
+}
+
+enum OfficialServiceRegion: String, CaseIterable, Codable, Identifiable {
+    case china
+    case international
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .china: "中国大陆"
+        case .international: "国际"
+        }
+    }
+}
+
+struct OfficialServiceProfile: Equatable {
+    let region: OfficialServiceRegion
+    let billingBaseURL: URL
+    let modelBaseURL: URL
+    let processingRegion: String
+}
+
+enum OfficialServiceConfiguration {
+    static let activeRegion: OfficialServiceRegion = .china
+    static let appleProductID = "com.jago.subforge.smart.300min"
+    static let internalProductID = "subforge_smart_300"
+
+    static func profile(for region: OfficialServiceRegion) -> OfficialServiceProfile? {
+        switch region {
+        case .china:
+            return OfficialServiceProfile(
+                region: .china,
+                billingBaseURL: URL(string: "https://billing.gobicowboy.cn")!,
+                modelBaseURL: URL(string: "https://model-api.gobicowboy.cn/v1")!,
+                processingRegion: "china"
+            )
+        case .international:
+            // 保留区域类型，中国区验证完成前不配置Base URL，也不自动跨区。
+            return nil
+        }
+    }
+
+    static var activeProfile: OfficialServiceProfile {
+        guard let profile = profile(for: activeRegion) else {
+            preconditionFailure("Official service region is not configured")
+        }
+        return profile
+    }
 }
 
 enum WhisperModel: String, CaseIterable, Identifiable, Codable {

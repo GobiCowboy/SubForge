@@ -23,6 +23,8 @@ struct SettingsView: View {
                     switch selection {
                     case .general:
                         GeneralSettingsPane(settings: settingsBinding)
+                    case .smartService:
+                        SmartServiceSettingsPane(settings: settingsBinding, service: model.smartService)
                     case .transcription:
                         TranscriptionSettingsPane(settings: settingsBinding)
                     case .proofreading:
