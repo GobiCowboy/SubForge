@@ -100,3 +100,19 @@
 - 不要求保留现有脚本命名
 - 只要求保留文档中定义的功能边界、输入输出和规则
 - **必须保留「转写管转写、分段管分段」边界**：新增 ASR 源时只做词元适配，禁止再复制一套切句逻辑
+
+## 6. 智能字幕跨服务关系
+
+```text
+StoreKit / Billing ──履约──► Model API钱包
+                              ▲
+SubForge ──业务请求+官方Key───┘
+   │
+   └──临时上传策略──► 阿里中国区临时OSS
+
+Model API ──中国区Key──► DashScope ASR / AI校对
+```
+
+- SubForge不保存或接收DashScope永久Key。
+- 客户端只提交`processingRegion=china`，不提交Base URL、Workspace或模型。
+- 官方钱包Key保存在macOS Keychain；用户自定义Provider Key与官方智能服务隔离。

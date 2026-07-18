@@ -138,6 +138,18 @@
 - `status`
 - `resultFiles`
 
+### 2.8 SmartServiceWallet
+
+- 官方API Key只存Keychain，不进入`AppSettings`编码数据。
+- 余额使用`subtitle.smart.second`整数秒，界面换算为智能分钟。
+- 官方服务地址由构建和环境配置决定，用户不能编辑官方Base URL。
+
+### 2.9 SmartSubtitleTask
+
+- 记录本地请求ID、服务端任务ID、处理区域、状态、预计秒数、实际秒数和剩余额度。
+- 不持久化临时OSS Policy、Signature或永久云Key。
+- 首版处理区域固定为`china`；任务创建后不能跨区。
+
 ## 3. 派生对象
 
 - `RecentProject`
@@ -152,3 +164,4 @@
 - 默认以本地内存状态和本地配置持久化为主
 - 只要数据模型稳定，后续存储实现可替换
 - 转写中间结果（词元）与可编辑字幕片段分层；不要把引擎原始 JSON 直接当编辑模型
+- 官方钱包凭证、临时上传策略和业务配置分层；不要把云密钥写入设置模型
