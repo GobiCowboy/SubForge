@@ -14,6 +14,7 @@ struct TranscriptionSettingsPane: View {
     @State private var downloadProgress: Double?
     @State private var isDownloadingFunASR = false
     @State private var funASRDownloadProgress: Double?
+    @State private var validationTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
@@ -30,10 +31,7 @@ struct TranscriptionSettingsPane: View {
                     case .cloudASR:
                         cloudASRSection
                     case .appleSpeech:
-                        SettingsListRow(
-                            title: "Apple 语音",
-                            description: "调用系统语音识别能力，首次验证会请求权限。"
-                        ) {
+                        SettingsListRow(title: "Apple 语音") {
                             Text("已启用")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(.secondary)
@@ -149,10 +147,7 @@ struct TranscriptionSettingsPane: View {
     }
 
     private var subtitleSegmentationControls: some View {
-        SettingsListRow(
-            title: "单条字幕最大字数",
-            description: "适用于 Apple 语音、本地 Whisper、本地 FunASR 和云端 ASR。"
-        ) {
+        SettingsListRow(title: "单条字幕最大字数") {
             Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
                 Text("\(settings.effectiveMaxSubtitleLength) 字")
                     .monospacedDigit()
@@ -172,13 +167,8 @@ struct TranscriptionSettingsPane: View {
     private var whisperSection: some View {
         SettingsInsetPanel {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("本地 Whisper")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("离线转写，模型越大质量越好。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text("本地 Whisper")
+                    .font(.system(size: 13, weight: .semibold))
 
                 Spacer()
 
@@ -199,13 +189,8 @@ struct TranscriptionSettingsPane: View {
     private var funASRSection: some View {
         SettingsInsetPanel {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("本地 FunASR / SenseVoice")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("中日韩英多语本地识别。语言由模型自动判定；时间戳一期走估算分段。")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text("本地 FunASR / SenseVoice")
+                    .font(.system(size: 13, weight: .semibold))
 
                 Spacer()
 
@@ -223,22 +208,15 @@ struct TranscriptionSettingsPane: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(FunASRModel.sensevoiceSmallQ8.displayName)
                         .font(.system(size: 13, weight: .semibold))
-                    Text(FunASRModel.sensevoiceSmallQ8.detail)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                    Text(
-                        FunASRModelStore.isVADAvailable
-                            ? "VAD：已就绪"
-                            : "VAD：未下载（下载模型时会一并获取）"
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(FunASRModelStore.isVADAvailable ? Color.secondary : Color.orange)
                 }
 
                 Spacer()
 
                 if FunASRModelStore.isReady() {
-                    SettingsPill(text: "已就绪", tint: .green)
+                    SettingsPill(
+                        text: FunASRModelStore.isBundled() ? "已内置" : "已就绪",
+                        tint: .green
+                    )
                 } else if isDownloadingFunASR {
                     VStack(alignment: .trailing, spacing: 4) {
                         ProgressView(value: funASRDownloadProgress ?? 0)
@@ -323,13 +301,9 @@ struct TranscriptionSettingsPane: View {
 
     private var cloudASRSection: some View {
         SettingsInsetPanel {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("云端 ASR")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("阿里默认：异步 transcription + qwen3-asr-flash-filetrans。本地音频会先走百炼临时上传再转写，无需自建 OSS。Base URL 须以 /api/v1/services/audio/asr/transcription 结尾，不要填 compatible-mode。")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
+            Text("云端 ASR")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             SettingsListRow(title: "服务预设") {
                 SettingsTrailingControl {
@@ -377,15 +351,19 @@ struct TranscriptionSettingsPane: View {
             return
         }
 
+        validationTask?.cancel()
+        Task { await FunASRCLIRunner.shared.cancelActive() }
+
         isTesting = true
         validationState.resultText = "正在调用当前转写链路..."
 
-        Task {
+        validationTask = Task {
             var testSettings = settings
             SettingsStore.hydrateSecrets(into: &testSettings, includeASR: true, includeLLM: false)
             let provider = TranscriptionService.createProvider(settings: testSettings)
             do {
                 let segments = try await provider.transcribe(audioURL: audioURL, language: testSettings.language)
+                try Task.checkCancellation()
                 let result = segments.map(\.text).joined(separator: "\n")
                 await MainActor.run {
                     let state = SettingsValidationState(
@@ -395,6 +373,11 @@ struct TranscriptionSettingsPane: View {
                     )
                     persistValidationState(state)
                     isTesting = false
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    isTesting = false
+                    validationState.resultText = "已取消上一次验证"
                 }
             } catch {
                 await MainActor.run {

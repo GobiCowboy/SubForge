@@ -9,17 +9,27 @@ enum FunASROutputParser {
         var text: String
     }
 
+    /// 清洗 SenseVoice stdout，只保留正文。
+    static func plainText(from stdout: String) -> String {
+        stripMetaTags(stdout)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("[sensevoice]") }
+            .joined(separator: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// 去掉 SenseVoice meta tag，并抽取可用文本行。
     static func parse(stdout: String, audioDuration: TimeInterval) -> [SubtitleSegment] {
-        let cleaned = stripMetaTags(stdout)
+        let cleanedLines = stripMetaTags(stdout)
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !$0.hasPrefix("[sensevoice]") }
 
-        guard !cleaned.isEmpty else { return [] }
+        guard !cleanedLines.isEmpty else { return [] }
 
-        let timed = cleaned.compactMap(parseTimedLine)
-        if timed.count == cleaned.count, timed.contains(where: { $0.start != nil && $0.end != nil }) {
+        let timed = cleanedLines.compactMap(parseTimedLine)
+        if timed.count == cleanedLines.count, timed.contains(where: { $0.start != nil && $0.end != nil }) {
             return timed.compactMap { item in
                 guard let start = item.start, let end = item.end else { return nil }
                 let text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,8 +38,7 @@ enum FunASROutputParser {
             }
         }
 
-        let fullText = cleaned.joined(separator: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let fullText = plainText(from: stdout)
         guard !fullText.isEmpty else { return [] }
 
         let duration = max(audioDuration, 0.5)

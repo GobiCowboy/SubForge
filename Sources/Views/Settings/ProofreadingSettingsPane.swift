@@ -117,11 +117,21 @@ struct ProofreadingSettingsPane: View {
         .onChange(of: settings.proofreadingEnabled) { _, enabled in
             if enabled {
                 hydrateCloudLLMKeyIfNeeded()
+                // 打开开关立刻提醒：别等到转写结束才发现没配 Key
+                if let warning = settings.proofreadingConfigWarning {
+                    model.notifyUser(warning + "。转写时将跳过校对。", level: .error, duration: 4.5)
+                }
             }
         }
         .onChange(of: settings.cloudLLMKey) { oldValue, newValue in
             if !oldValue.isEmpty, newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 SettingsStore.deleteLLMKey()
+            }
+            // Key 被清空且仍开着校对：立刻提醒
+            if settings.proofreadingEnabled,
+               newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let warning = settings.proofreadingConfigWarning {
+                model.notifyUser(warning, level: .error, duration: 3.5)
             }
         }
     }

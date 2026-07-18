@@ -6,8 +6,15 @@ config.json
 /models/
 .codex/
 BAK/
+tmp/
 *.xcuserstate
 .DS_Store
+
+# Local model weights are downloaded or bundled during release preparation.
+Resources/funasr/*.gguf
+
+# Developer-specific signing profiles must remain outside source control.
+Config/*.provisionprofile
 
 # FunASR runtime binaries (download via script/download_funasr_runtime.sh)
 vendor/funasr/llama-funasr-*

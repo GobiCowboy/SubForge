@@ -10,7 +10,8 @@ struct AppSettings: Equatable, Codable {
     var interfaceLanguage: InterfaceLanguage = .simplifiedChinese
     var showMenuBarIcon = true
 
-    var transcriptionEngine: TranscriptionEngine = .appleSpeech
+    /// 新安装默认本地 FunASR；已有用户配置不因升级被强制改写。
+    var transcriptionEngine: TranscriptionEngine = .funASRLocal
     var whisperModel: WhisperModel = .base
     var cloudASRPreset: CloudASRPreset = .dashscope
     var cloudASRURL: String = CloudASRPreset.dashscope.defaultURL
@@ -56,6 +57,32 @@ struct AppSettings: Equatable, Codable {
 
     var effectiveLLMModel: String {
         cloudLLMModel.isEmpty ? cloudLLMPreset.defaultModel : cloudLLMModel
+    }
+
+    /// AI 校对开关打开且云端 URL / Key / 模型齐全。
+    var isProofreadingFullyConfigured: Bool {
+        guard proofreadingEnabled else { return false }
+        let key = cloudLLMKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = effectiveLLMURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = effectiveLLMModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !key.isEmpty && !url.isEmpty && !model.isEmpty
+    }
+
+    /// 开关开了但缺配置时的说明；配置齐全或未开启则 nil。
+    var proofreadingConfigWarning: String? {
+        guard proofreadingEnabled else { return nil }
+        if isProofreadingFullyConfigured { return nil }
+        let key = cloudLLMKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key.isEmpty {
+            return "已开启 AI 校对，但未填写 API Key"
+        }
+        if effectiveLLMURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "已开启 AI 校对，但未填写 Base URL"
+        }
+        if effectiveLLMModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "已开启 AI 校对，但未填写模型名"
+        }
+        return "已开启 AI 校对，但配置不完整"
     }
 }
 

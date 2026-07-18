@@ -97,12 +97,22 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var playbackTimer: Timer?
     private var pipelineTask: Task<Void, Never>?
+    private var funASRHeartbeatObserver: NSObjectProtocol?
+    /// 当前导入音频的安全作用域，必须在整次转写流水线期间持有。
+    private var currentDocumentAccess: SecurityScopedResourceAccess?
     private let playbackService = MediaPlaybackService()
     private let keyboardMonitor = EditorKeyboardMonitor()
     private let watchFolderService = WatchFolderService()
     private let menuBarController = MenuBarController()
     private var watchDirectoryAccess: SecurityScopedResourceAccess?
     private var waveformTask: Task<Void, Never>?
+    /// 整条流水线计时（准备 → 转写 → 校对），从点开始就走秒表。
+    private var pipelineStartedAt: Date?
+    private var pipelineTickerTask: Task<Void, Never>?
+    private var pipelineModelLabel = ""
+    private var pipelinePhaseLabel = "准备中"
+    private var pipelineUsesLocalEngine = false
+    private var pipelineAudioDuration: TimeInterval = 0
     @Published private(set) var editorFocusContext: EditorFocusContext = .none
 
     init() {
@@ -156,6 +166,16 @@ final class AppModel: ObservableObject {
 
         bindWatchFolderService()
         applyWatchSettings(initialSettings)
+        funASRHeartbeatObserver = NotificationCenter.default.addObserver(
+            forName: .funASRTranscriptionHeartbeat,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleFunASRHeartbeat(notification)
+            }
+        }
     }
 
     deinit {
@@ -163,6 +183,90 @@ final class AppModel: ObservableObject {
         pipelineTask?.cancel()
         waveformTask?.cancel()
         watchFolderService.stop()
+        if let funASRHeartbeatObserver {
+            NotificationCenter.default.removeObserver(funASRHeartbeatObserver)
+        }
+    }
+
+    private func handleFunASRHeartbeat(_ notification: Notification) {
+        guard mode == .progress else { return }
+        // 秒表仍用流水线总时长；此处只用音频时长缓动进度条
+        if let duration = notification.userInfo?["duration"] as? TimeInterval, duration > 0 {
+            pipelineAudioDuration = duration
+        }
+        let wall = pipelineElapsedSeconds()
+        if pipelineAudioDuration > 0 {
+            let ratio = min(0.92, Double(wall) / max(pipelineAudioDuration * 0.9 + 15, 1))
+            pipelineProgress = 0.36 + ratio * 0.34
+        } else {
+            pipelineProgress = min(0.68, 0.36 + Double(wall) * 0.004)
+        }
+        refreshPipelineStatusMessage()
+    }
+
+    private func startPipelineClock(modelLabel: String, usesLocalEngine: Bool) {
+        pipelineStartedAt = Date()
+        pipelineModelLabel = modelLabel
+        pipelineUsesLocalEngine = usesLocalEngine
+        pipelinePhaseLabel = "准备中"
+        pipelineAudioDuration = 0
+        pipelineTickerTask?.cancel()
+        pipelineTickerTask = Task { @MainActor [weak self] in
+            while let self, !Task.isCancelled, self.mode == .progress {
+                self.refreshPipelineStatusMessage()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        refreshPipelineStatusMessage()
+    }
+
+    private func stopPipelineClock() {
+        pipelineTickerTask?.cancel()
+        pipelineTickerTask = nil
+        pipelineStartedAt = nil
+        pipelineAudioDuration = 0
+    }
+
+    private func pipelineElapsedSeconds() -> Int {
+        guard let start = pipelineStartedAt else { return 0 }
+        return max(0, Int(Date().timeIntervalSince(start).rounded(.down)))
+    }
+
+    private func setPipelinePhase(_ phase: String, progress: Double? = nil) {
+        pipelinePhaseLabel = phase
+        if let progress {
+            pipelineProgress = progress
+        }
+        refreshPipelineStatusMessage()
+    }
+
+    /// 例：`FunASR · 转写中 · 12s`（时间固定放最后）
+    private func refreshPipelineStatusMessage() {
+        guard mode == .progress else { return }
+        let elapsed = pipelineElapsedSeconds()
+        var parts: [String] = []
+        if !pipelineModelLabel.isEmpty {
+            parts.append(pipelineModelLabel)
+        }
+        if !pipelinePhaseLabel.isEmpty {
+            parts.append(pipelinePhaseLabel)
+        }
+        parts.append("\(elapsed)s")
+        pipelineMessage = parts.joined(separator: " · ")
+    }
+
+    /// 进度条文案用短名称：FunASR / Whisper / Apple 语音 / 云端 ASR
+    private func displayName(for engine: TranscriptionEngine, settings: AppSettings) -> String {
+        switch engine {
+        case .funASRLocal:
+            return "FunASR"
+        case .whisperLocal:
+            return "Whisper"
+        case .appleSpeech:
+            return "Apple 语音"
+        case .cloudASR:
+            return "云端 ASR"
+        }
     }
 
     var selectedSegment: SubtitleSegment? {
@@ -238,6 +342,7 @@ final class AppModel: ObservableObject {
         if mode == .progress {
             pipelineTask?.cancel()
             pipelineTask = nil
+            stopPipelineClock()
         }
         mode = .home
     }
@@ -251,11 +356,16 @@ final class AppModel: ObservableObject {
         stopPlayback(captureTimestamp: false)
         pipelineTask?.cancel()
         pipelineTask = nil
+        stopPipelineClock()
+        Task {
+            await FunASRCLIRunner.shared.cancelActive()
+        }
         mode = .home
         pipelineStages = Self.makePipelineStages(proofreadingEnabled: settings.proofreadingEnabled)
         pipelineProgress = 0
         pipelineMessage = "等待开始"
         currentDocumentURL = nil
+        currentDocumentAccess = nil
         segments = []
         selectedSegmentID = nil
         currentTime = 0
@@ -278,6 +388,8 @@ final class AppModel: ObservableObject {
         if ext == "srt" {
             importSRT(from: url)
         } else {
+            // 用户选中/拖入的文件：全程持有安全作用域，避免子进程读不到外部路径。
+            currentDocumentAccess = SecurityScopedResourceAccess(url: url)
             currentDocumentURL = url
             prepareMediaPreview(for: url)
             startTranscription(for: url)
@@ -374,8 +486,28 @@ final class AppModel: ObservableObject {
     }
 
     func startTranscription(for url: URL) {
+        // 必须串行：先 await 杀掉旧 CLI，再开新任务。
+        // 以前 fire-and-forget cancel 会在新任务启动后才执行 pkill，把新 FunASR 进程误杀。
+        Task { @MainActor in
+            if let existing = self.pipelineTask {
+                existing.cancel()
+                self.pipelineTask = nil
+                await FunASRCLIRunner.shared.cancelActive()
+            }
+
+            let engine = self.settings.transcriptionEngine
+            if LocalEngineUsageHint.shouldPresent(for: engine) {
+                let proceed = await LocalEngineUsageHint.presentIfNeeded(for: engine)
+                guard proceed else { return }
+            }
+            self.beginTranscriptionPipeline(for: url)
+        }
+    }
+
+    private func beginTranscriptionPipeline(for url: URL) {
         stopPlayback(captureTimestamp: false)
         pipelineTask?.cancel()
+        stopPipelineClock()
         mode = .progress
         currentDocumentURL = url
         segments = []
@@ -384,61 +516,113 @@ final class AppModel: ObservableObject {
         playbackDuration = 0
         pipelineStages = Self.makePipelineStages(proofreadingEnabled: settings.proofreadingEnabled)
         pipelineProgress = 0
-        pipelineMessage = "正在准备素材..."
+        pipelineMessage = "准备中 · 0s"
 
         pipelineTask = Task { [weak self] in
             guard let self else { return }
             do {
-                await self.advancePipeline(.prepare, progress: 0.14, message: "正在准备文件与轨道信息…")
-                guard !Task.isCancelled else { return }
+                // 先解析引擎，再开秒表，文案从一开始就带模型名
+                let resolution = self.resolveTranscriptionEngine(from: self.settings)
+                var transcriptionSettings = resolution.settings
+                if resolution.didFallback {
+                    self.settings.transcriptionEngine = transcriptionSettings.transcriptionEngine
+                    self.showToast(resolution.fallbackMessage ?? "已回退到可用转写引擎", level: .error, duration: 4.5)
+                }
 
-                var transcriptionSettings = self.settings
-                if transcriptionSettings.transcriptionEngine == .whisperLocal,
-                   !WhisperRuntime.isCLIAvailable {
-                    transcriptionSettings.transcriptionEngine = .appleSpeech
-                    self.settings = transcriptionSettings
-                    self.showToast("未检测到 Whisper 运行组件，已切换到 Apple 语音继续转写", level: .error)
+                if transcriptionSettings.transcriptionEngine == .cloudASR {
+                    var hydrated = transcriptionSettings
+                    SettingsStore.hydrateSecrets(into: &hydrated, includeASR: true, includeLLM: false)
+                    let key = hydrated.cloudASRKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if key.isEmpty || hydrated.effectiveASRURL.isEmpty || hydrated.effectiveASRModel.isEmpty {
+                        throw TranscriptionError.cloudNotConfigured
+                    }
+                    transcriptionSettings = hydrated
                 }
-                if transcriptionSettings.transcriptionEngine == .funASRLocal,
-                   !FunASRRuntime.isCLIAvailable {
-                    transcriptionSettings.transcriptionEngine = .appleSpeech
-                    self.settings = transcriptionSettings
-                    self.showToast("未检测到 FunASR 运行组件，已切换到 Apple 语音继续转写", level: .error)
+
+                let engine = transcriptionSettings.transcriptionEngine
+                let isLocalEngine =
+                    engine == .funASRLocal
+                    || engine == .whisperLocal
+                    || engine == .appleSpeech
+                let modelLabel = self.displayName(for: engine, settings: transcriptionSettings)
+                self.startPipelineClock(modelLabel: modelLabel, usesLocalEngine: isLocalEngine)
+
+                self.markStageActive(.prepare, progress: 0.14, message: "")
+                self.setPipelinePhase("准备音频", progress: 0.14)
+                // 短停留，让 UI 阶段点亮；真正拷文件在 transcribe 内
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else {
+                    self.stopPipelineClock()
+                    return
                 }
+                self.markStageDone(.prepare, progress: 0.2)
 
                 let provider = TranscriptionService.createProvider(settings: transcriptionSettings)
-                let engineName = transcriptionSettings.transcriptionEngine.rawValue
-                self.markStageActive(.transcribe, progress: 0.36, message: "正在使用 \(engineName) 转写…")
+                self.markStageActive(.transcribe, progress: 0.36, message: "")
+                self.setPipelinePhase("转写中", progress: 0.36)
+
                 var transcribedSegments = try await provider.transcribe(audioURL: url, language: transcriptionSettings.language)
-                transcribedSegments = self.normalizeSegments(transcribedSegments)
-                guard !Task.isCancelled else { return }
-                self.markStageDone(.transcribe, progress: self.settings.proofreadingEnabled ? 0.72 : 0.92)
+                transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
+                guard !Task.isCancelled else {
+                    self.stopPipelineClock()
+                    return
+                }
+
+                let willAttemptProofread = self.settings.proofreadingEnabled
+                self.markStageDone(.transcribe, progress: willAttemptProofread ? 0.72 : 0.92)
 
                 var finalSegments = transcribedSegments
-                if self.settings.proofreadingEnabled, let proofreadingProvider = ProofreadingService.createProvider(settings: self.settings) {
-                    self.markStageActive(.proofread, progress: 0.8, message: "正在执行模型纠正…")
-                    do {
-                        let corrected = try await proofreadingProvider.proofread(
-                            segments: transcribedSegments,
-                            batchSize: 60,
-                            prompt: self.settings.proofreadingPrompt,
-                            strictCorrections: self.settings.proofreadingStrictCorrections
-                        )
-                        let normalizedCorrected = self.normalizeSegments(corrected)
-                        if normalizedCorrected.isEmpty {
-                            finalSegments = transcribedSegments
-                            self.showToast("模型纠正返回空结果，已保留原始转写字幕", level: .error)
-                        } else {
-                            finalSegments = normalizedCorrected
+                var proofreadingNote: String?
+                if willAttemptProofread {
+                    var proofSettings = self.settings
+                    SettingsStore.hydrateSecrets(into: &proofSettings, includeASR: false, includeLLM: true)
+                    if let warning = proofSettings.proofreadingConfigWarning {
+                        proofreadingNote = warning + "，已跳过校对"
+                        self.markStageDone(.proofread, progress: 0.92)
+                        self.showToast(proofreadingNote!, level: .error, duration: 4.5)
+                    } else if let proofreadingProvider = ProofreadingService.createProvider(settings: proofSettings) {
+                        self.markStageActive(.proofread, progress: 0.8, message: "")
+                        self.setPipelinePhase("AI 校对", progress: 0.8)
+                        do {
+                            let corrected = try await proofreadingProvider.proofread(
+                                segments: transcribedSegments,
+                                batchSize: 60,
+                                prompt: proofSettings.proofreadingPrompt,
+                                strictCorrections: proofSettings.proofreadingStrictCorrections
+                            )
+                            let normalizedCorrected = self.normalizeSegments(corrected, stripTrailingPunctuation: false)
+                            if normalizedCorrected.isEmpty {
+                                finalSegments = transcribedSegments
+                                proofreadingNote = "模型纠正返回空结果，已保留原始转写"
+                                self.showToast(proofreadingNote!, level: .error, duration: 4)
+                            } else {
+                                finalSegments = normalizedCorrected
+                                proofreadingNote = "AI 校对已完成"
+                            }
+                            self.markStageDone(.proofread, progress: 0.92)
+                        } catch {
+                            self.markStageDone(.proofread, progress: 0.92)
+                            proofreadingNote = "模型纠正失败，已保留原始转写"
+                            self.showToast(
+                                "模型纠正失败，已保留原始转写结果：\(error.localizedDescription)",
+                                level: .error,
+                                duration: 4.5
+                            )
                         }
+                    } else {
+                        proofreadingNote = "AI 校对无法启动，已跳过"
                         self.markStageDone(.proofread, progress: 0.92)
-                    } catch {
-                        self.markStageDone(.proofread, progress: 0.92)
-                        self.showToast("模型纠正失败，已保留原始转写结果：\(error.localizedDescription)", level: .error)
+                        self.showToast(proofreadingNote!, level: .error, duration: 4)
                     }
                 }
 
-                self.markStageActive(.complete, progress: 1.0, message: "字幕已生成，可以开始微调")
+                let totalSeconds = self.pipelineElapsedSeconds()
+                self.pipelinePhaseLabel = "完成"
+                self.pipelineMessage = "\(modelLabel) · 完成 · \(totalSeconds)s"
+                self.pipelineProgress = 1.0
+                self.stopPipelineClock()
+
+                self.markStageActive(.complete, progress: 1.0, message: self.pipelineMessage)
                 self.segments = finalSegments
                 self.selectedSegmentID = finalSegments.first?.id
                 self.playbackDuration = (finalSegments.last?.end ?? 0) + 1.5
@@ -447,15 +631,67 @@ final class AppModel: ObservableObject {
                 self.mode = .editor
                 self.addRecentProject(for: url, kind: mediaKind(for: url), subtitleCount: finalSegments.count)
                 self.markStageDone(.complete, progress: 1.0)
+
                 self.showToast("已生成 \(finalSegments.count) 条字幕", level: .success)
                 self.pipelineTask = nil
             } catch {
+                let failedSeconds = self.pipelineElapsedSeconds()
+                self.stopPipelineClock()
                 self.pipelineTask = nil
                 self.mode = .home
-                self.pipelineMessage = "转写失败"
-                self.showToast("转写失败：\(error.localizedDescription)", level: .error)
+                self.pipelineMessage = failedSeconds > 0 ? "转写失败 · \(failedSeconds)s" : "转写失败"
+                self.showToast("转写失败：\(error.localizedDescription)", level: .error, duration: 4.5)
             }
         }
+    }
+
+    /// 解析实际可用引擎；缺运行时/模型时回退 Apple 语音并给出说明。
+    private func resolveTranscriptionEngine(from settings: AppSettings) -> (
+        settings: AppSettings,
+        didFallback: Bool,
+        fallbackMessage: String?
+    ) {
+        var resolved = settings
+        switch settings.transcriptionEngine {
+        case .whisperLocal:
+            if !WhisperRuntime.isCLIAvailable {
+                resolved.transcriptionEngine = .appleSpeech
+                return (
+                    resolved,
+                    true,
+                    "已回退：未检测到 Whisper 运行组件，改用 Apple 语音"
+                )
+            }
+            if !WhisperModelStore.isAvailable(settings.whisperModel),
+               WhisperModelStore.availableModels().isEmpty {
+                resolved.transcriptionEngine = .appleSpeech
+                return (
+                    resolved,
+                    true,
+                    "已回退：Whisper 模型未下载，改用 Apple 语音"
+                )
+            }
+        case .funASRLocal:
+            if !FunASRRuntime.isCLIAvailable {
+                resolved.transcriptionEngine = .appleSpeech
+                return (
+                    resolved,
+                    true,
+                    "已回退：未检测到 FunASR 运行组件，改用 Apple 语音"
+                )
+            }
+            if !FunASRModelStore.isReady() {
+                resolved.transcriptionEngine = .appleSpeech
+                return (
+                    resolved,
+                    true,
+                    "已回退：FunASR 模型或 VAD 未就绪，改用 Apple 语音"
+                )
+            }
+        case .cloudASR, .appleSpeech:
+            break
+        }
+        return (resolved, false, nil)
     }
 
     private static func makePipelineStages(proofreadingEnabled: Bool) -> [PipelineStageState] {
@@ -508,11 +744,18 @@ final class AppModel: ObservableObject {
         pipelineProgress = progress
     }
 
-    private func normalizeSegments(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
+    private func normalizeSegments(
+        _ segments: [SubtitleSegment],
+        stripTrailingPunctuation: Bool
+    ) -> [SubtitleSegment] {
         segments
             .map { segment in
                 var normalized = segment
-                normalized.text = normalized.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                var text = normalized.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if stripTrailingPunctuation {
+                    text = SubtitleTextFormatting.stripTrailingLineEndPunctuation(text)
+                }
+                normalized.text = text
                 return normalized
             }
             .filter { !$0.text.isEmpty }
@@ -1019,8 +1262,11 @@ final class AppModel: ObservableObject {
             UTType(filenameExtension: $0)
         }
         panel.prompt = "打开"
+        // 显式创建安全作用域书签，避免仅依赖瞬时 powerbox 路径。
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Downloads", isDirectory: true)
         if panel.runModal() == .OK, let url = panel.url {
-            importDocument(at: url)
+            importDocument(at: url.standardizedFileURL)
         }
     }
 
@@ -1058,11 +1304,15 @@ final class AppModel: ObservableObject {
         return SubtitleSegment(start: start, end: end, text: "")
     }
 
-    private func showToast(_ text: String, level: ToastMessage.Level) {
+    func notifyUser(_ text: String, level: ToastMessage.Level = .info, duration: TimeInterval = 3.5) {
+        showToast(text, level: level, duration: duration)
+    }
+
+    private func showToast(_ text: String, level: ToastMessage.Level, duration: TimeInterval = 3) {
         let message = ToastMessage(text: text, level: level)
         toast = message
         Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(duration))
             await MainActor.run {
                 self.dismissToast(message)
             }

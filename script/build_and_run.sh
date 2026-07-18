@@ -60,6 +60,7 @@ stage_bundle() {
 
   embed_whisper_runtime
   embed_funasr_runtime
+  embed_funasr_models
   rewrite_runtime_library_paths
   scrub_homebrew_backend_paths
   sign_nested_code_ad_hoc
@@ -98,7 +99,15 @@ stage_bundle() {
 PLIST
 }
 
+# 默认不内置 Whisper 模型（约 140MB+），用户在设置页按需下载。
+# 若调试需要打进包：BUNDLE_WHISPER_BASE=1 ./script/build_and_run.sh
+# 或指定 BASE_MODEL_SOURCE=/path/to/ggml-base.bin
 embed_bundled_base_model() {
+  if [ "${BUNDLE_WHISPER_BASE:-0}" != "1" ] && [ -z "${BASE_MODEL_SOURCE:-}" ]; then
+    echo "note: skip embedding Whisper base model (download in Settings; set BUNDLE_WHISPER_BASE=1 to bundle)" >&2
+    return 0
+  fi
+
   local source="${BASE_MODEL_SOURCE:-}"
   local candidates=(
     "$ROOT_DIR/Resources/ggml-base.bin"
@@ -118,11 +127,12 @@ embed_bundled_base_model() {
   fi
 
   if [ -z "$source" ] || [ ! -f "$source" ]; then
-    echo "missing bundled Base model; set BASE_MODEL_SOURCE=/path/to/ggml-base.bin" >&2
-    exit 1
+    echo "note: Whisper base model not found; app will require in-app download" >&2
+    return 0
   fi
 
   cp "$source" "$APP_RESOURCES/ggml-base.bin"
+  echo "note: bundled Whisper base model from $source" >&2
 }
 
 sign_nested_code_ad_hoc() {
@@ -134,7 +144,7 @@ sign_nested_code_ad_hoc() {
     file "$mach_o" | grep -q "Mach-O" || continue
     local base
     base="$(basename "$mach_o")"
-    if { [ "$base" = "whisper-cli" ] || [ "$base" = "llama-funasr-sensevoice" ]; } && [ -f "$INHERIT_ENTITLEMENTS" ]; then
+    if { [ "$base" = "whisper-cli" ] || [ "$base" = "llama-funasr-sensevoice" ] || [ "$base" = "llama-funasr-vad" ]; } && [ -f "$INHERIT_ENTITLEMENTS" ]; then
       codesign --force --timestamp=none \
         --entitlements "$INHERIT_ENTITLEMENTS" \
         --sign - "$mach_o"
@@ -201,6 +211,63 @@ embed_funasr_runtime() {
 
   cp "$source" "$APP_FRAMEWORKS/llama-funasr-sensevoice"
   chmod +x "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+
+  # VAD CLI：用于人声区间时间轴（与 ASR 同目录）
+  local vad_source=""
+  local vad_dir
+  vad_dir="$(dirname "$source")"
+  if [ -f "$vad_dir/llama-funasr-vad" ]; then
+    vad_source="$vad_dir/llama-funasr-vad"
+  elif [ -f "$ROOT_DIR/vendor/funasr/llama-funasr-vad" ]; then
+    vad_source="$ROOT_DIR/vendor/funasr/llama-funasr-vad"
+  fi
+  if [ -n "$vad_source" ]; then
+    cp "$vad_source" "$APP_FRAMEWORKS/llama-funasr-vad"
+    chmod +x "$APP_FRAMEWORKS/llama-funasr-vad"
+  else
+    echo "note: llama-funasr-vad not found; FunASR will fall back to full-span timing" >&2
+  fi
+}
+
+# 内置 FunASR 模型（SenseVoice q8 + VAD），用户开箱即用本地 FunASR。
+embed_funasr_models() {
+  local dest="$APP_RESOURCES/funasr"
+  mkdir -p "$dest"
+
+  local asr_name="sensevoice-small-q8.gguf"
+  local vad_name="fsmn-vad.gguf"
+  local asr_src="" vad_src=""
+
+  local asr_candidates=(
+    "${FUNASR_MODEL_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$asr_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$asr_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$asr_name"
+  )
+  local vad_candidates=(
+    "${FUNASR_VAD_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$vad_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$vad_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$vad_name"
+  )
+
+  local c
+  for c in "${asr_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then asr_src="$c"; break; fi
+  done
+  for c in "${vad_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then vad_src="$c"; break; fi
+  done
+
+  if [ -z "$asr_src" ] || [ -z "$vad_src" ]; then
+    echo "warning: FunASR model files missing; local FunASR will require in-app download" >&2
+    echo "  need $asr_name and $vad_name under Application Support or Resources/funasr" >&2
+    return 0
+  fi
+
+  cp "$asr_src" "$dest/$asr_name"
+  cp "$vad_src" "$dest/$vad_name"
+  echo "note: bundled FunASR models from $asr_src" >&2
 }
 
 rewrite_runtime_library_paths() {
@@ -208,7 +275,7 @@ rewrite_runtime_library_paths() {
     return
   fi
 
-  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" \) -print0 | while IFS= read -r -d '' mach_o; do
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" -o -name "llama-funasr-vad" \) -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
 
     if [[ "$(basename "$mach_o")" == *.dylib ]]; then

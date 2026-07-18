@@ -44,22 +44,29 @@ SubForge 是一个面向 Final Cut Pro（FCP）的字幕工作流应用：可监
 brew install whisper-cpp ggml libomp
 ```
 
-### 基础模型
+### 本地模型（不打进安装包）
 
-应用需要 Whisper 基础模型（如 `ggml-base.bin`）。把模型放到以下任一位置即可被打包脚本自动发现：
+**Whisper** 与 **FunASR** 的权重均不默认打进 `.app`（可显著减小分发包体积）：
 
-- `Resources/ggml-base.bin`
-- `BAK/models/ggml-base.bin`
-- `~/Library/Application Support/SubForge/models/ggml-base.bin`
+- 在应用 **设置 → 转写** 中按需下载
+- Whisper：Tiny / Base / Small（约 74～466MB）
+- FunASR：SenseVoice q8 + VAD（约 256MB）
 
-### 本地 FunASR（SenseVoice，可选）
+开发若需临时把 Whisper base 打进包：
+
+```bash
+BUNDLE_WHISPER_BASE=1 ./script/build_and_run.sh
+# 或 BASE_MODEL_SOURCE=/path/to/ggml-base.bin ./script/build_and_run.sh
+```
+
+### 本地 FunASR 运行时（SenseVoice CLI）
 
 ```bash
 # 下载 macOS arm64 CLI 到 vendor/funasr/
 bash script/download_funasr_runtime.sh
 ```
 
-SenseVoice q8 与 FSMN-VAD 模型在应用「设置 → 转写」中选择「本地 FunASR」后下载（约 256MB）。详见 `docs/300_features/308_funasr_local_engine.md`。
+打包脚本会嵌入 `llama-funasr-sensevoice` / `llama-funasr-vad`（若存在）。模型仍在设置页下载。详见 `docs/300_features/308_funasr_local_engine.md`。
 
 ### 构建（未签名 / 本地调试）
 

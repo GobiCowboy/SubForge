@@ -5,6 +5,7 @@ APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 TEAM_ID="${TEAM_ID:-4UNNXY925R}"
 APP_VERSION="${APP_VERSION:-1.0}"
+# 必须比历史上传的 CFBundleVersion 更大；用 14 位时间戳避免 12 位比旧 14 位小
 APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
 
@@ -133,6 +134,7 @@ stage_bundle() {
   embed_provisioning_profile
   embed_whisper_runtime
   embed_funasr_runtime
+  embed_funasr_models
   embed_third_party_notices
   rewrite_runtime_library_paths
   scrub_homebrew_backend_paths
@@ -250,7 +252,13 @@ provisioning_profile_matches_bundle() {
   [ "$app_identifier" = "$TEAM_ID.$BUNDLE_ID" ]
 }
 
+# 默认不内置 Whisper 模型；用户设置页下载。需要打进包时设 BUNDLE_WHISPER_BASE=1 或 BASE_MODEL_SOURCE。
 embed_bundled_base_model() {
+  if [ "${BUNDLE_WHISPER_BASE:-0}" != "1" ] && [ -z "${BASE_MODEL_SOURCE:-}" ]; then
+    echo "note: skip embedding Whisper base model (in-app download)" >&2
+    return 0
+  fi
+
   local source="${BASE_MODEL_SOURCE:-}"
   local candidates=(
     "$ROOT_DIR/Resources/ggml-base.bin"
@@ -270,8 +278,8 @@ embed_bundled_base_model() {
   fi
 
   if [ -z "$source" ] || [ ! -f "$source" ]; then
-    echo "missing bundled Base model; set BASE_MODEL_SOURCE=/path/to/ggml-base.bin" >&2
-    exit 1
+    echo "note: Whisper base model not found; shipping without bundled model" >&2
+    return 0
   fi
 
   cp "$source" "$APP_RESOURCES/ggml-base.bin"
@@ -303,6 +311,51 @@ embed_funasr_runtime() {
   fi
   cp "$source" "$APP_FRAMEWORKS/llama-funasr-sensevoice"
   chmod +x "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+  local vad_source
+  vad_source="$(dirname "$source")/llama-funasr-vad"
+  if [ -f "$vad_source" ]; then
+    cp "$vad_source" "$APP_FRAMEWORKS/llama-funasr-vad"
+    chmod +x "$APP_FRAMEWORKS/llama-funasr-vad"
+  fi
+}
+
+embed_funasr_models() {
+  local dest="$APP_RESOURCES/funasr"
+  mkdir -p "$dest"
+  local asr_name="sensevoice-small-q8.gguf"
+  local vad_name="fsmn-vad.gguf"
+  local asr_src="" vad_src=""
+  local asr_candidates=(
+    "${FUNASR_MODEL_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$asr_name"
+    "$ROOT_DIR/dist/SubForge.app/Contents/Resources/funasr/$asr_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$asr_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$asr_name"
+  )
+  local vad_candidates=(
+    "${FUNASR_VAD_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$vad_name"
+    "$ROOT_DIR/dist/SubForge.app/Contents/Resources/funasr/$vad_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$vad_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$vad_name"
+  )
+  local c
+  for c in "${asr_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then asr_src="$c"; break; fi
+  done
+  for c in "${vad_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then vad_src="$c"; break; fi
+  done
+  if [ -z "$asr_src" ] || [ -z "$vad_src" ]; then
+    echo "warning: FunASR models missing; shipping without bundled FunASR weights" >&2
+    return 0
+  fi
+  cp "$asr_src" "$dest/$asr_name"
+  cp "$vad_src" "$dest/$vad_name"
+  # App Store 拒绝 root-only 可读文件（90255）
+  chmod a+r "$dest/$asr_name" "$dest/$vad_name"
+  find "$dest" -type d -exec chmod a+rx {} \;
+  find "$dest" -type f -exec chmod a+r {} \;
 }
 
 embed_third_party_notices() {
@@ -334,7 +387,7 @@ rewrite_runtime_library_paths() {
     return
   fi
 
-  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" \) -print0 | while IFS= read -r -d '' mach_o; do
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" -o -name "llama-funasr-vad" \) -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
 
     if [[ "$(basename "$mach_o")" == *.dylib ]]; then
@@ -371,6 +424,12 @@ clean_bundle_metadata() {
   find "$APP_BUNDLE" -name "._*" -delete
   find "$APP_BUNDLE" -print0 | xargs -0 xattr -c 2>/dev/null || true
   dot_clean -m "$APP_BUNDLE" 2>/dev/null || true
+  # 确保非 root 可读（App Store 90255）
+  find "$APP_BUNDLE" -type d -exec chmod u+rwx,go+rx {} \; 2>/dev/null || true
+  find "$APP_BUNDLE" -type f -exec chmod u+rw,go+r {} \; 2>/dev/null || true
+  # 可执行位留给二进制
+  find "$APP_BUNDLE/Contents/MacOS" -type f -exec chmod a+x {} \; 2>/dev/null || true
+  find "$APP_BUNDLE/Contents/Frameworks" -type f \( -name "whisper-cli" -o -name "llama-funasr-*" -o -name "*.dylib" -o -name "*.so" \) -exec chmod a+x {} \; 2>/dev/null || true
 }
 
 sign_nested_code() {
@@ -380,25 +439,23 @@ sign_nested_code() {
     find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
       file "$mach_o" | grep -q "Mach-O" || continue
 
-      if [ "$(basename "$mach_o")" = "whisper-cli" ]; then
-        local timestamp_arg="--timestamp"
-        local options_arg="--options runtime"
-        if [ "$identity" = "-" ]; then
-          timestamp_arg="--timestamp=none"
-          options_arg=""
-        fi
+      local base
+      base="$(basename "$mach_o")"
+      local timestamp_arg="--timestamp"
+      local options_arg="--options runtime"
+      if [ "$identity" = "-" ]; then
+        timestamp_arg="--timestamp=none"
+        options_arg=""
+      fi
 
+      # App Store 沙盒：主程序带 sandbox，嵌套 CLI 必须 sandbox+inherit（否则 90296）
+      if [ "$base" = "whisper-cli" ] \
+        || [ "$base" = "llama-funasr-sensevoice" ] \
+        || [ "$base" = "llama-funasr-vad" ]; then
         codesign --force "$timestamp_arg" ${options_arg:+--options runtime} \
           --entitlements "$INHERIT_ENTITLEMENTS" \
           --sign "$identity" "$mach_o"
       else
-        local timestamp_arg="--timestamp"
-        local options_arg="--options runtime"
-        if [ "$identity" = "-" ]; then
-          timestamp_arg="--timestamp=none"
-          options_arg=""
-        fi
-
         codesign --force "$timestamp_arg" ${options_arg:+--options runtime} \
           --sign "$identity" "$mach_o"
       fi

@@ -83,6 +83,7 @@ stage_bundle() {
   embed_bundled_base_model
   embed_whisper_runtime
   embed_funasr_runtime
+  embed_funasr_models
   embed_third_party_notices
   rewrite_runtime_library_paths
   scrub_homebrew_backend_paths
@@ -124,7 +125,13 @@ stage_bundle() {
 PLIST
 }
 
+# 默认不内置 Whisper 模型；用户设置页下载。需要打进包时设 BUNDLE_WHISPER_BASE=1 或 BASE_MODEL_SOURCE。
 embed_bundled_base_model() {
+  if [ "${BUNDLE_WHISPER_BASE:-0}" != "1" ] && [ -z "${BASE_MODEL_SOURCE:-}" ]; then
+    echo "note: skip embedding Whisper base model (in-app download)" >&2
+    return 0
+  fi
+
   local source="${BASE_MODEL_SOURCE:-}"
   local candidates=(
     "$ROOT_DIR/Resources/ggml-base.bin"
@@ -144,8 +151,8 @@ embed_bundled_base_model() {
   fi
 
   if [ -z "$source" ] || [ ! -f "$source" ]; then
-    echo "missing bundled Base model; set BASE_MODEL_SOURCE=/path/to/ggml-base.bin" >&2
-    exit 1
+    echo "note: Whisper base model not found; shipping without bundled model" >&2
+    return 0
   fi
 
   cp "$source" "$APP_RESOURCES/ggml-base.bin"
@@ -177,6 +184,45 @@ embed_funasr_runtime() {
   fi
   cp "$source" "$APP_FRAMEWORKS/llama-funasr-sensevoice"
   chmod +x "$APP_FRAMEWORKS/llama-funasr-sensevoice"
+  local vad_source
+  vad_source="$(dirname "$source")/llama-funasr-vad"
+  if [ -f "$vad_source" ]; then
+    cp "$vad_source" "$APP_FRAMEWORKS/llama-funasr-vad"
+    chmod +x "$APP_FRAMEWORKS/llama-funasr-vad"
+  fi
+}
+
+embed_funasr_models() {
+  local dest="$APP_RESOURCES/funasr"
+  mkdir -p "$dest"
+  local asr_name="sensevoice-small-q8.gguf"
+  local vad_name="fsmn-vad.gguf"
+  local asr_src="" vad_src=""
+  local asr_candidates=(
+    "${FUNASR_MODEL_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$asr_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$asr_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$asr_name"
+  )
+  local vad_candidates=(
+    "${FUNASR_VAD_SOURCE:-}"
+    "$ROOT_DIR/Resources/funasr/$vad_name"
+    "$HOME/Library/Application Support/SubForge/models/funasr/$vad_name"
+    "$HOME/Library/Containers/com.jago.subforge/Data/Library/Application Support/SubForge/models/funasr/$vad_name"
+  )
+  local c
+  for c in "${asr_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then asr_src="$c"; break; fi
+  done
+  for c in "${vad_candidates[@]}"; do
+    if [ -n "$c" ] && [ -f "$c" ]; then vad_src="$c"; break; fi
+  done
+  if [ -z "$asr_src" ] || [ -z "$vad_src" ]; then
+    echo "warning: FunASR models missing; shipping without bundled FunASR weights" >&2
+    return 0
+  fi
+  cp "$asr_src" "$dest/$asr_name"
+  cp "$vad_src" "$dest/$vad_name"
 }
 
 embed_third_party_notices() {
@@ -208,7 +254,7 @@ rewrite_runtime_library_paths() {
     return
   fi
 
-  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" \) -print0 | while IFS= read -r -d '' mach_o; do
+  find "$APP_FRAMEWORKS" -type f \( -name "*.dylib" -o -name "*.so" -o -name "whisper-cli" -o -name "llama-funasr-sensevoice" -o -name "llama-funasr-vad" \) -print0 | while IFS= read -r -d '' mach_o; do
     file "$mach_o" | grep -q "Mach-O" || continue
 
     if [[ "$(basename "$mach_o")" == *.dylib ]]; then

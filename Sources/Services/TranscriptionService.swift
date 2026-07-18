@@ -139,11 +139,14 @@ final class WhisperCppProvider: TranscriptionProvider {
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         let cliPath = try resolveCLIPath()
         let modelPath = try resolveModelPath()
+        let prepared = try SandboxMediaAccess.prepareForProcessing(audioURL)
+        defer { prepared.cleanup() }
+
         let wavURL = FileManager.default.temporaryDirectory.appendingPathComponent("subforge_whisper_\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: wavURL) }
 
         try await Task.detached(priority: .userInitiated) {
-            try Self.convertToWAV(input: audioURL, output: wavURL)
+            try Self.convertToWAV(input: prepared.url, output: wavURL)
         }.value
 
         let dtwPreset = model.rawValue
@@ -1197,6 +1200,8 @@ enum TranscriptionError: LocalizedError {
     case funASRVADUnavailable
     case funASRExecutionFailed(String)
     case audioConversionFailed
+    /// 无法读取用户选择的音频（常见于沙箱未拿到安全作用域，或拖入路径无效）。
+    case audioSourceUnreadable
     case whisperExecutionFailed(String)
     case cloudNotConfigured
     case cloudRequestFailedWithDetail(String)
@@ -1224,6 +1229,8 @@ enum TranscriptionError: LocalizedError {
             "FunASR 执行失败：\(message)"
         case .audioConversionFailed:
             "音频转换失败（afconvert）"
+        case .audioSourceUnreadable:
+            "无法读取所选音频。请用「打开」按钮重新选择文件，不要只依赖失效的最近项目路径；若从访达拖入失败，请改用打开面板。"
         case .whisperExecutionFailed(let message):
             "whisper-cli 执行失败：\(message)"
         case .cloudNotConfigured:

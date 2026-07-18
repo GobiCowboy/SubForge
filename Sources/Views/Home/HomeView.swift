@@ -168,8 +168,8 @@ struct HomeView: View {
 
             badge(text: model.settings.transcriptionEngine.rawValue, systemImage: "waveform")
             badge(
-                text: model.settings.proofreadingEnabled ? model.settings.proofreadingEngine.rawValue : "AI 校对关闭",
-                systemImage: model.settings.proofreadingEnabled ? "checkmark.circle.fill" : "xmark.circle"
+                text: proofreadingBadgeText,
+                systemImage: proofreadingBadgeSymbol
             )
             badge(text: model.summaryLanguage, systemImage: "globe")
             listenBadge
@@ -181,6 +181,26 @@ struct HomeView: View {
         .overlay(alignment: .top) {
             Divider()
         }
+    }
+
+    private var proofreadingBadgeText: String {
+        if !model.settings.proofreadingEnabled {
+            return "AI 校对关闭"
+        }
+        if model.settings.proofreadingConfigWarning != nil {
+            return "AI 校对未配置"
+        }
+        return model.settings.proofreadingEngine.rawValue
+    }
+
+    private var proofreadingBadgeSymbol: String {
+        if !model.settings.proofreadingEnabled {
+            return "xmark.circle"
+        }
+        if model.settings.proofreadingConfigWarning != nil {
+            return "exclamationmark.triangle.fill"
+        }
+        return "checkmark.circle.fill"
     }
 
     private func badge(text: String, systemImage: String) -> some View {
@@ -231,15 +251,24 @@ struct HomeView: View {
     private func handleProviders(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            guard
-                let data = item as? Data,
-                let url = URL(dataRepresentation: data, relativeTo: nil)
-            else {
-                return
-            }
+            let url: URL? = {
+                if let data = item as? Data {
+                    return URL(dataRepresentation: data, relativeTo: nil)
+                }
+                if let url = item as? URL {
+                    return url
+                }
+                if let path = item as? String {
+                    return URL(fileURLWithPath: path)
+                }
+                return nil
+            }()
+            guard let url else { return }
 
             Task { @MainActor in
-                model.importDocument(at: url)
+                // 拖入文件必须立刻拿安全作用域，再交给 import（否则异步后可能已失效）
+                _ = url.startAccessingSecurityScopedResource()
+                model.importDocument(at: url.standardizedFileURL)
             }
         }
         return true

@@ -2,28 +2,39 @@ import Foundation
 
 enum FunASRRuntime {
     static let cliFileName = "llama-funasr-sensevoice"
+    static let vadCLIFileName = "llama-funasr-vad"
 
-    static var cliCandidates: [String] {
+    private static func candidates(for fileName: String) -> [String] {
         [
-            Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/\(cliFileName)").path,
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/\(fileName)").path,
             FunASRModelStore.directory
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("bin/\(cliFileName)").path,
+                .appendingPathComponent("bin/\(fileName)").path,
             Bundle.main.bundleURL
                 .deletingLastPathComponent()
                 .deletingLastPathComponent()
-                .appendingPathComponent("vendor/funasr/\(cliFileName)").path,
-            FileManager.default.currentDirectoryPath + "/vendor/funasr/\(cliFileName)"
+                .appendingPathComponent("vendor/funasr/\(fileName)").path,
+            FileManager.default.currentDirectoryPath + "/vendor/funasr/\(fileName)"
         ]
     }
 
+    static var cliCandidates: [String] { candidates(for: cliFileName) }
+
     static var isCLIAvailable: Bool {
-        cliCandidates.contains { FileManager.default.isExecutableFile(atPath: $0) || FileManager.default.fileExists(atPath: $0) }
+        resolveCLIPath() != nil
     }
 
     static func resolveCLIPath() -> String? {
-        cliCandidates.first {
+        resolveExecutable(cliFileName)
+    }
+
+    static func resolveVADCLIPath() -> String? {
+        resolveExecutable(vadCLIFileName)
+    }
+
+    private static func resolveExecutable(_ fileName: String) -> String? {
+        candidates(for: fileName).first {
             FileManager.default.isExecutableFile(atPath: $0) || FileManager.default.fileExists(atPath: $0)
         }
     }
