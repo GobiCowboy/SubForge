@@ -28,6 +28,45 @@ enum OfficialServiceRegion: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum OfficialPurchasePlan: String, CaseIterable, Codable, Hashable, Identifiable {
+    case starter
+    case standard
+
+    var id: String { rawValue }
+
+    var minutes: Int {
+        switch self {
+        case .starter: 60
+        case .standard: 300
+        }
+    }
+
+    var title: String {
+        "\(minutes) 分钟"
+    }
+
+    var badge: String {
+        switch self {
+        case .starter: "轻量尝试"
+        case .standard: "常用套餐 · 推荐"
+        }
+    }
+
+    var appleProductID: String {
+        switch self {
+        case .starter: "com.jago.subforge.smart.60min"
+        case .standard: "com.jago.subforge.smart.300min"
+        }
+    }
+
+    var internalProductID: String {
+        switch self {
+        case .starter: "subforge_smart_60"
+        case .standard: "subforge_smart_300"
+        }
+    }
+}
+
 struct OfficialServiceProfile: Equatable {
     let region: OfficialServiceRegion
     let billingBaseURL: URL
@@ -37,8 +76,9 @@ struct OfficialServiceProfile: Equatable {
 
 enum OfficialServiceConfiguration {
     static let activeRegion: OfficialServiceRegion = .china
-    static let appleProductID = "com.jago.subforge.smart.300min"
-    static let internalProductID = "subforge_smart_300"
+    static let purchasePlans = OfficialPurchasePlan.allCases
+    static let appleProductID = OfficialPurchasePlan.standard.appleProductID
+    static let internalProductID = OfficialPurchasePlan.standard.internalProductID
 
     static func profile(for region: OfficialServiceRegion) -> OfficialServiceProfile? {
         switch region {

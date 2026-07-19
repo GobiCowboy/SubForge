@@ -37,7 +37,7 @@ private struct BillingErrorResponse: Decodable {
 @MainActor
 final class SmartServiceStore: ObservableObject {
     @Published private(set) var balanceSeconds = 0
-    @Published private(set) var productPrice: String?
+    @Published private(set) var productPrices: [OfficialPurchasePlan: String] = [:]
     @Published private(set) var statusMessage = "尚未购买智能字幕时长"
     @Published private(set) var isLoading = false
     @Published private(set) var isPurchasing = false
@@ -53,6 +53,10 @@ final class SmartServiceStore: ObservableObject {
         let minutes = balanceSeconds / 60
         let seconds = balanceSeconds % 60
         return seconds == 0 ? "\(minutes) 分钟" : "\(minutes) 分 \(seconds) 秒"
+    }
+
+    func price(for plan: OfficialPurchasePlan) -> String? {
+        productPrices[plan]
     }
 
     func load() async {
@@ -84,12 +88,20 @@ final class SmartServiceStore: ObservableObject {
 
     @discardableResult
     func purchase300Minutes() async -> Bool {
+        await purchase(plan: .standard)
+    }
+
+    @discardableResult
+    func purchase(plan: OfficialPurchasePlan) async -> Bool {
         guard !isPurchasing else { return false }
         isPurchasing = true
         defer { isPurchasing = false }
         do {
             statusMessage = "正在准备 App Store 订单…"
-            let order = try await createOrder(existingKey: KeychainStore.read(.officialServiceKey))
+            let order = try await createOrder(
+                plan: plan,
+                existingKey: KeychainStore.read(.officialServiceKey)
+            )
             guard KeychainStore.save(order.apiKey, account: .officialServiceKey) else {
                 throw SmartPurchaseError.keychainSaveFailed
             }
@@ -100,7 +112,7 @@ final class SmartServiceStore: ObservableObject {
             guard let product = products.first(where: { $0.id == order.appleProductId }) else {
                 throw SmartPurchaseError.productUnavailable
             }
-            productPrice = product.displayPrice
+            productPrices[plan] = product.displayPrice
             let result = try await product.purchase(options: [.appAccountToken(accountToken)])
             switch result {
             case .success(.verified(let transaction)):
@@ -131,18 +143,25 @@ final class SmartServiceStore: ObservableObject {
     }
 
     private func loadProductPrice() async {
-        guard let product = try? await Product.products(
-            for: [OfficialServiceConfiguration.appleProductID]
-        ).first else { return }
-        productPrice = product.displayPrice
+        guard let products = try? await Product.products(
+            for: OfficialServiceConfiguration.purchasePlans.map(\.appleProductID)
+        ) else { return }
+        for plan in OfficialServiceConfiguration.purchasePlans {
+            if let product = products.first(where: { $0.id == plan.appleProductID }) {
+                productPrices[plan] = product.displayPrice
+            }
+        }
     }
 
-    private func createOrder(existingKey: String?) async throws -> AppleOrderResponse {
+    private func createOrder(
+        plan: OfficialPurchasePlan,
+        existingKey: String?
+    ) async throws -> AppleOrderResponse {
         let url = profile.billingBaseURL.appending(path: "v1/apple/orders")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body = ["productId": OfficialServiceConfiguration.internalProductID]
+        var body = ["productId": plan.internalProductID]
         if let existingKey, !existingKey.isEmpty { body["existingApiKey"] = existingKey }
         request.httpBody = try JSONEncoder().encode(body)
         request.timeoutInterval = 30

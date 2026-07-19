@@ -12,7 +12,7 @@
 
 - 当前处理区域：中国大陆（首版不可切换）。
 - 剩余智能分钟与刷新状态。
-- `300分钟`商品卡片；Mac App Store价格从StoreKit读取。
+- `60分钟`与`300分钟`两个商品卡片；Mac App Store价格从StoreKit读取，默认选中300分钟。
 - 购买、到账等待和手动刷新入口；消耗型商品不提供“恢复购买”。
 - 数据路径、临时存储与按秒计费说明。
 - 官方智能模式开关与高级自定义Provider入口分离。
@@ -27,8 +27,8 @@
 
 ## Apple购买
 
-- Product ID：`com.jago.subforge.smart.300min`。
-- 商品类型：消耗型内购，发放18,000智能秒且余额不在客户端过期。
+- Product ID：`com.jago.subforge.smart.60min`（发放3,600智能秒）与`com.jago.subforge.smart.300min`（发放18,000智能秒）。
+- 商品类型：消耗型内购，余额不在客户端过期。
 - 价格、货币和名称只使用StoreKit本地化Product。
 - StoreKit本地验证只用于客户端状态；真正入账只信任Apple Server Notifications V2的服务端签名通知。
 - Billing履约成功后客户端才刷新钱包，客户端purchase success不自行增加额度。

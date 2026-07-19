@@ -158,6 +158,6 @@ No account is required. No sample login credentials are needed.
 - 在安装 Final Cut Pro 的机器测试“导出到 FCP”
 - 在未安装 Final Cut Pro 的机器确认错误提示清楚
 - 在开启和关闭菜单栏图标时测试 Dock / Command-Tab / 关闭窗口行为
-- 在App Store Connect创建`com.jago.subforge.smart.300min`消耗型商品，价格和本地化状态可销售。
+- 在 App Store Connect 创建两个消耗型商品：`com.jago.subforge.smart.60min`（60分钟，¥6）与 `com.jago.subforge.smart.300min`（300分钟，¥18），并确认价格和本地化状态可销售。
 - 使用StoreKit Sandbox验证购买、取消、pending、Server Notifications V2、只发放一次额度和到账轮询。
 - App Store Connect隐私问卷与`PrivacyInfo.xcprivacy`一致，声明Audio Data和Other User Content用于App Functionality。

@@ -19,4 +19,8 @@ import Testing
 @Test func officialProductIdentifiersStayAligned() {
     #expect(OfficialServiceConfiguration.internalProductID == "subforge_smart_300")
     #expect(OfficialServiceConfiguration.appleProductID == "com.jago.subforge.smart.300min")
+    #expect(OfficialPurchasePlan.starter.appleProductID == "com.jago.subforge.smart.60min")
+    #expect(OfficialPurchasePlan.starter.internalProductID == "subforge_smart_60")
+    #expect(OfficialPurchasePlan.starter.minutes == 60)
+    #expect(OfficialPurchasePlan.standard.minutes == 300)
 }
