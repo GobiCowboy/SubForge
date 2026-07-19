@@ -49,6 +49,7 @@
 ## 实现与验证
 
 - `SmartServiceStore`：StoreKit商品、pending Key入Keychain、`appAccountToken`购买、Billing轮询和钱包刷新。
+- TestFlight首装读取`AppTransaction.shared`失败时按StoreKit恢复路径调用`AppTransaction.refresh()`；打开智能服务设置页会再次尝试领取，失败时显示可见提示。
 - `OfficialSmartServiceClient`：中国区钱包、上传会话、任务提交与轮询；官方Key与BYOK Key分开。
 - `OSSMultipartUploader`：将音频写入沙箱临时multipart文件后流式直传阿里HTTPS Host，请求完成后删除临时副本。
 - 智能服务设置Pane已接入剩余时长、官方区域、购买、刷新和设为当前引擎。
