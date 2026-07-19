@@ -71,44 +71,46 @@ struct ProofreadingSettingsPane: View {
                 }
             }
 
-            SettingsDisclosureSection(title: "AI 校对验证", isExpanded: $isValidationExpanded) {
-                SettingsSectionCard(tone: .emphasis) {
-                    SettingsStatusRow(
-                        title: "当前模型",
-                        value: settings.effectiveLLMModel,
-                        tint: .secondary
-                    )
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsDisclosureSection(title: "AI 校对验证", isExpanded: $isValidationExpanded) {
+                    SettingsSectionCard(tone: .emphasis) {
+                        SettingsStatusRow(
+                            title: "当前模型",
+                            value: settings.effectiveLLMModel,
+                            tint: .secondary
+                        )
 
-                    SettingsValidationResultBox(
-                        title: "原始文本",
-                        hasValidated: validationState.hasValidated,
-                        isSuccess: validationState.passed,
-                        originalText: SettingsTestAsset.proofreadingSampleInput,
-                        resultText: validationState.resultText
-                    )
-
-                    SettingsActionRow {
-                        Button(action: copySampleText) {
-                            Label("复制原始文本", systemImage: "doc.on.doc")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                    } secondary: {
-                        Button(action: runProofreadingTest) {
-                            HStack(spacing: 8) {
-                                if isTesting {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                                Text(isTesting ? "验证中..." : "验证当前模型纠正配置")
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(isTesting || !settings.proofreadingEnabled || settings.cloudLLMKey.isEmpty)
+                        SettingsValidationResultBox(
+                            title: "原始文本",
+                            hasValidated: validationState.hasValidated,
+                            isSuccess: validationState.passed,
+                            originalText: SettingsTestAsset.proofreadingSampleInput,
+                            resultText: validationState.resultText
+                        )
                     }
+                }
+
+                SettingsActionRow {
+                    Button(action: copySampleText) {
+                        Label("复制原始文本", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                } secondary: {
+                    Button(action: runProofreadingTest) {
+                        HStack(spacing: 8) {
+                            if isTesting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(isTesting ? "验证中..." : "验证当前模型纠正配置")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(isTesting || !settings.proofreadingEnabled || settings.cloudLLMKey.isEmpty)
                 }
             }
         }

@@ -70,6 +70,7 @@ struct SubtitleSettingsPane: View {
                     planCard(plan)
                 }
             }
+            .frame(maxWidth: .infinity)
             .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -166,9 +167,10 @@ struct SubtitleSettingsPane: View {
                         .frame(width: 2)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
+        .frame(maxWidth: .infinity, minHeight: 58)
         .accessibilityLabel(plan.title)
         .accessibilityValue(isSelected ? "已选择" : "未选择")
     }
@@ -193,18 +195,20 @@ struct SubtitleSettingsPane: View {
                 Text("• 不建议用于正式字幕制作")
                 Text("• 推荐使用官方智能字幕获得最佳体验")
             }
-            .font(.system(size: 12))
+            .font(.system(size: 14))
             .foregroundStyle(.secondary)
             .padding(.top, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "flask.fill")
                     .foregroundStyle(.orange)
                 Text("本地识别（实验）")
-                    .font(.system(size: 13, weight: .semibold))
-                Text("时间轴精度较低")
-                    .font(.system(size: 12))
+                    .font(.system(size: 15, weight: .semibold))
+                Text("限制")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 14)
@@ -217,6 +221,7 @@ struct SubtitleSettingsPane: View {
     }
 
     private func select(_ plan: SubtitlePlan) {
+        isLocalLimitationsExpanded = false
         switch plan {
         case .official:
             rememberLocalEngineIfNeeded()

@@ -18,14 +18,14 @@ struct TranscriptionSettingsPane: View {
     @State private var validationTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
+        VStack(alignment: .leading, spacing: 22) {
             SettingsGroup(title: "转写配置") {
                 SettingsListSection {
+                    languagePickerControl
+                    subtitleSegmentationControls
                     if showsEnginePicker {
                         enginePickerControl
                     }
-                    languagePickerControl
-                    subtitleSegmentationControls
 
                     switch settings.transcriptionEngine {
                     case .cloudASR:
@@ -57,7 +57,17 @@ struct TranscriptionSettingsPane: View {
                 EmptyView()
             }
 
-            SettingsDisclosureSection(title: "转写验证", isExpanded: $isValidationExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsDisclosureSection(title: "转写验证", isExpanded: $isValidationExpanded) {
+                    SettingsValidationResultBox(
+                        title: "测试音频原文",
+                        hasValidated: validationState.hasValidated,
+                        isSuccess: validationState.passed,
+                        originalText: SettingsTestAsset.expectedASRText,
+                        resultText: validationState.resultText
+                    )
+                }
+
                 HStack(spacing: 12) {
                     Button(action: runTranscriptionTest) {
                         HStack(spacing: 8) {
