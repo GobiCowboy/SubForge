@@ -229,8 +229,13 @@ embed_funasr_runtime() {
   fi
 }
 
-# 内置 FunASR 模型（SenseVoice q8 + VAD），用户开箱即用本地 FunASR。
+# FunASR 模型默认按需下载；仅显式开启时嵌入 SenseVoice q8 + VAD。
 embed_funasr_models() {
+  if [ "${BUNDLE_FUNASR_MODELS:-0}" != "1" ]; then
+    echo "note: FunASR model weights are downloaded on demand (set BUNDLE_FUNASR_MODELS=1 to embed)" >&2
+    return 0
+  fi
+
   local dest="$APP_RESOURCES/funasr"
   mkdir -p "$dest"
 

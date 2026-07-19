@@ -193,6 +193,11 @@ embed_funasr_runtime() {
 }
 
 embed_funasr_models() {
+  if [ "${BUNDLE_FUNASR_MODELS:-0}" != "1" ]; then
+    echo "note: FunASR model weights are downloaded on demand (set BUNDLE_FUNASR_MODELS=1 to embed)" >&2
+    return 0
+  fi
+
   local dest="$APP_RESOURCES/funasr"
   mkdir -p "$dest"
   local asr_name="sensevoice-small-q8.gguf"

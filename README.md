@@ -59,6 +59,12 @@ BUNDLE_WHISPER_BASE=1 ./script/build_and_run.sh
 # 或 BASE_MODEL_SOURCE=/path/to/ggml-base.bin ./script/build_and_run.sh
 ```
 
+开发若需临时把 SenseVoice q8 + VAD 打进包：
+
+```bash
+BUNDLE_FUNASR_MODELS=1 ./script/build_and_run.sh
+```
+
 ### 本地 FunASR 运行时（SenseVoice CLI）
 
 ```bash

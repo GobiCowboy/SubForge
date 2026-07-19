@@ -41,11 +41,6 @@ enum FunASRRuntime {
 }
 
 enum FunASRModelDownloader {
-    private static let mirrors = [
-        "https://hf-mirror.com/",
-        "https://huggingface.co/"
-    ]
-
     static func download(
         _ model: FunASRModel = .sensevoiceSmallQ8,
         progress: @escaping @Sendable (Double?) -> Void = { _ in }
@@ -82,8 +77,7 @@ enum FunASRModelDownloader {
         let temporaryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("subforge_funasr_\(UUID().uuidString)_\(fileName)")
 
-        for mirror in mirrors {
-            let remote = "\(mirror)\(repository)/resolve/main/\(fileName)"
+        for remote in downloadURLs(repository: repository, fileName: fileName) {
             do {
                 progress(progressRange.lowerBound)
                 try await downloadViaURLSession(from: remote, to: temporaryURL) { raw in
@@ -120,19 +114,23 @@ enum FunASRModelDownloader {
         throw FunASRDownloadError.allMirrorsFailed(fileName)
     }
 
+    static func downloadURLs(repository: String, fileName: String) -> [URL] {
+        [
+            "https://www.modelscope.cn/models/\(repository)/resolve/master/\(fileName)",
+            "https://hf-mirror.com/\(repository)/resolve/main/\(fileName)",
+            "https://huggingface.co/\(repository)/resolve/main/\(fileName)"
+        ].compactMap(URL.init(string:))
+    }
+
     private static func downloadViaURLSession(
-        from remoteURL: String,
+        from remoteURL: URL,
         to localURL: URL,
         progress: @escaping @Sendable (Double?) -> Void
     ) async throws {
-        guard let url = URL(string: remoteURL) else {
-            throw FunASRDownloadError.downloadFailed(remoteURL)
-        }
-
         let delegate = FunASRDownloadDelegate(destination: localURL, progress: progress)
         let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
-        try await delegate.start(url: url, session: session)
+        try await delegate.start(url: remoteURL, session: session)
     }
 }
 
