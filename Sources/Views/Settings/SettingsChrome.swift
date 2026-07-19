@@ -24,6 +24,40 @@ struct SettingsGroup<Content: View>: View {
     }
 }
 
+struct SettingsDisclosureSection<Content: View>: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self._isExpanded = isExpanded
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            content
+                .padding(.top, 12)
+        } label: {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+        )
+    }
+}
+
 struct SettingsSectionCard<Content: View>: View {
     let tone: SettingsCardTone
     @ViewBuilder let content: Content

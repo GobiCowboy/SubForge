@@ -78,7 +78,6 @@ struct SubtitleSettingsPane: View {
 
             selectedPlanContent
         }
-        .animation(.easeInOut(duration: 0.22), value: selectedPlan)
         .onAppear(perform: rememberLocalEngineIfNeeded)
         .onChange(of: settings.transcriptionEngine) { _, engine in
             guard Self.localEngines.contains(engine) else { return }
@@ -102,7 +101,6 @@ struct SubtitleSettingsPane: View {
         switch selectedPlan {
         case .official:
             OfficialSmartServicePanel(settings: $settings, service: service)
-                .transition(.opacity.combined(with: .move(edge: .top)))
         case .custom:
             VStack(alignment: .leading, spacing: 28) {
                 configurationTabs
@@ -117,7 +115,7 @@ struct SubtitleSettingsPane: View {
                     ProofreadingSettingsPane(settings: $settings)
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .local:
             VStack(alignment: .leading, spacing: 18) {
                 localExperimentalNotice
@@ -134,7 +132,7 @@ struct SubtitleSettingsPane: View {
                     ProofreadingSettingsPane(settings: $settings)
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -176,13 +174,15 @@ struct SubtitleSettingsPane: View {
     }
 
     private var configurationTabs: some View {
-        Picker("字幕配置", selection: $configurationTab) {
+        Picker("", selection: $configurationTab) {
             ForEach(SubtitleConfigurationTab.allCases) { tab in
                 Text(tab.rawValue).tag(tab)
             }
         }
         .pickerStyle(.segmented)
-        .frame(width: 220)
+        .labelsHidden()
+        .controlSize(.large)
+        .frame(minWidth: 584, maxWidth: .infinity)
     }
 
     private var localExperimentalNotice: some View {

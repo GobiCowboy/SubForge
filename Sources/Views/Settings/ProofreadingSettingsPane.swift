@@ -7,6 +7,7 @@ struct ProofreadingSettingsPane: View {
 
     @State private var isTesting = false
     @State private var validationState = SettingsValidationState()
+    @State private var isValidationExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
@@ -70,7 +71,7 @@ struct ProofreadingSettingsPane: View {
                 }
             }
 
-            SettingsGroup(title: "AI 校对验证") {
+            SettingsDisclosureSection(title: "AI 校对验证", isExpanded: $isValidationExpanded) {
                 SettingsSectionCard(tone: .emphasis) {
                     SettingsStatusRow(
                         title: "当前模型",

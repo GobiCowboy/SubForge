@@ -10,6 +10,7 @@ struct TranscriptionSettingsPane: View {
 
     @State private var isTesting = false
     @State private var validationState = SettingsValidationState()
+    @State private var isValidationExpanded = false
     @State private var downloadingModel: WhisperModel?
     @State private var downloadProgress: Double?
     @State private var isDownloadingFunASR = false
@@ -27,12 +28,8 @@ struct TranscriptionSettingsPane: View {
                     subtitleSegmentationControls
 
                     switch settings.transcriptionEngine {
-                    case .whisperLocal:
-                        whisperSection
-                    case .funASRLocal:
-                        funASRSection
                     case .cloudASR:
-                        cloudASRSection
+                        cloudASRControls
                     case .officialSmart:
                         SettingsListRow(title: "智能字幕") {
                             Text("在「智能服务」中购买与查看额度")
@@ -45,11 +42,22 @@ struct TranscriptionSettingsPane: View {
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
+                    case .whisperLocal, .funASRLocal:
+                        EmptyView()
                     }
                 }
             }
 
-            SettingsGroup(title: "转写验证") {
+            switch settings.transcriptionEngine {
+            case .whisperLocal:
+                whisperSection
+            case .funASRLocal:
+                funASRSection
+            case .cloudASR, .officialSmart, .appleSpeech:
+                EmptyView()
+            }
+
+            SettingsDisclosureSection(title: "转写验证", isExpanded: $isValidationExpanded) {
                 HStack(spacing: 12) {
                     Button(action: runTranscriptionTest) {
                         HStack(spacing: 8) {
@@ -91,21 +99,19 @@ struct TranscriptionSettingsPane: View {
     }
 
     private var enginePickerControl: some View {
-        SettingsCompactPicker(title: enginePickerTitle, systemImage: "waveform") {
+        SettingsListRow(title: enginePickerTitle) {
             Picker(enginePickerTitle, selection: $settings.transcriptionEngine) {
                 ForEach(selectableEngines) { engine in
                     Text(engine.rawValue).tag(engine)
                 }
             }
             .labelsHidden()
-            .frame(width: 168)
+            .frame(width: SettingsListMetrics.pickerWidth)
         }
-        .padding(.top, 12)
-        .padding(.horizontal, 16)
     }
 
     private var languagePickerControl: some View {
-        SettingsCompactPicker(title: "语言", systemImage: "globe") {
+        SettingsListRow(title: "语言") {
             Picker("语言", selection: $settings.language) {
                 Text("中文").tag("zh-CN")
                 Text("中文（繁体）").tag("zh-TW")
@@ -115,9 +121,8 @@ struct TranscriptionSettingsPane: View {
                 Text("한국어").tag("ko-KR")
             }
             .labelsHidden()
-            .frame(width: 168)
+            .frame(width: SettingsListMetrics.pickerWidth)
         }
-        .padding(.horizontal, 16)
     }
 
     private var selectableEngines: [TranscriptionEngine] {
@@ -301,43 +306,38 @@ struct TranscriptionSettingsPane: View {
         }
     }
 
-    private var cloudASRSection: some View {
-        SettingsInsetPanel {
-            Text("云端 ASR")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            SettingsListRow(title: "服务预设") {
-                SettingsTrailingControl {
-                    Picker("服务预设", selection: $settings.cloudASRPreset) {
-                        ForEach(CloudASRPreset.allCases) { preset in
-                            Text(preset.rawValue).tag(preset)
-                        }
-                    }
-                    .labelsHidden()
-                    .onChange(of: settings.cloudASRPreset) { _, preset in
-                        settings.cloudASRURL = preset.defaultURL
-                        settings.cloudASRModel = preset.defaultModel
+    @ViewBuilder
+    private var cloudASRControls: some View {
+        SettingsListRow(title: "服务预设") {
+            SettingsTrailingControl {
+                Picker("服务预设", selection: $settings.cloudASRPreset) {
+                    ForEach(CloudASRPreset.allCases) { preset in
+                        Text(preset.rawValue).tag(preset)
                     }
                 }
+                .labelsHidden()
+                .onChange(of: settings.cloudASRPreset) { _, preset in
+                    settings.cloudASRURL = preset.defaultURL
+                    settings.cloudASRModel = preset.defaultModel
+                }
             }
+        }
 
-            SettingsListRow(title: "Base URL") {
-                TextField("Base URL", text: $settings.cloudASRURL)
-                    .textFieldStyle(.roundedBorder)
-                    .help(settings.cloudASRURL)
-            }
+        SettingsListRow(title: "Base URL") {
+            TextField("Base URL", text: $settings.cloudASRURL)
+                .textFieldStyle(.roundedBorder)
+                .help(settings.cloudASRURL)
+        }
 
-            SettingsListRow(title: "API Key") {
-                SecureField("API Key", text: $settings.cloudASRKey)
-                    .textFieldStyle(.roundedBorder)
-            }
+        SettingsListRow(title: "API Key") {
+            SecureField("API Key", text: $settings.cloudASRKey)
+                .textFieldStyle(.roundedBorder)
+        }
 
-            SettingsListRow(title: "模型") {
-                TextField("模型名", text: $settings.cloudASRModel)
-                    .textFieldStyle(.roundedBorder)
-                    .help(settings.cloudASRModel)
-            }
+        SettingsListRow(title: "模型") {
+            TextField("模型名", text: $settings.cloudASRModel)
+                .textFieldStyle(.roundedBorder)
+                .help(settings.cloudASRModel)
         }
     }
 
