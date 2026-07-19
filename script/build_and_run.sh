@@ -329,6 +329,27 @@ sign_bundle_if_requested() {
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE" >/dev/null 2>&1 &
+
+  # SwiftUI WindowGroup 可能恢复为“无可见窗口”。本地运行入口模拟一次
+  # 用户的 ⌘N，确保测试时主窗口先创建；应用内菜单栏随后可正常复用它。
+  for _ in {1..20}; do
+    pgrep -x "$APP_NAME" >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  # 给 macOS 窗口状态恢复留出时间，避免恢复中的窗口被重复创建。
+  sleep 3
+  window_count="$(/usr/bin/osascript \
+    -e "tell application \"System Events\" to tell process \"$APP_NAME\" to count windows" \
+    2>/dev/null || printf '0')"
+  if [ "$window_count" -eq 0 ] 2>/dev/null; then
+    /usr/bin/osascript \
+      -e "tell application \"$APP_NAME\" to activate" \
+      -e "tell application \"System Events\" to tell process \"$APP_NAME\" to keystroke \"n\" using {command down}" \
+      >/dev/null 2>&1 || true
+  fi
+  /usr/bin/osascript \
+    -e "tell application \"System Events\" to tell process \"$APP_NAME\" to set frontmost to true" \
+    >/dev/null 2>&1 || true
 }
 
 stream_logs() {
