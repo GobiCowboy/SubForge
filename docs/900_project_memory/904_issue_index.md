@@ -17,6 +17,10 @@
 | ISSUE-013 | P1 | 预期限制 | Developer ID站外包不能完成Mac App Store消耗型内购 | 购买入口以StoreKit商品可用性为准；正式付费能力在Mac App Store包验收 |
 | ISSUE-014 | P0 | 待TestFlight验收 | TestFlight首装无法领取10分钟体验 | 根因是`AppTransaction.shared`返回`SKInternalErrorDomain Code=13`；已增加`AppTransaction.refresh()`恢复路径、设置页重试与可见错误提示 |
 | ISSUE-015 | P0 | 待TestFlight验收 | 智能字幕轮询遇到临时服务错误后丢失任务 | 客户端现对轮询阶段的 5xx 和可恢复网络错误继续重试，不再因单次临时故障直接退出并触发后续 `ACTIVE_TASK_EXISTS` |
+| ISSUE-016 | P1 | 修复中 | 本地构建切换官方服务时频繁弹出钥匙串密码框 | 本地构建与 TestFlight 使用同一 service 名访问不同签名创建的凭证；需隔离凭证命名空间并禁止读写过程触发交互 |
+| ISSUE-017 | P0 | 修复中 | TestFlight 点击购买按钮没有可见反馈 | 商品加载失败和购买错误仅写入状态但界面未展示，用户无法区分 StoreKit 商品不可用、网络错误和购买处理中 |
+| ISSUE-018 | P0 | 修复中 | 官方服务返回的长字幕未严格遵守最大字数 | 官方服务返回校对后字幕，客户端最终结果必须再次强制按共享最大字数分段，不能依赖服务端拆分 |
+| ISSUE-019 | P2 | 修复中 | 字幕设置页信息层级和控件布局不符合验收稿 | 精简官方功能说明、改用字数滑杆、把配置状态贴近转写与 AI 校对标签，并调整本地实验提示位置 |
 
 ## 使用规则
 
