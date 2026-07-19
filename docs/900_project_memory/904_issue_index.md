@@ -25,7 +25,7 @@
 | ISSUE-021 | P0 | 待在线验收 | 创建 Apple 内购订单返回 `APPLICATION_REQUIRED` | 创建订单请求现显式携带 `applicationId=subforge`，并增加请求体回归测试 |
 | ISSUE-022 | P1 | 待修复 | 客户端最大字数分段在语义中间硬切 | 官方长字幕虽已受最大字数约束，但公共分段器会把 `Final Cut Pro`、`Apple Speech` 及中文短语从中间拆开；应将字数作为目标值，按标点、停顿和词组边界回退分段 |
 | ISSUE-023 | P1 | 待修复 | 官方智能字幕进度未区分 ASR 转写与 AI 校对 | 当前服务端只回传笼统 `processing`，客户端把它显示成“云端转写与 AI 校对”；应映射为可验证的独立阶段，不能在服务端完成前提前标记校对完成 |
-| ISSUE-024 | P0 | 待修复 | StoreKit Sandbox 成交后钱包额度未到账 | Apple 沙盒交易已验证并完成，但订单轮询未进入 `paid`，需核对 App Store Server Notifications V2 的 Sandbox 回调、应用路由、环境和 `appAccountToken` 订单匹配 |
+| ISSUE-024 | P0 | 待修复 | StoreKit 成交后若 Apple 通知漏发，钱包额度永久不到账 | 真实 Sandbox 连续购买中前两笔通知和履约成功，第三笔 StoreKit 已验证但 Apple 通知未到 Nginx，订单永久停留 `pending`；客户端需上报 transaction ID，Billing 必须向 App Store Server API 主动核验并幂等补发，不能只依赖通知 |
 | ISSUE-025 | P1 | 待修复 | 流水线取消语义不完整 | 当前客户端退出并取消本地任务，但官方云任务提交后只停止轮询，服务端可能继续处理；需要明确本地停止、上传终止及云任务取消/不可取消反馈 |
 
 ## 使用规则
