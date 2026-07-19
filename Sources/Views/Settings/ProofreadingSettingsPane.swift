@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct ProofreadingSettingsPane: View {
@@ -71,8 +70,25 @@ struct ProofreadingSettingsPane: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsDisclosureSection(title: "AI 校对验证", isExpanded: $isValidationExpanded) {
+            SettingsValidationSection(
+                title: "AI 校对验证",
+                isExpanded: $isValidationExpanded,
+                state: validationState,
+                action: {
+                    Button(action: runProofreadingTest) {
+                        HStack(spacing: 8) {
+                            if isTesting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(isTesting ? "验证中..." : "验证")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+                    .disabled(isTesting || !settings.proofreadingEnabled || settings.cloudLLMKey.isEmpty)
+                }
+            ) {
                     SettingsSectionCard(tone: .emphasis) {
                         SettingsStatusRow(
                             title: "当前模型",
@@ -89,30 +105,6 @@ struct ProofreadingSettingsPane: View {
                         )
                     }
                 }
-
-                SettingsActionRow {
-                    Button(action: copySampleText) {
-                        Label("复制原始文本", systemImage: "doc.on.doc")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                } secondary: {
-                    Button(action: runProofreadingTest) {
-                        HStack(spacing: 8) {
-                            if isTesting {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Text(isTesting ? "验证中..." : "验证当前模型纠正配置")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(isTesting || !settings.proofreadingEnabled || settings.cloudLLMKey.isEmpty)
-                }
-            }
         }
         .onAppear {
             if settings.proofreadingEngine == .appleLocal {
@@ -212,9 +204,4 @@ struct ProofreadingSettingsPane: View {
         settings.proofreadingValidationState = state
     }
 
-    private func copySampleText() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(SettingsTestAsset.proofreadingSampleInput, forType: .string)
-        model.toast = ToastMessage(text: "已复制原始文本", level: .success)
-    }
 }

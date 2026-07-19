@@ -45,8 +45,9 @@ struct OfficialSmartServicePanel: View {
                         }
                     }
 
-                    Divider()
+                }
 
+                SettingsSectionCard {
                     HStack(alignment: .bottom, spacing: 16) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("剩余时长")

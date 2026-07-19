@@ -24,18 +24,24 @@ struct SettingsGroup<Content: View>: View {
     }
 }
 
-struct SettingsDisclosureSection<Content: View>: View {
+struct SettingsValidationSection<Content: View, Action: View>: View {
     let title: String
     @Binding var isExpanded: Bool
+    let state: SettingsValidationState
     @ViewBuilder let content: Content
+    @ViewBuilder let action: Action
 
     init(
         title: String,
         isExpanded: Binding<Bool>,
+        state: SettingsValidationState,
+        @ViewBuilder action: () -> Action,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self._isExpanded = isExpanded
+        self.state = state
+        self.action = action()
         self.content = content()
     }
 
@@ -44,8 +50,18 @@ struct SettingsDisclosureSection<Content: View>: View {
             content
                 .padding(.top, 12)
         } label: {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+
+                Spacer(minLength: 0)
+
+                Text(state.hasValidated ? "已验证" : "未验证")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(state.hasValidated ? (state.passed ? .green : .orange) : .secondary)
+
+                action
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)

@@ -18,7 +18,7 @@ struct TranscriptionSettingsPane: View {
     @State private var validationTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsGroup(title: "转写配置") {
                 SettingsListSection {
                     languagePickerControl
@@ -57,8 +57,25 @@ struct TranscriptionSettingsPane: View {
                 EmptyView()
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsDisclosureSection(title: "转写验证", isExpanded: $isValidationExpanded) {
+            SettingsValidationSection(
+                title: "转写验证",
+                isExpanded: $isValidationExpanded,
+                state: validationState,
+                action: {
+                    Button(action: runTranscriptionTest) {
+                        HStack(spacing: 8) {
+                            if isTesting {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Label(isTesting ? "验证中..." : "验证", systemImage: "checkmark.shield")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                    .disabled(isTesting || validationBlocked)
+                }
+            ) {
                     SettingsValidationResultBox(
                         title: "测试音频原文",
                         hasValidated: validationState.hasValidated,
@@ -66,30 +83,6 @@ struct TranscriptionSettingsPane: View {
                         originalText: SettingsTestAsset.expectedASRText,
                         resultText: validationState.resultText
                     )
-                }
-
-                HStack(spacing: 12) {
-                    Button(action: runTranscriptionTest) {
-                        HStack(spacing: 8) {
-                            if isTesting {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Label(isTesting ? "验证中..." : "验证当前转写配置", systemImage: "checkmark.shield")
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .disabled(isTesting || validationBlocked)
-
-                    if validationState.hasValidated {
-                        Text(validationState.passed ? "验证通过" : "验证未通过")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(validationState.passed ? .green : .orange)
-                    }
-
-                    Spacer(minLength: 0)
-                }
             }
         }
         .onAppear {
@@ -110,28 +103,32 @@ struct TranscriptionSettingsPane: View {
 
     private var enginePickerControl: some View {
         SettingsListRow(title: enginePickerTitle) {
-            Picker(enginePickerTitle, selection: $settings.transcriptionEngine) {
-                ForEach(selectableEngines) { engine in
-                    Text(engine.rawValue).tag(engine)
+            SettingsTrailingControl(width: SettingsListMetrics.controlWidth) {
+                Picker(enginePickerTitle, selection: $settings.transcriptionEngine) {
+                    ForEach(selectableEngines) { engine in
+                        Text(engine.rawValue).tag(engine)
+                    }
                 }
+                .labelsHidden()
+                .frame(width: SettingsListMetrics.pickerWidth)
             }
-            .labelsHidden()
-            .frame(width: SettingsListMetrics.pickerWidth)
         }
     }
 
     private var languagePickerControl: some View {
         SettingsListRow(title: "语言") {
-            Picker("语言", selection: $settings.language) {
-                Text("中文").tag("zh-CN")
-                Text("中文（繁体）").tag("zh-TW")
-                Text("中英混合").tag("zh-CN,en-US")
-                Text("English").tag("en-US")
-                Text("日本語").tag("ja-JP")
-                Text("한국어").tag("ko-KR")
+            SettingsTrailingControl(width: SettingsListMetrics.controlWidth) {
+                Picker("语言", selection: $settings.language) {
+                    Text("中文").tag("zh-CN")
+                    Text("中文（繁体）").tag("zh-TW")
+                    Text("中英混合").tag("zh-CN,en-US")
+                    Text("English").tag("en-US")
+                    Text("日本語").tag("ja-JP")
+                    Text("한국어").tag("ko-KR")
+                }
+                .labelsHidden()
+                .frame(width: SettingsListMetrics.pickerWidth)
             }
-            .labelsHidden()
-            .frame(width: SettingsListMetrics.pickerWidth)
         }
     }
 
@@ -165,12 +162,14 @@ struct TranscriptionSettingsPane: View {
 
     private var subtitleSegmentationControls: some View {
         SettingsListRow(title: "单条字幕最大字数") {
-            Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
-                Text("\(settings.effectiveMaxSubtitleLength) 字")
-                    .monospacedDigit()
-                    .frame(width: 48, alignment: .trailing)
+            SettingsTrailingControl(width: SettingsListMetrics.controlWidth) {
+                Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
+                    Text("\(settings.effectiveMaxSubtitleLength) 字")
+                        .monospacedDigit()
+                        .frame(width: 48, alignment: .trailing)
+                }
+                .frame(width: 156)
             }
-            .frame(width: 156)
         }
     }
 

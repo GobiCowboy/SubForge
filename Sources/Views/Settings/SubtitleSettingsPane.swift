@@ -191,9 +191,12 @@ struct SubtitleSettingsPane: View {
         DisclosureGroup(isExpanded: $isLocalLimitationsExpanded) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("转写在本地完成；启用 AI 校对后，将使用你配置的云端服务。")
-                Text("• 当前时间轴精度较低")
-                Text("• 不建议用于正式字幕制作")
-                Text("• 推荐使用官方智能字幕获得最佳体验")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("• 当前时间轴精度较低")
+                    Text("• 不建议用于正式字幕制作")
+                    Text("• 推荐使用官方智能字幕获得最佳体验")
+                }
+                .padding(.leading, 16)
             }
             .font(.system(size: 14))
             .foregroundStyle(.secondary)
@@ -205,9 +208,11 @@ struct SubtitleSettingsPane: View {
                     .foregroundStyle(.orange)
                 Text("本地识别（实验）")
                     .font(.system(size: 15, weight: .semibold))
-                Text("限制")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                if !isLocalLimitationsExpanded {
+                    Text("时间轴不准确")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 0)
             }
         }
