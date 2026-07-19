@@ -11,7 +11,7 @@
 | I-005 | 本地配置持久化 | 已存在 | `SettingsStore`、`RecentProjectsStore` 已独立；云端 API Key 通过 `KeychainStore` 保存，目录授权通过 security-scoped bookmark 保存 |
 | I-006 | 字幕基础工具 | 已存在 | `SRTCodec`、`TimeFormatting` 已独立 |
 | I-007 | 真实转写服务层 | 已存在 | `TranscriptionService` 工厂 + `AppleSpeechProvider` / `WhisperCppProvider` / `FunASRSenseVoiceProvider` / `CloudASRProvider`；各 provider 只做听写与词元归一，切句交给公共分段器 |
-| I-022 | FunASR SenseVoice 本地引擎 | 已存在 | `FunASRSenseVoiceProvider`、`FunASROutputParser`、`FunASRRuntime` / `FunASRModelStore` / `FunASRModelDownloader`；CLI `llama-funasr-sensevoice` + SenseVoice q8 + FSMN-VAD |
+| I-022 | FunASR SenseVoice 本地引擎 | 已存在 | `FunASRSenseVoiceProvider`、`FunASROutputParser`、`FunASRRuntime` / `FunASRModelStore` / `FunASRModelDownloader`；ModelScope 国内源优先按需下载 SenseVoice q8 + FSMN-VAD |
 | I-021 | DashScope filetrans 临时上传 | 已存在 | `CloudASRProvider`：`getPolicy` → 百炼临时 OSS 上传 → `oss://` → 异步 transcription；避免 Base64 整包导致 413 |
 | I-008 | 模型纠正服务层 | 已存在 | `ProofreadingService` 已接入 OpenAI 兼容模型纠正链路 |
 | I-009 | Whisper 模型管理 | 已存在 | `WhisperModelStore`、`WhisperModelDownloader` 负责本地模型下载与检测 |

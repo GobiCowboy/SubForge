@@ -113,6 +113,7 @@ CLI 候选路径：
 | 日期 | 说明 |
 |------|------|
 | 2026-07-15 | 锁定 SenseVoice GGUF 本地集成方案与 CLI 契约 |
+| 2026-07-19 | ModelScope 国内源设为首选；安装包默认不内置权重，保留显式内置开关与海外降级源 |
 
 ## 9. 2026-07-19 国内源与按需下载开发前检查
 
@@ -120,3 +121,9 @@ CLI 候选路径：
 - ModelScope 使用 `master` revision，Hugging Face 系列使用 `main` revision，分别生成下载 URL。
 - 保留海外源作为降级路径；ModelScope 的 ASR 与 VAD 文件 SHA-256 已与当前包内文件核对一致。
 - 三套构建脚本默认不再复制模型权重，但继续嵌入本地运行时；显式设置 `BUNDLE_FUNASR_MODELS=1` 时允许开发验证内置模型。
+
+## 10. 2026-07-19 实现与验证
+
+- SenseVoice 与 FSMN-VAD 均按 ModelScope → hf-mirror → Hugging Face 顺序下载。
+- `build_and_run.sh`、App Store 与 Developer ID 打包脚本默认跳过权重；`BUNDLE_FUNASR_MODELS=1` 可恢复内置。
+- `bash -n` 通过三套构建脚本语法检查；`swift test` 通过 23 项，其中 2 项固定国内源优先与 VAD 同源契约。
