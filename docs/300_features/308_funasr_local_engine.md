@@ -75,7 +75,9 @@ CLI 候选路径：
 2. `Application Support/SubForge/bin/llama-funasr-sensevoice`
 3. 仓库 `vendor/funasr/llama-funasr-sensevoice`（开发）
 
-下载镜像：`hf-mirror.com` → `huggingface.co`。
+下载顺序：ModelScope 国内仓库 → `hf-mirror.com` → `huggingface.co`。
+
+安装包默认只嵌入 FunASR 运行时，不嵌入约 256MB 的 SenseVoice + VAD 权重；用户在设置中按需下载。构建调试若确需内置，可通过显式环境变量开启。
 
 ## 5. 架构衔接
 
@@ -111,3 +113,10 @@ CLI 候选路径：
 | 日期 | 说明 |
 |------|------|
 | 2026-07-15 | 锁定 SenseVoice GGUF 本地集成方案与 CLI 契约 |
+
+## 9. 2026-07-19 国内源与按需下载开发前检查
+
+- 继续复用 `FunASRModelDownloader`、现有进度回调和模型存储目录，不新增下载器。
+- ModelScope 使用 `master` revision，Hugging Face 系列使用 `main` revision，分别生成下载 URL。
+- 保留海外源作为降级路径；ModelScope 的 ASR 与 VAD 文件 SHA-256 已与当前包内文件核对一致。
+- 三套构建脚本默认不再复制模型权重，但继续嵌入本地运行时；显式设置 `BUNDLE_FUNASR_MODELS=1` 时允许开发验证内置模型。
