@@ -266,9 +266,9 @@ struct HomeView: View {
             guard let url else { return }
 
             Task { @MainActor in
-                // 拖入文件必须立刻拿安全作用域，再交给 import（否则异步后可能已失效）
-                _ = url.startAccessingSecurityScopedResource()
-                model.importDocument(at: url.standardizedFileURL)
+                // 保留 drop 返回的原始 URL；importDocument 内 SecurityScopedResourceAccess 会 startAccessing。
+                // 不要 standardizedFileURL，否则可能丢掉 security-scoped 令牌，导致后续无法播放。
+                model.importDocument(at: url)
             }
         }
         return true

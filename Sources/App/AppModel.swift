@@ -102,6 +102,8 @@ final class AppModel: ObservableObject {
     private var funASRHeartbeatObserver: NSObjectProtocol?
     /// 当前导入音频的安全作用域，必须在整次转写流水线期间持有。
     private var currentDocumentAccess: SecurityScopedResourceAccess?
+    /// 播放/波形用的沙箱内可读副本（外部文件在 App Sandbox 下 AVPlayer 常读不到原路径）。
+    private var playbackLocalMedia: SandboxMediaAccess.PreparedFile?
     private let playbackService = MediaPlaybackService()
     private let keyboardMonitor = EditorKeyboardMonitor()
     private let watchFolderService = WatchFolderService()
@@ -163,6 +165,11 @@ final class AppModel: ObservableObject {
         playbackService.onDurationLoaded = { [weak self] duration in
             guard let self else { return }
             self.playbackDuration = max(self.playbackDuration, duration)
+        }
+
+        playbackService.onLoadFailed = { message in
+            // 转写进行中不打扰；进入编辑后点播放时再提示更清晰。
+            AppLog.editor.error("media load failed message=\(message, privacy: .public)")
         }
 
         keyboardMonitor.start { [weak self] event in
@@ -390,7 +397,7 @@ final class AppModel: ObservableObject {
         isEditingSubtitle = false
         editorFocusContext = .none
         activeEditorSurface = .table
-        playbackService.clear()
+        clearPlaybackMedia()
     }
 
     func importDocument(at url: URL) {
@@ -404,7 +411,8 @@ final class AppModel: ObservableObject {
         if ext == "srt" {
             importSRT(from: url)
         } else {
-            // 用户选中/拖入的文件：全程持有安全作用域，避免子进程读不到外部路径。
+            // 必须保留 open panel / drop 返回的原始 URL，不要 standardizedFileURL，
+            // 否则可能丢掉 security-scoped 访问令牌，后续 AVPlayer 静默失败。
             currentDocumentAccess = SecurityScopedResourceAccess(url: url)
             currentDocumentURL = url
             prepareMediaPreview(for: url)
@@ -892,6 +900,7 @@ final class AppModel: ObservableObject {
                 return
             }
             stopPlayback()
+            currentDocumentAccess = nil
             currentDocumentURL = url
             segments = parsed
             selectedSegmentID = parsed.first?.id
@@ -901,7 +910,7 @@ final class AppModel: ObservableObject {
             isEditingSubtitle = false
             editorFocusContext = .none
             activeEditorSurface = .table
-            playbackService.clear()
+            clearPlaybackMedia()
             mode = .editor
             addRecentProject(for: url, kind: "srt", subtitleCount: parsed.count)
             showToast("已导入 \(parsed.count) 条字幕", level: .success)
@@ -1165,14 +1174,36 @@ final class AppModel: ObservableObject {
             }
         }
 
-        isPlaying = true
+        // 音频项目：必须走 AVPlayer。SRT 无音频时才用合成时钟推进时间轴。
+        let isAudioDocument = currentDocumentURL.map { mediaKind(for: $0) == "audio" } ?? false
+        if isAudioDocument {
+            if !playbackService.hasLoadedMedia || !playbackService.canPlay {
+                // 再试一次：用沙箱副本重载（导入时偶发 AVPlayerItem 未就绪/失败）。
+                if let url = currentDocumentURL {
+                    prepareMediaPreview(for: url)
+                }
+            }
 
-        if playbackService.hasLoadedMedia {
+            guard playbackService.hasLoadedMedia, playbackService.canPlay else {
+                showToast("无法播放音频：文件可能不可读或格式不受支持", level: .error, duration: 4)
+                return
+            }
+
+            isPlaying = true
             playbackService.seek(to: currentTime)
             playbackService.play(rate: playbackRate)
             return
         }
 
+        isPlaying = true
+
+        if playbackService.hasLoadedMedia, playbackService.canPlay {
+            playbackService.seek(to: currentTime)
+            playbackService.play(rate: playbackRate)
+            return
+        }
+
+        // 仅 SRT：无真实音频，用计时器驱动时间轴高亮。
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
@@ -1213,16 +1244,55 @@ final class AppModel: ObservableObject {
     }
 
     private func prepareMediaPreview(for url: URL) {
-        playbackService.loadMedia(from: url)
+        // 与转写同一策略：外部文件先拷进沙箱 temp，再交给 AVPlayer / 波形分析。
+        // 直接播用户原路径时，App Sandbox 下 AVPlayer 经常创建成功但静默无声。
+        cleanupPlaybackLocalMedia()
+
+        let previewURL: URL
+        do {
+            let prepared = try SandboxMediaAccess.prepareForProcessing(url)
+            if prepared.isTemporaryCopy {
+                playbackLocalMedia = prepared
+                previewURL = prepared.url
+                AppLog.import.info(
+                    "playback media sandbox copy ready source=\(url.lastPathComponent, privacy: .public)"
+                )
+            } else {
+                previewURL = prepared.url
+                AppLog.import.info(
+                    "playback media direct path source=\(url.lastPathComponent, privacy: .public)"
+                )
+            }
+        } catch {
+            previewURL = url
+            AppLog.import.warning(
+                "playback media prepare failed, fallback original error=\(error.localizedDescription, privacy: .public)"
+            )
+        }
+
+        playbackService.loadMedia(from: previewURL)
         waveformTask?.cancel()
         waveformSamples = []
+        let analyzeURL = previewURL
         waveformTask = Task { [weak self] in
-            let samples = await WaveformAnalysisService.analyze(url: url)
+            let samples = await WaveformAnalysisService.analyze(url: analyzeURL)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self?.waveformSamples = samples
             }
         }
+    }
+
+    private func cleanupPlaybackLocalMedia() {
+        playbackLocalMedia?.cleanup()
+        playbackLocalMedia = nil
+    }
+
+    private func clearPlaybackMedia() {
+        waveformTask?.cancel()
+        waveformTask = nil
+        cleanupPlaybackLocalMedia()
+        playbackService.clear()
     }
 
     private func handleEditorKeyDown(_ event: NSEvent) -> Bool {
@@ -1384,7 +1454,8 @@ final class AppModel: ObservableObject {
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Downloads", isDirectory: true)
         if panel.runModal() == .OK, let url = panel.url {
-            importDocument(at: url.standardizedFileURL)
+            // 保留 panel 返回的原始 URL（含 security scope），不要 standardizedFileURL。
+            importDocument(at: url)
         }
     }
 
