@@ -75,10 +75,25 @@ struct OfficialServiceProfile: Equatable {
 }
 
 enum OfficialServiceConfiguration {
+    static let applicationID = "subforge"
     static let activeRegion: OfficialServiceRegion = .china
     static let purchasePlans = OfficialPurchasePlan.allCases
     static let appleProductID = OfficialPurchasePlan.standard.appleProductID
     static let internalProductID = OfficialPurchasePlan.standard.internalProductID
+
+    static func purchaseOrderBody(
+        plan: OfficialPurchasePlan,
+        existingKey: String?
+    ) -> [String: String] {
+        var body = [
+            "applicationId": applicationID,
+            "productId": plan.internalProductID
+        ]
+        if let existingKey, !existingKey.isEmpty {
+            body["existingApiKey"] = existingKey
+        }
+        return body
+    }
 
     static func profile(for region: OfficialServiceRegion) -> OfficialServiceProfile? {
         switch region {

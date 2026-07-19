@@ -624,6 +624,20 @@ final class AppModel: ObservableObject {
                     await self.smartService.refreshWallet()
                 }
                 transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
+                if engine == .officialSmart {
+                    // Treat the shared maximum as a final client-side invariant.
+                    // The server may return already-proofread but unsplit lines.
+                    transcribedSegments = OfficialSmartSubtitleProvider.applySegmentation(
+                        transcribedSegments,
+                        configuration: SubtitleSegmentationConfiguration(
+                            maxCharacters: transcriptionSettings.effectiveMaxSubtitleLength
+                        )
+                    )
+                    transcribedSegments = self.normalizeSegments(
+                        transcribedSegments,
+                        stripTrailingPunctuation: true
+                    )
+                }
                 guard !Task.isCancelled else {
                     self.stopPipelineClock()
                     return

@@ -73,7 +73,10 @@ enum TimedSubtitleSegmenter {
         }
 
         flush()
-        return removeOverlaps(results)
+        return enforceHardCharacterLimit(
+            removeOverlaps(results),
+            maxCharacters: configuration.maxCharacters
+        )
     }
 
     static func segmentEstimated(
@@ -176,5 +179,33 @@ enum TimedSubtitleSegmenter {
             normalized.append(segment)
         }
         return normalized
+    }
+
+    /// Sentence heuristics prefer word boundaries, but the user-facing maximum
+    /// is an invariant. A single oversized Latin token or service result must
+    /// still be split instead of escaping the configured limit.
+    private static func enforceHardCharacterLimit(
+        _ segments: [SubtitleSegment],
+        maxCharacters: Int
+    ) -> [SubtitleSegment] {
+        segments.flatMap { segment in
+            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.count > maxCharacters else { return [segment] }
+
+            let characters = Array(text)
+            let chunks = stride(from: 0, to: characters.count, by: maxCharacters).map { start in
+                String(characters[start..<min(start + maxCharacters, characters.count)])
+            }
+            let duration = max(segment.end - segment.start, 0.1)
+            let total = Double(characters.count)
+            var consumed = 0
+
+            return chunks.map { chunk in
+                let start = segment.start + duration * Double(consumed) / total
+                consumed += chunk.count
+                let end = segment.start + duration * Double(consumed) / total
+                return SubtitleSegment(start: start, end: max(end, start + 0.01), text: chunk)
+            }
+        }
     }
 }

@@ -54,7 +54,10 @@ struct SubtitlePreviewCanvas: View {
                         .fill(Color(nsColor: .windowBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
+                                .strokeBorder(
+                                    SettingsVisualTokens.standardBorder,
+                                    lineWidth: SettingsVisualTokens.borderWidth
+                                )
                         )
 
                     stageFrame(proxy: proxy)

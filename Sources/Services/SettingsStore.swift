@@ -76,7 +76,11 @@ enum SettingsStore {
     }
 
     private static func normalize(_ settings: inout AppSettings) {
-        settings.maxSubtitleLength = settings.effectiveMaxSubtitleLength
+        let legacyLength = min(max(settings.maxSubtitleLength ?? 24, 10), 50)
+        settings.maxSubtitleLength = legacyLength
+        settings.officialMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .official)
+        settings.customMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .custom)
+        settings.localMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .local)
 
         if settings.proofreadingEngine == .appleLocal {
             settings.proofreadingEngine = .cloudLLM

@@ -6,6 +6,30 @@ enum SettingsCardTone {
     case emphasis
 }
 
+enum SettingsVisualTokens {
+    static let standardBorder = Color(nsColor: .separatorColor).opacity(0.50)
+    static let choiceBorder = Color(nsColor: .separatorColor).opacity(0.50)
+    static let selectedBorder = Color.accentColor.opacity(0.90)
+    static let borderWidth: CGFloat = 1
+}
+
+struct SettingsPageHeader: View {
+    let section: SettingsSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(section.rawValue)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.primary)
+
+            Text(section.pageSubtitle)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct SettingsGroup<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
@@ -69,7 +93,7 @@ struct SettingsValidationSection<Content: View, Action: View>: View {
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 }
@@ -95,7 +119,7 @@ struct SettingsSectionCard<Content: View>: View {
         .background(cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(cardStroke, lineWidth: 1)
+                .strokeBorder(cardStroke, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 
@@ -104,12 +128,7 @@ struct SettingsSectionCard<Content: View>: View {
     }
 
     private var cardStroke: Color {
-        switch tone {
-        case .regular:
-            Color(nsColor: .separatorColor).opacity(0.18)
-        case .emphasis:
-            Color(nsColor: .separatorColor).opacity(0.24)
-        }
+        SettingsVisualTokens.standardBorder
     }
 }
 
@@ -128,7 +147,7 @@ struct SettingsListSection<Content: View>: View {
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 }
@@ -259,7 +278,7 @@ struct SettingsCompactPicker<Control: View>: View {
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 1)
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 }
@@ -280,7 +299,7 @@ struct SettingsInsetPanel<Content: View>: View {
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.14), lineWidth: 1)
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
@@ -318,7 +337,7 @@ struct SettingsTipBox: View {
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.06))
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 }

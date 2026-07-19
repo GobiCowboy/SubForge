@@ -19,7 +19,11 @@ struct AppSettings: Equatable, Codable {
     var cloudASRModel: String = CloudASRPreset.dashscope.defaultModel
     var language: String = "zh-CN"
     var sentenceSplitStrategy: SentenceSplitStrategy = .punctuation
+    /// 旧版公共设置，保留用于迁移未分方案的历史配置。
     var maxSubtitleLength: Int? = 24
+    var officialMaxSubtitleLength: Int?
+    var customMaxSubtitleLength: Int?
+    var localMaxSubtitleLength: Int?
     var keepFillerWords = false
     var transcriptionValidationState = SettingsValidationState()
 
@@ -48,7 +52,47 @@ struct AppSettings: Equatable, Codable {
     }
 
     var effectiveMaxSubtitleLength: Int {
-        min(max(maxSubtitleLength ?? 24, 10), 50)
+        effectiveMaxSubtitleLength(for: subtitleLengthProfile)
+    }
+
+    var subtitleLengthProfile: SubtitleLengthProfile {
+        switch transcriptionEngine {
+        case .officialSmart:
+            .official
+        case .cloudASR:
+            .custom
+        case .funASRLocal, .whisperLocal, .appleSpeech:
+            .local
+        }
+    }
+
+    func effectiveMaxSubtitleLength(for profile: SubtitleLengthProfile) -> Int {
+        let configured: Int?
+        switch profile {
+        case .official:
+            configured = officialMaxSubtitleLength
+        case .custom:
+            configured = customMaxSubtitleLength
+        case .local:
+            configured = localMaxSubtitleLength
+        }
+        return Self.clampSubtitleLength(configured ?? maxSubtitleLength ?? 24)
+    }
+
+    mutating func setMaxSubtitleLength(_ value: Int, for profile: SubtitleLengthProfile) {
+        let clamped = Self.clampSubtitleLength(value)
+        switch profile {
+        case .official:
+            officialMaxSubtitleLength = clamped
+        case .custom:
+            customMaxSubtitleLength = clamped
+        case .local:
+            localMaxSubtitleLength = clamped
+        }
+    }
+
+    private static func clampSubtitleLength(_ value: Int) -> Int {
+        min(max(value, 10), 50)
     }
 
     var effectiveLLMURL: String {
@@ -84,6 +128,12 @@ struct AppSettings: Equatable, Codable {
         }
         return "已开启 AI 校对，但配置不完整"
     }
+}
+
+enum SubtitleLengthProfile {
+    case official
+    case custom
+    case local
 }
 
 enum InterfaceLanguage: String, CaseIterable, Codable, Identifiable {

@@ -59,43 +59,31 @@ struct SubtitleSettingsPane: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            pageHeader
-
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(Array(SubtitlePlan.allCases.enumerated()), id: \.element.id) { index, plan in
                     if index > 0 {
                         Divider()
-                            .frame(height: 34)
+                            .frame(height: 52)
                     }
                     planCard(plan)
                 }
             }
             .frame(maxWidth: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
             )
+            .padding(.bottom, 22)
 
-            SharedSubtitleSegmentationSettings(settings: $settings)
+            Divider()
             selectedPlanContent
         }
         .onAppear(perform: rememberLocalEngineIfNeeded)
         .onChange(of: settings.transcriptionEngine) { _, engine in
             guard Self.localEngines.contains(engine) else { return }
             storedLocalTranscriptionEngine = engine.rawValue
-        }
-    }
-
-    private var pageHeader: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("字幕")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.primary)
-            Text("选择生成字幕的方式")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -118,12 +106,12 @@ struct SubtitleSettingsPane: View {
                     ProofreadingSettingsPane(settings: $settings)
                 }
             }
+            .padding(.top, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         case .local:
             VStack(alignment: .leading, spacing: 18) {
-                localExperimentalNotice
-
                 configurationTabs
+                localExperimentalNotice
                 if configurationTab == .transcription {
                     TranscriptionSettingsPane(
                         settings: $settings,
@@ -135,6 +123,7 @@ struct SubtitleSettingsPane: View {
                     ProofreadingSettingsPane(settings: $settings)
                 }
             }
+            .padding(.top, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -167,44 +156,20 @@ struct SubtitleSettingsPane: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
             .background(
-                isSelected ? Color.accentColor.opacity(0.06) : Color.clear
+                isSelected ? Color.accentColor.opacity(0.07) : Color.clear
             )
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle()
-                        .fill(Color.accentColor)
-                        .frame(width: 2)
-                }
-            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, minHeight: 58)
+        .frame(maxWidth: .infinity, minHeight: 52)
         .accessibilityLabel(plan.title)
         .accessibilityValue(isSelected ? "已选择" : "未选择")
     }
 
     private var configurationTabs: some View {
-        HStack(spacing: 16) {
-            Picker("", selection: $configurationTab) {
-                ForEach(SubtitleConfigurationTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.large)
-            .frame(width: 280)
-
-            Spacer(minLength: 12)
-
-            SubtitleConfigurationStatusView(
-                status: .resolve(tab: configurationTab, settings: settings)
-            )
-        }
-        .frame(maxWidth: .infinity)
+        SubtitleConfigurationTabs(selection: $configurationTab, settings: settings)
     }
 
     private var localExperimentalNotice: some View {
@@ -241,7 +206,7 @@ struct SubtitleSettingsPane: View {
         .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
         )
     }
 

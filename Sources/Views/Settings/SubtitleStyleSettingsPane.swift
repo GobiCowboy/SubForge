@@ -273,7 +273,10 @@ private struct SubtitlePresetButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(0.20), lineWidth: 1)
+                    .strokeBorder(
+                        isSelected ? SettingsVisualTokens.selectedBorder : SettingsVisualTokens.choiceBorder,
+                        lineWidth: SettingsVisualTokens.borderWidth
+                    )
             )
         }
         .buttonStyle(.plain)

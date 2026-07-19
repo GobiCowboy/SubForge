@@ -9,18 +9,18 @@ enum KeychainStore {
         case officialServiceKey = "official-service-key"
     }
 
-    private static let service = Bundle.main.bundleIdentifier ?? "com.jago.subforge"
+    private static let baseService = Bundle.main.bundleIdentifier ?? "com.jago.subforge"
+    private static let cacheLock = NSLock()
+    private static var cachedValues: [Account: String] = [:]
 
     static func read(_ account: Account) -> String? {
-        var query = baseQuery(account)
+        if let cached = cachedValue(for: account) {
+            return cached
+        }
+
+        var query = nonInteractiveQuery(account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        // Reading app settings must never summon a system password dialog.
-        // A locked or signature-incompatible item is treated as unavailable and
-        // can be retried after the app is installed with its normal signature.
-        let authenticationContext = LAContext()
-        authenticationContext.interactionNotAllowed = true
-        query[kSecUseAuthenticationContext as String] = authenticationContext
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -32,7 +32,9 @@ enum KeychainStore {
             return nil
         }
 
-        return String(data: data, encoding: .utf8)
+        guard let value = String(data: data, encoding: .utf8) else { return nil }
+        cache(value, for: account)
+        return value
     }
 
     @discardableResult
@@ -44,14 +46,20 @@ enum KeychainStore {
         }
 
         let attributes = [kSecValueData as String: data]
-        let updateQuery = baseQuery(account)
+        let updateQuery = nonInteractiveQuery(account)
         let status = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
+            cache(trimmed, for: account)
             return true
         }
 
-        if status != errSecItemNotFound {
-            SecItemDelete(baseQuery(account) as CFDictionary)
+        // Never delete an item that this signature cannot update. Deleting or
+        // updating a foreign/legacy item can summon the login-keychain dialog.
+        guard status == errSecItemNotFound else {
+            AppLog.settings.error(
+                "keychainUpdateFailed account=\(account.rawValue, privacy: .public) status=\(status, privacy: .public)"
+            )
+            return false
         }
 
         var query = baseQuery(account)
@@ -63,18 +71,69 @@ enum KeychainStore {
                 "keychainSaveFailed account=\(account.rawValue, privacy: .public) status=\(addStatus, privacy: .public)"
             )
         }
+        if addStatus == errSecSuccess {
+            cache(trimmed, for: account)
+        }
         return addStatus == errSecSuccess
     }
 
     static func delete(_ account: Account) {
-        SecItemDelete(baseQuery(account) as CFDictionary)
+        _ = SecItemDelete(nonInteractiveQuery(account) as CFDictionary)
+        _ = cacheLock.withLock {
+            cachedValues.removeValue(forKey: account)
+        }
     }
 
     private static func baseQuery(_ account: Account) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: serviceName(for: account),
             kSecAttrAccount as String: account.rawValue
         ]
+    }
+
+    private static func nonInteractiveQuery(_ account: Account) -> [String: Any] {
+        var query = baseQuery(account)
+        let authenticationContext = LAContext()
+        authenticationContext.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = authenticationContext
+        return query
+    }
+
+    /// The official wallet key is deliberately isolated by signing channel.
+    /// A locally/ad-hoc signed build must not touch a TestFlight/App Store item
+    /// with the same bundle identifier, which otherwise prompts for the login
+    /// keychain password on every visit to the official plan.
+    static func serviceName(for account: Account, signingChannel: String? = nil) -> String {
+        guard account == .officialServiceKey else { return baseService }
+        return "\(baseService).official-service.v2.\(signingChannel ?? currentSigningChannel)"
+    }
+
+    private static var currentSigningChannel: String {
+        if Bundle.main.appStoreReceiptURL.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
+            return "app-store"
+        }
+        guard entitlement("com.apple.application-identifier") as? String != nil else {
+            return "local"
+        }
+        if entitlement("get-task-allow") as? Bool == true {
+            return "development"
+        }
+        return "app-store"
+    }
+
+    private static func entitlement(_ name: String) -> Any? {
+        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
+        return SecTaskCopyValueForEntitlement(task, name as CFString, nil)
+    }
+
+    private static func cachedValue(for account: Account) -> String? {
+        cacheLock.withLock { cachedValues[account] }
+    }
+
+    private static func cache(_ value: String, for account: Account) {
+        cacheLock.withLock {
+            cachedValues[account] = value
+        }
     }
 }

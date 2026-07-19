@@ -17,12 +17,24 @@ import Testing
 }
 
 @Test func officialProductIdentifiersStayAligned() {
+    #expect(OfficialServiceConfiguration.applicationID == "subforge")
     #expect(OfficialServiceConfiguration.internalProductID == "subforge_smart_300")
     #expect(OfficialServiceConfiguration.appleProductID == "com.jago.subforge.smart.300min")
     #expect(OfficialPurchasePlan.starter.appleProductID == "com.jago.subforge.smart.60min")
     #expect(OfficialPurchasePlan.starter.internalProductID == "subforge_smart_60")
     #expect(OfficialPurchasePlan.starter.minutes == 60)
     #expect(OfficialPurchasePlan.standard.minutes == 300)
+}
+
+@Test func officialPurchaseOrderIncludesApplicationIdentity() {
+    let body = OfficialServiceConfiguration.purchaseOrderBody(
+        plan: .standard,
+        existingKey: "wallet-key"
+    )
+
+    #expect(body["applicationId"] == "subforge")
+    #expect(body["productId"] == "subforge_smart_300")
+    #expect(body["existingApiKey"] == "wallet-key")
 }
 
 @Test func officialTaskPollingRetriesOnlyRecoverableFailures() {
@@ -39,6 +51,11 @@ import Testing
             start: 0,
             end: 8,
             text: "这是一段需要按照公共字数限制重新切分的官方智能字幕结果"
+        ),
+        SubtitleSegment(
+            start: 8.1,
+            end: 12,
+            text: "Supercalifragilisticexpialidocious"
         )
     ]
 
@@ -49,6 +66,17 @@ import Testing
 
     #expect(output.count > 1)
     #expect(output.allSatisfy { $0.text.count <= 10 })
+    #expect(output.first?.start == 0)
+    #expect(output.last.map { $0.end <= 12.01 } == true)
+}
+
+@Test func officialWalletUsesSeparateLocalAndAppStoreKeychainServices() {
+    let local = KeychainStore.serviceName(for: .officialServiceKey, signingChannel: "local")
+    let store = KeychainStore.serviceName(for: .officialServiceKey, signingChannel: "app-store")
+
+    #expect(local != store)
+    #expect(local.contains("official-service.v2.local"))
+    #expect(store.contains("official-service.v2.app-store"))
 }
 
 @MainActor

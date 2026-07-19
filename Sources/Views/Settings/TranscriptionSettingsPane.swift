@@ -44,6 +44,13 @@ struct TranscriptionSettingsPane: View {
                     case .whisperLocal, .funASRLocal:
                         EmptyView()
                     }
+
+                    SettingsListRow(title: "单条字幕最大字数", controlWidth: 360) {
+                        SubtitleLengthSlider(
+                            settings: $settings,
+                            profile: settings.subtitleLengthProfile
+                        )
+                    }
                 }
             }
 

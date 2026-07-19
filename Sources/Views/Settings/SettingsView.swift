@@ -19,7 +19,9 @@ struct SettingsView: View {
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
+                VStack(alignment: .leading, spacing: 28) {
+                    SettingsPageHeader(section: selection)
+
                     switch selection {
                     case .general:
                         GeneralSettingsPane(settings: settingsBinding)

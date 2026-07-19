@@ -63,7 +63,10 @@ struct ProofreadingSettingsPane: View {
                                 .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(Color(nsColor: .separatorColor).opacity(0.18))
+                                        .strokeBorder(
+                                            SettingsVisualTokens.standardBorder,
+                                            lineWidth: SettingsVisualTokens.borderWidth
+                                        )
                                 )
                         }
                     }

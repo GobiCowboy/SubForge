@@ -33,4 +33,19 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             "通过自动监听目录，把转写、校对、导出串成自动化工作流"
         }
     }
+
+    var pageSubtitle: String {
+        switch self {
+        case .general:
+            "设置应用的基础偏好"
+        case .subtitles:
+            "选择生成字幕的方式"
+        case .style:
+            "调整字幕的字体、画幅和位置"
+        case .export:
+            "设置字幕格式与保存位置"
+        case .watch:
+            "配置自动处理目录"
+        }
+    }
 }

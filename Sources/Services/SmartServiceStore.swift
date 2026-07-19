@@ -53,12 +53,15 @@ private struct AppleTrialResponse: Decodable {
 final class SmartServiceStore: ObservableObject {
     @Published private(set) var balanceSeconds = 0
     @Published private(set) var productPrices: [OfficialPurchasePlan: String] = [:]
+    @Published private(set) var productCatalogMessage: String?
+    @Published private(set) var hasLoadedProductCatalog = false
     @Published private(set) var statusMessage = "尚未购买智能字幕时长"
     @Published private(set) var isLoading = false
     @Published private(set) var isPurchasing = false
 
     private let profile = OfficialServiceConfiguration.activeProfile
     private let session: URLSession
+    private var hasLoaded = false
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -74,8 +77,14 @@ final class SmartServiceStore: ObservableObject {
         productPrices[plan]
     }
 
-    func load() async {
-        guard !isLoading else { return }
+    func priceText(for plan: OfficialPurchasePlan) -> String {
+        if let price = productPrices[plan] { return price }
+        return hasLoadedProductCatalog ? "暂不可用" : "加载中"
+    }
+
+    func load(force: Bool = false) async {
+        guard !isLoading, force || !hasLoaded else { return }
+        hasLoaded = true
         isLoading = true
         defer { isLoading = false }
         await loadProductPrice()
@@ -170,7 +179,16 @@ final class SmartServiceStore: ObservableObject {
         isPurchasing = true
         defer { isPurchasing = false }
         do {
-            statusMessage = "正在准备 App Store 订单…"
+            statusMessage = "正在连接 App Store…"
+            let products = try await Product.products(for: [plan.appleProductID])
+            guard let product = products.first(where: { $0.id == plan.appleProductID }) else {
+                productCatalogMessage = "TestFlight 未返回该内购商品，请检查 App Store Connect 商品状态与测试账号。"
+                throw SmartPurchaseError.productUnavailable
+            }
+            productPrices[plan] = product.displayPrice
+            productCatalogMessage = nil
+
+            statusMessage = "正在准备购买订单…"
             let order = try await createOrder(
                 plan: plan,
                 existingKey: KeychainStore.read(.officialServiceKey)
@@ -181,11 +199,10 @@ final class SmartServiceStore: ObservableObject {
             guard let accountToken = UUID(uuidString: order.appAccountToken) else {
                 throw SmartPurchaseError.invalidOrder
             }
-            let products = try await Product.products(for: [order.appleProductId])
-            guard let product = products.first(where: { $0.id == order.appleProductId }) else {
-                throw SmartPurchaseError.productUnavailable
+            guard product.id == order.appleProductId else {
+                throw SmartPurchaseError.invalidOrder
             }
-            productPrices[plan] = product.displayPrice
+            statusMessage = "正在打开 Apple 购买窗口…"
             let result = try await product.purchase(options: [.appAccountToken(accountToken)])
             switch result {
             case .success(.verified(let transaction)):
@@ -211,18 +228,37 @@ final class SmartServiceStore: ObservableObject {
             }
         } catch {
             statusMessage = error.localizedDescription
+            AppLog.settings.error(
+                "storeKitPurchaseFailed product=\(plan.appleProductID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
         }
         return false
     }
 
     private func loadProductPrice() async {
-        guard let products = try? await Product.products(
-            for: OfficialServiceConfiguration.purchasePlans.map(\.appleProductID)
-        ) else { return }
-        for plan in OfficialServiceConfiguration.purchasePlans {
-            if let product = products.first(where: { $0.id == plan.appleProductID }) {
-                productPrices[plan] = product.displayPrice
+        do {
+            let products = try await Product.products(
+                for: OfficialServiceConfiguration.purchasePlans.map(\.appleProductID)
+            )
+            hasLoadedProductCatalog = true
+            for plan in OfficialServiceConfiguration.purchasePlans {
+                if let product = products.first(where: { $0.id == plan.appleProductID }) {
+                    productPrices[plan] = product.displayPrice
+                }
             }
+            let missing = OfficialServiceConfiguration.purchasePlans.filter { productPrices[$0] == nil }
+            productCatalogMessage = missing.isEmpty
+                ? nil
+                : "部分内购商品暂不可用；点击购买会重新向 App Store 查询。"
+            AppLog.settings.info(
+                "storeKitProductsLoaded requested=\(OfficialServiceConfiguration.purchasePlans.count, privacy: .public) returned=\(products.count, privacy: .public)"
+            )
+        } catch {
+            hasLoadedProductCatalog = true
+            productCatalogMessage = "无法连接 App Store：\(error.localizedDescription)"
+            AppLog.settings.error(
+                "storeKitProductsLoadFailed error=\(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -234,8 +270,10 @@ final class SmartServiceStore: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body = ["productId": plan.internalProductID]
-        if let existingKey, !existingKey.isEmpty { body["existingApiKey"] = existingKey }
+        let body = OfficialServiceConfiguration.purchaseOrderBody(
+            plan: plan,
+            existingKey: existingKey
+        )
         request.httpBody = try JSONEncoder().encode(body)
         request.timeoutInterval = 30
         return try await send(request)
@@ -250,7 +288,7 @@ final class SmartServiceStore: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode([
-            "applicationId": "subforge",
+            "applicationId": OfficialServiceConfiguration.applicationID,
             "signedAppTransaction": signedAppTransaction
         ])
         request.timeoutInterval = 30
