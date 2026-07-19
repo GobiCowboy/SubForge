@@ -23,7 +23,7 @@ struct PipelineProgressView: View {
                     ForEach(model.pipelineStages) { stage in
                         HStack(spacing: 12) {
                             stageIcon(stage)
-                            Text(stage.stage.rawValue)
+                            Text(stage.title)
                                 .font(.system(size: 14, weight: stage.status == .active ? .semibold : .regular))
                             Spacer()
                         }

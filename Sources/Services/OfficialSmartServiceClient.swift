@@ -1,6 +1,18 @@
 import AVFoundation
 import Foundation
 
+struct OfficialSmartProgressUpdate: Sendable {
+    enum Phase: Sendable {
+        case securingUpload
+        case uploading
+        case processing
+        case finishing
+    }
+
+    let phase: Phase
+    let progress: Double
+}
+
 enum OfficialSmartServiceError: LocalizedError {
     case unavailable
     case keyMissing
@@ -76,6 +88,7 @@ struct OfficialSmartServiceClient {
     let profile: OfficialServiceProfile
     let apiKey: String
     var session: URLSession = .shared
+    var onProgress: (@Sendable (OfficialSmartProgressUpdate) -> Void)?
 
     func wallet() async throws -> OfficialSmartWallet {
         try await request(path: "subtitle-smart/wallet", method: "GET", body: nil)
@@ -101,12 +114,15 @@ struct OfficialSmartServiceClient {
             "language": Self.providerLanguage(language),
             "processingRegion": profile.processingRegion
         ]
+        onProgress?(.init(phase: .securingUpload, progress: 0.24))
         let body = try JSONSerialization.data(withJSONObject: uploadBody)
         let upload: SmartUploadSession = try await request(
             path: "subtitle-smart/uploads", method: "POST", body: body,
             requestID: UUID().uuidString.lowercased()
         )
+        onProgress?(.init(phase: .uploading, progress: 0.32))
         try await OSSMultipartUploader.upload(audioURL: audioURL, policy: upload.upload, session: session)
+        onProgress?(.init(phase: .processing, progress: 0.48))
         let submitBody = try JSONSerialization.data(withJSONObject: ["ossUrl": "oss://\(upload.upload.objectKey)"])
         let _: SmartTaskResponse = try await request(
             path: "subtitle-smart/tasks/\(upload.taskId)/submit", method: "POST", body: submitBody
@@ -115,13 +131,14 @@ struct OfficialSmartServiceClient {
     }
 
     private func poll(taskID: String) async throws -> [SubtitleSegment] {
-        for _ in 0..<300 {
+        for attempt in 0..<300 {
             try Task.checkCancellation()
             let task: SmartTaskResponse = try await request(
                 path: "subtitle-smart/tasks/\(taskID)", method: "GET", body: nil
             )
             switch task.status {
             case "completed":
+                onProgress?(.init(phase: .finishing, progress: 0.92))
                 guard let segments = task.result?.segments, !segments.isEmpty else {
                     throw OfficialSmartServiceError.invalidResponse
                 }
@@ -131,6 +148,8 @@ struct OfficialSmartServiceClient {
             case "failed", "expired":
                 throw OfficialSmartServiceError.taskFailed(task.errorCode ?? task.status)
             default:
+                let progress = min(0.88, 0.50 + Double(attempt) * 0.012)
+                onProgress?(.init(phase: .processing, progress: progress))
                 try await Task.sleep(for: .seconds(2))
             }
         }
@@ -176,13 +195,20 @@ struct OfficialSmartServiceClient {
 }
 
 final class OfficialSmartSubtitleProvider: TranscriptionProvider {
+    private let onProgress: (@Sendable (OfficialSmartProgressUpdate) -> Void)?
+
+    init(onProgress: (@Sendable (OfficialSmartProgressUpdate) -> Void)? = nil) {
+        self.onProgress = onProgress
+    }
+
     func transcribe(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
         guard let key = KeychainStore.read(.officialServiceKey) else {
             throw OfficialSmartServiceError.keyMissing
         }
         return try await OfficialSmartServiceClient(
             profile: OfficialServiceConfiguration.activeProfile,
-            apiKey: key
+            apiKey: key,
+            onProgress: onProgress
         ).process(audioURL: audioURL, language: language)
     }
 }

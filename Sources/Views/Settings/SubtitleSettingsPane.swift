@@ -9,7 +9,7 @@ private enum SubtitlePlan: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .official: "官方"
+        case .official: "官方（推荐）"
         case .custom: "自定义"
         case .local: "本地（实验）"
         }

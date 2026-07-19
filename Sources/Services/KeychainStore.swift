@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 import Security
 
 enum KeychainStore {
@@ -14,6 +15,12 @@ enum KeychainStore {
         var query = baseQuery(account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        // Reading app settings must never summon a system password dialog.
+        // A locked or signature-incompatible item is treated as unavailable and
+        // can be retried after the app is installed with its normal signature.
+        let authenticationContext = LAContext()
+        authenticationContext.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = authenticationContext
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)

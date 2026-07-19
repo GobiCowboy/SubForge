@@ -98,7 +98,7 @@ APP_STORE_PASSWORD="app-specific-password"
 当前声明：
 
 - 不追踪用户
-- 官方智能字幕开启时收集`Audio Data`和`Other User Content`，用途仅为App Functionality，不关联身份且不用于追踪
+- 官方智能字幕开启时收集`Audio Data`和`Other User Content`，并为首装体验与内购处理`User ID`和`Purchase History`；用途仅为App Functionality，不用于追踪
 - Required Reason API:
   - UserDefaults
   - File Timestamp
@@ -126,9 +126,9 @@ App bundle 会嵌入：
 
 SubForge is a macOS utility for turning user-selected audio files into editable subtitles, importing existing SRT files, then exporting SRT and Final Cut Pro XML files. The app can optionally watch a user-selected folder for new audio exported from Final Cut Pro. Folder watching is off by default and only starts after the user selects a folder.
 
-The app uses an on-device FunASR engine by default. Local Whisper and Apple Speech are optional transcription engines. Cloud proofreading is off by default; if the user enables it and enters their own API key, subtitle text is sent to the configured provider for proofreading.
+The app defaults to Smart Subtitle, a managed cloud transcription and AI proofreading service. A first App Store installation receives a one-time 10-minute trial after our server verifies the Apple-signed App Transaction. Local FunASR, Local Whisper, Apple Speech, and user-configured cloud providers remain available as alternative subtitle plans.
 
-The optional Smart Subtitle consumable provides 300 minutes of managed cloud transcription and AI proofreading. Audio is uploaded directly from the Mac to temporary Alibaba Cloud OSS storage using a short-lived upload policy issued by our server. The app never contains our permanent cloud API key. Credits are granted only after our server verifies an App Store Server Notification V2; a client-side successful purchase does not grant credits.
+Smart Subtitle consumables provide either 60 or 300 minutes of managed cloud transcription and AI proofreading. Audio is uploaded directly from the Mac to temporary Alibaba Cloud OSS storage using a short-lived upload policy issued by our server. The app never contains our permanent cloud API key. Credits are granted only after our server verifies an App Store Server Notification V2; a client-side successful purchase does not grant credits.
 
 The app requests Apple Events permission only for the user-triggered “Export to Final Cut Pro” action, which opens Final Cut Pro with the generated FCPXML file.
 
@@ -146,6 +146,9 @@ No account is required. No sample login credentials are needed.
 - 官方智能字幕会将音频直传阿里临时OSS，用于ASR与AI校对；需说明临时存储与删除政策。
 - 目录监听默认关闭，只监听用户选择的目录。
 - 不收集分析数据，不追踪用户。
+- 首装体验会把Apple签名的App Transaction发送至Billing验签；原始JWS和`appTransactionID`不落库，只保存不可逆摘要用于阻止重复领取。
+- 阿里临时OSS音频有效期最长48小时并自动清理；Model API中的字幕结果仅加密暂存24小时。
+- 用户内容只用于完成其发起的字幕处理，不用于研究、模型训练、广告或数据分析。
 
 ## 9. 提交前检查
 
@@ -160,4 +163,4 @@ No account is required. No sample login credentials are needed.
 - 在开启和关闭菜单栏图标时测试 Dock / Command-Tab / 关闭窗口行为
 - 在 App Store Connect 创建两个消耗型商品：`com.jago.subforge.smart.60min`（60分钟，¥6）与 `com.jago.subforge.smart.300min`（300分钟，¥18），并确认价格和本地化状态可销售。
 - 使用StoreKit Sandbox验证购买、取消、pending、Server Notifications V2、只发放一次额度和到账轮询。
-- App Store Connect隐私问卷与`PrivacyInfo.xcprivacy`一致，声明Audio Data和Other User Content用于App Functionality。
+- App Store Connect隐私问卷与`PrivacyInfo.xcprivacy`一致，声明Audio Data、Other User Content、User ID和Purchase History用于App Functionality且不追踪。

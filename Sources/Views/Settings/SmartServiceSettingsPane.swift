@@ -23,7 +23,7 @@ struct OfficialSmartServicePanel: View {
             purchaseSection
 
             SettingsTipBox(
-                text: "购买后，选择音频即可自动完成转写、时间轴和 AI 校对。"
+                text: "购买的时长用于完成转写、时间轴和 AI 校对。音频会上传至云端大模型处理，不会用于研究或数据分析。"
             )
         }
         .task { await service.load() }
@@ -32,24 +32,6 @@ struct OfficialSmartServicePanel: View {
     private var valueSection: some View {
         SettingsSectionCard(tone: .emphasis) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "sparkles.rectangle.stack.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 42, height: 42)
-                        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("把录音直接变成可用字幕")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text("一次处理，自动完成转写、时间轴和 AI 校对。")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
                 HStack(spacing: 10) {
                     serviceFeature("自动转写", detail: "语音一键变文字", systemImage: "waveform")
                     serviceFeature("精准时间轴", detail: "字幕与画面对齐", systemImage: "timeline.selection")
@@ -99,12 +81,13 @@ struct OfficialSmartServicePanel: View {
                             if service.isPurchasing {
                                 ProgressView().controlSize(.small)
                             }
-                            Text(purchaseTitle)
+                            Text("购买")
+                                .font(.system(size: 15, weight: .semibold))
                         }
-                        .frame(minWidth: 220)
+                        .frame(minWidth: 280, minHeight: 28)
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
+                    .controlSize(.large)
                     .disabled(service.isPurchasing)
 
                     Button("刷新额度") {
@@ -195,11 +178,4 @@ struct OfficialSmartServicePanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var purchaseTitle: String {
-        if service.isPurchasing { return "购买处理中…" }
-        if let price = service.price(for: selectedPlan) {
-            return "购买 \(selectedPlan.minutes) 分钟 · \(price)"
-        }
-        return "购买 \(selectedPlan.minutes) 分钟"
-    }
 }

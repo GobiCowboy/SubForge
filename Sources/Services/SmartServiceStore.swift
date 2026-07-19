@@ -6,6 +6,7 @@ enum SmartPurchaseError: LocalizedError {
     case invalidOrder
     case keychainSaveFailed
     case verificationFailed
+    case appTransactionUnavailable
     case server(String)
 
     var errorDescription: String? {
@@ -14,9 +15,17 @@ enum SmartPurchaseError: LocalizedError {
         case .invalidOrder: "购买订单数据无效"
         case .keychainSaveFailed: "无法将官方服务凭证安全保存到钥匙串"
         case .verificationFailed: "StoreKit 交易验证失败"
+        case .appTransactionUnavailable: "暂时无法验证本次 App Store 安装"
         case .server(let code): "购买服务错误：\(code)"
         }
     }
+}
+
+enum SmartTrialActivation: Equatable {
+    case notNeeded
+    case granted(Int)
+    case restored(Int)
+    case unavailable(String)
 }
 
 private struct AppleOrderResponse: Decodable {
@@ -32,6 +41,12 @@ private struct BillingOrderResponse: Decodable {
 
 private struct BillingErrorResponse: Decodable {
     let error: String
+}
+
+private struct AppleTrialResponse: Decodable {
+    let apiKey: String
+    let granted: Bool
+    let trialSeconds: Int
 }
 
 @MainActor
@@ -83,6 +98,37 @@ final class SmartServiceStore: ObservableObject {
             statusMessage = wallet.balanceSeconds > 0 ? "官方智能服务已就绪" : "额度已用完，可继续购买"
         } catch {
             statusMessage = "凭证已保存，等待购买入账"
+        }
+    }
+
+    /// App Store signs one stable app transaction per Apple Account and app.
+    /// Billing verifies that JWS and Model API derives an idempotent trial wallet
+    /// from its one-way digest, so reinstalling cannot create extra trial time.
+    func activateTrialIfNeeded() async -> SmartTrialActivation {
+        if let key = KeychainStore.read(.officialServiceKey), !key.isEmpty {
+            await refreshWallet()
+            return .notNeeded
+        }
+
+        do {
+            let verification = try await AppTransaction.shared
+            guard case .verified = verification else {
+                throw SmartPurchaseError.verificationFailed
+            }
+            let trial = try await claimTrial(
+                signedAppTransaction: verification.jwsRepresentation
+            )
+            guard KeychainStore.save(trial.apiKey, account: .officialServiceKey) else {
+                throw SmartPurchaseError.keychainSaveFailed
+            }
+            await refreshWallet()
+            return trial.granted
+                ? .granted(trial.trialSeconds)
+                : .restored(trial.trialSeconds)
+        } catch {
+            let message = error.localizedDescription
+            statusMessage = message
+            return .unavailable(message)
         }
     }
 
@@ -164,6 +210,22 @@ final class SmartServiceStore: ObservableObject {
         var body = ["productId": plan.internalProductID]
         if let existingKey, !existingKey.isEmpty { body["existingApiKey"] = existingKey }
         request.httpBody = try JSONEncoder().encode(body)
+        request.timeoutInterval = 30
+        return try await send(request)
+    }
+
+    private func claimTrial(signedAppTransaction: String) async throws -> AppleTrialResponse {
+        guard !signedAppTransaction.isEmpty else {
+            throw SmartPurchaseError.appTransactionUnavailable
+        }
+        let url = profile.billingBaseURL.appending(path: "v1/apple/trials")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode([
+            "applicationId": "subforge",
+            "signedAppTransaction": signedAppTransaction
+        ])
         request.timeoutInterval = 30
         return try await send(request)
     }

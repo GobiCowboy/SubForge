@@ -47,6 +47,7 @@ enum PipelineStageStatus {
 
 struct PipelineStageState: Identifiable {
     let stage: PipelineStage
+    let title: String
     var status: PipelineStageStatus
 
     var id: PipelineStage { stage }
@@ -120,7 +121,8 @@ final class AppModel: ObservableObject {
         let initialSettings = SettingsStore.load()
         settings = initialSettings
         pipelineStages = Self.makePipelineStages(
-            proofreadingEnabled: initialSettings.proofreadingEnabled || initialSettings.transcriptionEngine == .officialSmart
+            proofreadingEnabled: initialSettings.proofreadingEnabled || initialSettings.transcriptionEngine == .officialSmart,
+            officialSmart: initialSettings.transcriptionEngine == .officialSmart
         )
         menuBarController.bind(model: self)
         SubForgeAppDelegate.applyActivationPolicy(for: initialSettings)
@@ -178,6 +180,12 @@ final class AppModel: ObservableObject {
             Task { @MainActor in
                 self.handleFunASRHeartbeat(notification)
             }
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            let activation = await self.smartService.activateTrialIfNeeded()
+            self.presentTrialActivation(activation)
         }
     }
 
@@ -367,7 +375,8 @@ final class AppModel: ObservableObject {
         }
         mode = .home
         pipelineStages = Self.makePipelineStages(
-            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart
+            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart,
+            officialSmart: settings.transcriptionEngine == .officialSmart
         )
         pipelineProgress = 0
         pipelineMessage = "等待开始"
@@ -522,7 +531,8 @@ final class AppModel: ObservableObject {
         currentTime = 0
         playbackDuration = 0
         pipelineStages = Self.makePipelineStages(
-            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart
+            proofreadingEnabled: settings.proofreadingEnabled || settings.transcriptionEngine == .officialSmart,
+            officialSmart: settings.transcriptionEngine == .officialSmart
         )
         pipelineProgress = 0
         pipelineMessage = "准备中 · 0s"
@@ -547,9 +557,23 @@ final class AppModel: ObservableObject {
                     }
                     transcriptionSettings = hydrated
                 }
-                if transcriptionSettings.transcriptionEngine == .officialSmart,
-                   KeychainStore.read(.officialServiceKey) == nil {
-                    throw OfficialSmartServiceError.keyMissing
+                if transcriptionSettings.transcriptionEngine == .officialSmart {
+                    if KeychainStore.read(.officialServiceKey) == nil {
+                        let activation = await self.smartService.activateTrialIfNeeded()
+                        self.presentTrialActivation(activation)
+                    } else {
+                        await self.smartService.refreshWallet()
+                    }
+                    guard KeychainStore.read(.officialServiceKey) != nil else {
+                        throw OfficialSmartServiceError.keyMissing
+                    }
+                    if self.smartService.balanceSeconds > 0 {
+                        self.showToast(
+                            "智能字幕可用时长：\(self.smartService.balanceText)",
+                            level: .info,
+                            duration: 3.5
+                        )
+                    }
                 }
 
                 let engine = transcriptionSettings.transcriptionEngine
@@ -570,7 +594,16 @@ final class AppModel: ObservableObject {
                 }
                 self.markStageDone(.prepare, progress: 0.2)
 
-                let provider = TranscriptionService.createProvider(settings: transcriptionSettings)
+                let provider: TranscriptionProvider
+                if engine == .officialSmart {
+                    provider = OfficialSmartSubtitleProvider { [weak self] update in
+                        Task { @MainActor in
+                            self?.handleOfficialSmartProgress(update)
+                        }
+                    }
+                } else {
+                    provider = TranscriptionService.createProvider(settings: transcriptionSettings)
+                }
                 self.markStageActive(.transcribe, progress: 0.36, message: "")
                 self.setPipelinePhase("转写中", progress: 0.36)
 
@@ -665,7 +698,7 @@ final class AppModel: ObservableObject {
                 self.pipelineTask = nil
                 self.mode = .home
                 self.pipelineMessage = failedSeconds > 0 ? "转写失败 · \(failedSeconds)s" : "转写失败"
-                self.showToast("转写失败：\(error.localizedDescription)", level: .error, duration: 4.5)
+                self.showToast(self.pipelineErrorMessage(for: error), level: .error, duration: 4.5)
             }
         }
     }
@@ -719,11 +752,71 @@ final class AppModel: ObservableObject {
         return (resolved, false, nil)
     }
 
-    private static func makePipelineStages(proofreadingEnabled: Bool) -> [PipelineStageState] {
+    private static func makePipelineStages(
+        proofreadingEnabled: Bool,
+        officialSmart: Bool
+    ) -> [PipelineStageState] {
         let stages: [PipelineStage] = proofreadingEnabled
             ? [.prepare, .transcribe, .proofread, .complete]
             : [.prepare, .transcribe, .complete]
-        return stages.map { PipelineStageState(stage: $0, status: .pending) }
+        return stages.map { stage in
+            let title: String
+            if officialSmart {
+                switch stage {
+                case .prepare: title = "准备文件"
+                case .transcribe: title = "上传音频"
+                case .proofread: title = "云端转写与 AI 校对"
+                case .complete: title = "生成字幕"
+                }
+            } else {
+                title = stage.rawValue
+            }
+            return PipelineStageState(stage: stage, title: title, status: .pending)
+        }
+    }
+
+    private func handleOfficialSmartProgress(_ update: OfficialSmartProgressUpdate) {
+        guard mode == .progress else { return }
+        switch update.phase {
+        case .securingUpload:
+            markStageActive(.transcribe, progress: update.progress, message: "")
+            setPipelinePhase("准备安全上传", progress: update.progress)
+        case .uploading:
+            markStageActive(.transcribe, progress: update.progress, message: "")
+            setPipelinePhase("上传音频", progress: update.progress)
+        case .processing:
+            markStageDone(.transcribe, progress: update.progress)
+            markStageActive(.proofread, progress: update.progress, message: "")
+            setPipelinePhase("云端转写与 AI 校对", progress: update.progress)
+        case .finishing:
+            markStageDone(.transcribe, progress: update.progress)
+            markStageDone(.proofread, progress: update.progress)
+            setPipelinePhase("生成字幕", progress: update.progress)
+        }
+    }
+
+    private func presentTrialActivation(_ activation: SmartTrialActivation) {
+        switch activation {
+        case .granted(let seconds):
+            showToast("首次安装已赠送 \(seconds / 60) 分钟智能字幕体验", level: .success, duration: 5)
+        case .restored(let seconds):
+            showToast("已恢复 \(seconds / 60) 分钟智能字幕体验凭证", level: .info, duration: 4)
+        case .notNeeded, .unavailable:
+            break
+        }
+    }
+
+    private func pipelineErrorMessage(for error: Error) -> String {
+        switch error {
+        case OfficialSmartServiceError.insufficientCredits:
+            return "智能字幕时长不足，请前往“设置 > 字幕”购买"
+        case OfficialSmartServiceError.additionalCreditsRequired(let seconds):
+            return "智能字幕时长不足，还需要 \(seconds) 秒；当前方案保持不变"
+        case OfficialSmartServiceError.keyMissing:
+            return "暂时无法领取体验额度，请稍后重试或前往“设置 > 字幕”"
+        default:
+            return "转写失败：\(error.localizedDescription)"
+        }
     }
 
     private func advancePipeline(_ stage: PipelineStage, progress: Double, message: String) async {
