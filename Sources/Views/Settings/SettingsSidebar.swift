@@ -20,7 +20,7 @@ struct SettingsSidebar: View {
 
             Spacer(minLength: 0)
         }
-        .frame(width: 216, alignment: .topLeading)
+        .frame(width: 240, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
     }
@@ -39,7 +39,7 @@ struct SettingsSidebar: View {
         }
         .foregroundStyle(selection == section ? Color.white : Color.primary)
         .padding(.horizontal, 12)
-        .frame(width: 192, height: 38, alignment: .leading)
+        .frame(width: 216, height: 38, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(selection == section ? Color.accentColor : Color.clear)

@@ -1,6 +1,22 @@
 import SwiftUI
 
-private enum CustomSubtitleTab: String, CaseIterable, Identifiable {
+private enum SubtitlePlan: String, CaseIterable, Identifiable {
+    case official
+    case custom
+    case local
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .official: "官方"
+        case .custom: "自定义"
+        case .local: "本地（实验）"
+        }
+    }
+}
+
+private enum SubtitleConfigurationTab: String, CaseIterable, Identifiable {
     case transcription = "转写"
     case proofreading = "AI 校对"
 
@@ -11,170 +27,213 @@ struct SubtitleSettingsPane: View {
     @Binding var settings: AppSettings
     @ObservedObject var service: SmartServiceStore
 
-    @AppStorage("subforge.customTranscriptionEngine")
-    private var storedCustomTranscriptionEngine = TranscriptionEngine.funASRLocal.rawValue
-    @State private var customTab: CustomSubtitleTab = .transcription
+    @AppStorage("subforge.localTranscriptionEngine")
+    private var storedLocalTranscriptionEngine = TranscriptionEngine.funASRLocal.rawValue
+    @State private var configurationTab: SubtitleConfigurationTab = .transcription
+    @State private var isLocalLimitationsExpanded = false
 
-    private var isOfficial: Bool {
-        settings.transcriptionEngine == .officialSmart
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            SettingsGroup(title: "字幕方案") {
-                VStack(spacing: 12) {
-                    planCard(
-                        title: "官方（推荐）",
-                        subtitle: "无需配置，自动完成转写和 AI 校对",
-                        summary: "云端转写 + AI 校对",
-                        systemImage: "sparkles.rectangle.stack.fill",
-                        selected: isOfficial,
-                        action: selectOfficial
-                    )
-
-                    planCard(
-                        title: "自定义",
-                        subtitle: "使用自己的转写和 AI 校对服务",
-                        summary: customSummary,
-                        systemImage: "slider.horizontal.3",
-                        selected: !isOfficial,
-                        action: selectCustom
-                    )
-                }
-            }
-
-            if isOfficial {
-                OfficialSmartServicePanel(settings: $settings, service: service)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            } else {
-                customSettings
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .animation(.easeInOut(duration: 0.22), value: isOfficial)
-        .onAppear(perform: rememberCurrentCustomEngine)
-        .onChange(of: settings.transcriptionEngine) { _, engine in
-            guard engine != .officialSmart else { return }
-            storedCustomTranscriptionEngine = engine.rawValue
+    private var selectedPlan: SubtitlePlan {
+        switch settings.transcriptionEngine {
+        case .officialSmart:
+            .official
+        case .cloudASR:
+            .custom
+        case .funASRLocal, .whisperLocal, .appleSpeech:
+            .local
         }
     }
 
-    private var customSummary: String {
-        let transcription = customTranscriptionEngine.rawValue
-        let proofreading = settings.proofreadingEnabled
-            ? settings.cloudLLMPreset.rawValue
-            : "未配置"
-        return "转写：\(transcription)\nAI 校对：\(proofreading)"
-    }
-
-    private var customTranscriptionEngine: TranscriptionEngine {
-        guard let engine = TranscriptionEngine(rawValue: storedCustomTranscriptionEngine),
-              engine != .officialSmart else {
+    private var localTranscriptionEngine: TranscriptionEngine {
+        guard let engine = TranscriptionEngine(rawValue: storedLocalTranscriptionEngine),
+              Self.localEngines.contains(engine) else {
             return .funASRLocal
         }
         return engine
     }
 
-    private var customSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            SettingsGroup(title: "自定义设置") {
-                Picker("自定义设置", selection: $customTab) {
-                    ForEach(CustomSubtitleTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 260)
-            }
+    private static let localEngines: [TranscriptionEngine] = [
+        .funASRLocal,
+        .whisperLocal,
+        .appleSpeech
+    ]
 
-            switch customTab {
-            case .transcription:
-                TranscriptionSettingsPane(
-                    settings: $settings,
-                    allowsOfficialSmart: false
-                )
-            case .proofreading:
-                ProofreadingSettingsPane(settings: $settings)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            pageHeader
+
+            HStack(spacing: 0) {
+                ForEach(Array(SubtitlePlan.allCases.enumerated()), id: \.element.id) { index, plan in
+                    if index > 0 {
+                        Divider()
+                            .frame(height: 34)
+                    }
+                    planCard(plan)
+                }
             }
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 1)
+            )
+
+            selectedPlanContent
+        }
+        .animation(.easeInOut(duration: 0.22), value: selectedPlan)
+        .onAppear(perform: rememberLocalEngineIfNeeded)
+        .onChange(of: settings.transcriptionEngine) { _, engine in
+            guard Self.localEngines.contains(engine) else { return }
+            storedLocalTranscriptionEngine = engine.rawValue
         }
     }
 
-    private func planCard(
-        title: String,
-        subtitle: String,
-        summary: String,
-        systemImage: String,
-        selected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
-                    .padding(.top, 1)
+    private var pageHeader: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("字幕")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.primary)
+            Text("选择生成字幕的方式")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+    }
 
-                Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
-                    .frame(width: 34, height: 34)
-                    .background(
-                        (selected ? Color.accentColor : Color.secondary).opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+    @ViewBuilder
+    private var selectedPlanContent: some View {
+        switch selectedPlan {
+        case .official:
+            OfficialSmartServicePanel(settings: $settings, service: service)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        case .custom:
+            VStack(alignment: .leading, spacing: 28) {
+                configurationTabs
+                if configurationTab == .transcription {
+                    TranscriptionSettingsPane(
+                        settings: $settings,
+                        allowsOfficialSmart: false,
+                        allowedEngines: [.cloudASR],
+                        showsEnginePicker: false
                     )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ProofreadingSettingsPane(settings: $settings)
                 }
-
-                Spacer(minLength: 14)
-
-                Text(summary)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(selected ? .primary : .secondary)
-                    .multilineTextAlignment(.trailing)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                selected ? Color.accentColor.opacity(0.07) : Color(nsColor: .controlBackgroundColor),
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(
-                        selected ? Color.accentColor.opacity(0.45) : Color(nsColor: .separatorColor).opacity(0.18),
-                        lineWidth: selected ? 1.5 : 1
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        case .local:
+            VStack(alignment: .leading, spacing: 18) {
+                localExperimentalNotice
+
+                configurationTabs
+                if configurationTab == .transcription {
+                    TranscriptionSettingsPane(
+                        settings: $settings,
+                        allowsOfficialSmart: false,
+                        allowedEngines: Self.localEngines,
+                        enginePickerTitle: "本地模型"
                     )
+                } else {
+                    ProofreadingSettingsPane(settings: $settings)
+                }
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    private func planCard(_ plan: SubtitlePlan) -> some View {
+        let isSelected = selectedPlan == plan
+
+        return Button {
+            select(plan)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+
+                Text(plan.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.06) : Color.clear
             )
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Rectangle()
+                        .fill(Color.accentColor)
+                        .frame(width: 2)
+                }
+            }
         }
         .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityLabel(title)
-        .accessibilityValue(selected ? "已选择" : "未选择")
+        .contentShape(Rectangle())
+        .accessibilityLabel(plan.title)
+        .accessibilityValue(isSelected ? "已选择" : "未选择")
     }
 
-    private func selectOfficial() {
-        rememberCurrentCustomEngine()
-        settings.transcriptionEngine = .officialSmart
+    private var configurationTabs: some View {
+        Picker("字幕配置", selection: $configurationTab) {
+            ForEach(SubtitleConfigurationTab.allCases) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 220)
     }
 
-    private func selectCustom() {
-        settings.transcriptionEngine = customTranscriptionEngine
+    private var localExperimentalNotice: some View {
+        DisclosureGroup(isExpanded: $isLocalLimitationsExpanded) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("转写在本地完成；启用 AI 校对后，将使用你配置的云端服务。")
+                Text("• 当前时间轴精度较低")
+                Text("• 不建议用于正式字幕制作")
+                Text("• 推荐使用官方智能字幕获得最佳体验")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .padding(.top, 8)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "flask.fill")
+                    .foregroundStyle(.orange)
+                Text("本地识别（实验）")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("时间轴精度较低")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+        )
     }
 
-    private func rememberCurrentCustomEngine() {
-        guard settings.transcriptionEngine != .officialSmart else { return }
-        storedCustomTranscriptionEngine = settings.transcriptionEngine.rawValue
+    private func select(_ plan: SubtitlePlan) {
+        switch plan {
+        case .official:
+            rememberLocalEngineIfNeeded()
+            settings.transcriptionEngine = .officialSmart
+            configurationTab = .transcription
+        case .custom:
+            rememberLocalEngineIfNeeded()
+            settings.transcriptionEngine = .cloudASR
+            configurationTab = .transcription
+        case .local:
+            settings.transcriptionEngine = localTranscriptionEngine
+            configurationTab = .transcription
+        }
+    }
+
+    private func rememberLocalEngineIfNeeded() {
+        guard Self.localEngines.contains(settings.transcriptionEngine) else { return }
+        storedLocalTranscriptionEngine = settings.transcriptionEngine.rawValue
     }
 }

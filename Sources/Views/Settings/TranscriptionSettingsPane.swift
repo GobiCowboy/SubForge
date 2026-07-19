@@ -1,16 +1,15 @@
-import AVFoundation
 import SwiftUI
 
 struct TranscriptionSettingsPane: View {
     @EnvironmentObject private var model: AppModel
     @Binding var settings: AppSettings
     var allowsOfficialSmart: Bool = true
+    var allowedEngines: [TranscriptionEngine]? = nil
+    var showsEnginePicker: Bool = true
+    var enginePickerTitle: String = "转写引擎"
 
     @State private var isTesting = false
     @State private var validationState = SettingsValidationState()
-    @State private var isPlayingTestAudio = false
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var audioDelegate: SettingsAudioPlayDelegate?
     @State private var downloadingModel: WhisperModel?
     @State private var downloadProgress: Double?
     @State private var isDownloadingFunASR = false
@@ -21,7 +20,10 @@ struct TranscriptionSettingsPane: View {
         VStack(alignment: .leading, spacing: 32) {
             SettingsGroup(title: "转写配置") {
                 SettingsListSection {
-                    transcriptionHeaderControls
+                    if showsEnginePicker {
+                        enginePickerControl
+                    }
+                    languagePickerControl
                     subtitleSegmentationControls
 
                     switch settings.transcriptionEngine {
@@ -48,43 +50,27 @@ struct TranscriptionSettingsPane: View {
             }
 
             SettingsGroup(title: "转写验证") {
-                SettingsSectionCard(tone: .emphasis) {
-                    SettingsStatusRow(
-                        title: "当前引擎",
-                        value: settings.transcriptionEngine.rawValue,
-                        tint: .secondary
-                    )
-
-                    SettingsValidationResultBox(
-                        title: "测试音频原文",
-                        hasValidated: validationState.hasValidated,
-                        isSuccess: validationState.passed,
-                        originalText: SettingsTestAsset.expectedASRText,
-                        resultText: validationState.resultText
-                    )
-
-                    SettingsActionRow {
-                        Button(action: toggleTestAudio) {
-                            Label(isPlayingTestAudio ? "停止试听" : "试听测试音频", systemImage: isPlayingTestAudio ? "stop.fill" : "play.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                    } secondary: {
-                        Button(action: runTranscriptionTest) {
-                            HStack(spacing: 8) {
-                                if isTesting {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                                Text(isTesting ? "验证中..." : "验证当前转写配置")
+                HStack(spacing: 12) {
+                    Button(action: runTranscriptionTest) {
+                        HStack(spacing: 8) {
+                            if isTesting {
+                                ProgressView()
+                                    .controlSize(.small)
                             }
-                            .frame(maxWidth: .infinity)
+                            Label(isTesting ? "验证中..." : "验证当前转写配置", systemImage: "checkmark.shield")
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(isTesting || validationBlocked)
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                    .disabled(isTesting || validationBlocked)
+
+                    if validationState.hasValidated {
+                        Text(validationState.passed ? "验证通过" : "验证未通过")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(validationState.passed ? .green : .orange)
+                    }
+
+                    Spacer(minLength: 0)
                 }
             }
         }
@@ -104,33 +90,39 @@ struct TranscriptionSettingsPane: View {
         }
     }
 
-    private var transcriptionHeaderControls: some View {
-        HStack(spacing: 12) {
-            SettingsCompactPicker(title: "转写引擎", systemImage: "waveform") {
-                Picker("转写引擎", selection: $settings.transcriptionEngine) {
-                    ForEach(TranscriptionEngine.allCases.filter { allowsOfficialSmart || $0 != .officialSmart }) { engine in
-                        Text(engine.rawValue).tag(engine)
-                    }
+    private var enginePickerControl: some View {
+        SettingsCompactPicker(title: enginePickerTitle, systemImage: "waveform") {
+            Picker(enginePickerTitle, selection: $settings.transcriptionEngine) {
+                ForEach(selectableEngines) { engine in
+                    Text(engine.rawValue).tag(engine)
                 }
-                .labelsHidden()
-                .frame(width: 168)
             }
-
-            SettingsCompactPicker(title: "语言", systemImage: "globe") {
-                Picker("语言", selection: $settings.language) {
-                    Text("中文").tag("zh-CN")
-                    Text("中文（繁体）").tag("zh-TW")
-                    Text("中英混合").tag("zh-CN,en-US")
-                    Text("English").tag("en-US")
-                    Text("日本語").tag("ja-JP")
-                    Text("한국어").tag("ko-KR")
-                }
-                .labelsHidden()
-                .frame(width: 168)
-            }
+            .labelsHidden()
+            .frame(width: 168)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
+        .padding(.horizontal, 16)
+    }
+
+    private var languagePickerControl: some View {
+        SettingsCompactPicker(title: "语言", systemImage: "globe") {
+            Picker("语言", selection: $settings.language) {
+                Text("中文").tag("zh-CN")
+                Text("中文（繁体）").tag("zh-TW")
+                Text("中英混合").tag("zh-CN,en-US")
+                Text("English").tag("en-US")
+                Text("日本語").tag("ja-JP")
+                Text("한국어").tag("ko-KR")
+            }
+            .labelsHidden()
+            .frame(width: 168)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private var selectableEngines: [TranscriptionEngine] {
+        let engines = allowedEngines ?? TranscriptionEngine.allCases
+        return engines.filter { allowsOfficialSmart || $0 != .officialSmart }
     }
 
     private var validationBlocked: Bool {
@@ -417,33 +409,6 @@ struct TranscriptionSettingsPane: View {
         settings.transcriptionValidationState = state
     }
 
-    private func toggleTestAudio() {
-        if isPlayingTestAudio {
-            audioPlayer?.stop()
-            isPlayingTestAudio = false
-            return
-        }
-
-        guard let audioURL = SettingsTestAsset.audioURL() else {
-            model.toast = ToastMessage(text: "测试音频不存在", level: .error)
-            return
-        }
-
-        do {
-            let player = try AVAudioPlayer(contentsOf: audioURL)
-            let delegate = SettingsAudioPlayDelegate {
-                isPlayingTestAudio = false
-            }
-            audioPlayer = player
-            audioDelegate = delegate
-            player.delegate = delegate
-            player.play()
-            isPlayingTestAudio = true
-        } catch {
-            model.toast = ToastMessage(text: "播放测试音频失败：\(error.localizedDescription)", level: .error)
-        }
-    }
-
     private func downloadModel(_ candidate: WhisperModel) {
         downloadingModel = candidate
         downloadProgress = 0
@@ -513,17 +478,5 @@ struct TranscriptionSettingsPane: View {
             return "下载中..."
         }
         return "下载中 \(Int(funASRDownloadProgress * 100))%"
-    }
-}
-
-private final class SettingsAudioPlayDelegate: NSObject, AVAudioPlayerDelegate {
-    let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
     }
 }

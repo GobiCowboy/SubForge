@@ -16,80 +16,81 @@ struct OfficialSmartServicePanel: View {
     @ObservedObject var service: SmartServiceStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            SettingsSectionCard(tone: .emphasis) {
-                HStack(alignment: .top, spacing: 16) {
-                    Image(systemName: "sparkles.rectangle.stack.fill")
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 44, height: 44)
-                        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsGroup(title: "智能字幕") {
+                SettingsSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "sparkles.rectangle.stack.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 38, height: 38)
+                                .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("官方智能字幕")
-                            .font(.system(size: 17, weight: .semibold))
-                        Text("无需配置，自动完成转写、时间轴和 AI 校对")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer(minLength: 0)
-                    SettingsPill(text: "即开即用", tint: .green)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    serviceFeatureRow("自动转写")
-                    serviceFeatureRow("自动生成时间轴")
-                    serviceFeatureRow("自动 AI 校对")
-                }
-
-                Divider()
-
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("剩余时长")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Text(service.balanceText)
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                    }
-
-                    Spacer(minLength: 16)
-
-                    HStack(spacing: 10) {
-                        Button {
-                            Task {
-                                _ = await service.purchase300Minutes()
-                                settings.transcriptionEngine = .officialSmart
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("ASR + AI 校对")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("一次处理，直接得到可用字幕")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
                             }
-                        } label: {
-                            HStack(spacing: 8) {
-                                if service.isPurchasing {
-                                    ProgressView().controlSize(.small)
+
+                            Spacer(minLength: 0)
+                        }
+
+                        HStack(spacing: 8) {
+                            serviceFeaturePill("自动转写", systemImage: "waveform")
+                            serviceFeaturePill("时间轴", systemImage: "timeline.selection")
+                            serviceFeaturePill("AI 校对", systemImage: "wand.and.stars")
+                        }
+                    }
+
+                    Divider()
+
+                    HStack(alignment: .bottom, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("剩余时长")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            Text(service.balanceText)
+                                .font(.system(size: 26, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                        }
+
+                        Spacer(minLength: 0)
+
+                        HStack(spacing: 8) {
+                            Button {
+                                Task {
+                                    _ = await service.purchase300Minutes()
+                                    settings.transcriptionEngine = .officialSmart
                                 }
-                                Text(purchaseTitle)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    if service.isPurchasing {
+                                        ProgressView().controlSize(.small)
+                                    }
+                                    Text(purchaseTitle)
+                                }
+                                .frame(minWidth: 154)
                             }
-                            .frame(minWidth: 154)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(service.isPurchasing)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                            .disabled(service.isPurchasing)
 
-                        Button("刷新额度") {
-                            Task { await service.refreshWallet() }
+                            Button("刷新额度") {
+                                Task { await service.refreshWallet() }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                            .disabled(service.isLoading || service.isPurchasing)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .disabled(service.isLoading || service.isPurchasing)
                     }
                 }
             }
 
             SettingsTipBox(
-                text: "使用云端智能字幕时，音频和字幕仅用于完成本次转写与校对，不用于模型训练或研究。"
+                text: "选择音频后，SubForge 会自动完成转写、时间轴和 AI 校对。"
             )
         }
         .task { await service.load() }
@@ -101,13 +102,12 @@ struct OfficialSmartServicePanel: View {
         return "购买 300 分钟"
     }
 
-    private func serviceFeatureRow(_ text: String) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-        }
-        .foregroundStyle(.primary)
+    private func serviceFeaturePill(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

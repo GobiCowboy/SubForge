@@ -10,8 +10,8 @@ struct AppSettings: Equatable, Codable {
     var interfaceLanguage: InterfaceLanguage = .simplifiedChinese
     var showMenuBarIcon = true
 
-    /// 新安装默认本地 FunASR；已有用户配置不因升级被强制改写。
-    var transcriptionEngine: TranscriptionEngine = .funASRLocal
+    /// 新安装默认官方智能字幕；已有用户配置不因升级被强制改写。
+    var transcriptionEngine: TranscriptionEngine = .officialSmart
     var whisperModel: WhisperModel = .base
     var cloudASRPreset: CloudASRPreset = .dashscope
     var cloudASRURL: String = CloudASRPreset.dashscope.defaultURL

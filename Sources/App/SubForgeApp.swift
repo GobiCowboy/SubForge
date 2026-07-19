@@ -13,7 +13,11 @@ struct SubForgeApp: App {
     }
 
     private var mainWindow: some Scene {
-        WindowGroup("SubForge") {
+        // The app has one primary workspace. A WindowGroup lets macOS restore
+        // or create multiple copies of that workspace (for example via ⌘N),
+        // which is confusing for a menu-bar utility. Use a keyed Window so
+        // there is always exactly one main window.
+        Window("SubForge", id: "main") {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 1180, minHeight: 760)

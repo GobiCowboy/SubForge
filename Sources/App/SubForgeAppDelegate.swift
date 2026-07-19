@@ -10,6 +10,12 @@ final class SubForgeAppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    // Closing the workspace should leave the menu-bar app running. The user
+    // can reopen it from “显示 SubForge” or the Applications menu.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     static func applyActivationPolicy(for settings: AppSettings) {
         showDockIcon()
     }

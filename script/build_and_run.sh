@@ -330,17 +330,22 @@ sign_bundle_if_requested() {
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE" >/dev/null 2>&1 &
 
-  # SwiftUI WindowGroup 可能恢复为“无可见窗口”。本地运行入口模拟一次
-  # 用户的 ⌘N，确保测试时主窗口先创建；应用内菜单栏随后可正常复用它。
+  # 给 SwiftUI 单实例 Window 留出状态恢复时间。只有确认没有任何
+  # 主窗口时才模拟一次 ⌘N，避免和 macOS 的窗口恢复时机撞车。
   for _ in {1..20}; do
     pgrep -x "$APP_NAME" >/dev/null 2>&1 && break
     sleep 0.1
   done
-  # 给 macOS 窗口状态恢复留出时间，避免恢复中的窗口被重复创建。
-  sleep 3
-  window_count="$(/usr/bin/osascript \
-    -e "tell application \"System Events\" to tell process \"$APP_NAME\" to count windows" \
-    2>/dev/null || printf '0')"
+  window_count=0
+  for _ in {1..30}; do
+    window_count="$(/usr/bin/osascript \
+      -e "tell application \"System Events\" to tell process \"$APP_NAME\" to count windows" \
+      2>/dev/null || printf '0')"
+    if [ "$window_count" -gt 0 ] 2>/dev/null; then
+      break
+    fi
+    sleep 0.25
+  done
   if [ "$window_count" -eq 0 ] 2>/dev/null; then
     /usr/bin/osascript \
       -e "tell application \"$APP_NAME\" to activate" \

@@ -10,7 +10,11 @@ struct ProofreadingSettingsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "校对配置") {
+            if let configurationStatusText {
+                SettingsTipBox(text: configurationStatusText)
+            }
+
+            SettingsGroup(title: "AI 校对配置") {
                 SettingsListSection {
                     SettingsListRow(title: "启用模型纠正") {
                         Toggle("", isOn: $settings.proofreadingEnabled)
@@ -66,7 +70,7 @@ struct ProofreadingSettingsPane: View {
                 }
             }
 
-            SettingsGroup(title: "校对验证") {
+            SettingsGroup(title: "AI 校对验证") {
                 SettingsSectionCard(tone: .emphasis) {
                     SettingsStatusRow(
                         title: "当前模型",
@@ -134,6 +138,16 @@ struct ProofreadingSettingsPane: View {
                 model.notifyUser(warning, level: .error, duration: 3.5)
             }
         }
+    }
+
+    private var configurationStatusText: String? {
+        if !settings.proofreadingEnabled {
+            return "未配置 AI 校对。当前仅进行转写。"
+        }
+        if let warning = settings.proofreadingConfigWarning {
+            return "\(warning)。当前仅进行转写。"
+        }
+        return nil
     }
 
     private func runProofreadingTest() {

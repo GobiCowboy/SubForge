@@ -16,6 +16,13 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.isReleasedWhenClosed = false
         window.title = "SubForge"
+        // SwiftUI may replace the NSWindow delegate. Routing the close button
+        // directly through this controller keeps the red button as “hide
+        // window” instead of letting the last-window termination path run.
+        if let closeButton = window.standardWindowButton(.closeButton) {
+            closeButton.target = self
+            closeButton.action = #selector(closeButtonPressed(_:))
+        }
         AppLog.lifecycle.info("main window attached id=\(ObjectIdentifier(window).hashValue, privacy: .public)")
     }
 
@@ -40,6 +47,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func setHidesDockOnClose(_ hidesDockOnClose: Bool) {
         self.hidesDockOnClose = hidesDockOnClose
+    }
+
+    @objc private func closeButtonPressed(_ sender: Any?) {
+        guard let window else { return }
+        window.orderOut(nil)
+        if hidesDockOnClose {
+            SubForgeAppDelegate.hideDockIconForMenuBarResidentMode()
+        }
+        AppLog.lifecycle.info("main window close button intercepted, hidden to menu bar")
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
