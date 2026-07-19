@@ -92,6 +92,10 @@ stage_bundle() {
   <string>SubForge 需要语音识别权限，将用户选择的音频转写为字幕。</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>SubForge 需要控制 Final Cut Pro 来导入导出的 FCPXML。</string>
+  <key>SKIncludeConsumableInAppPurchaseHistory</key>
+  <true/>
+  <key>SubForgeSigningChannel</key>
+  <string>local</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>

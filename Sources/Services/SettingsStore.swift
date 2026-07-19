@@ -37,8 +37,10 @@ enum SettingsStore {
                 persistPreferences(settings, includeSecrets: false)
             }
 
-            settings.cloudASRKey = KeychainStore.read(.cloudASRKey) ?? settings.cloudASRKey
-            settings.cloudLLMKey = KeychainStore.read(.cloudLLMKey) ?? settings.cloudLLMKey
+            // Do not touch Keychain during app launch. Development and App Store
+            // signatures have different ACLs, and an eager read can summon the
+            // login-keychain password dialog before the user needs either key.
+            // Each settings/provider path hydrates only the secret it actually uses.
         }
 
         return settings

@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 struct SubtitleSegmentationConfiguration: Equatable {
     var maxCharacters: Int
@@ -23,36 +24,65 @@ private extension Character {
 }
 
 enum TimedSubtitleSegmenter {
+    private struct TaggedWord {
+        var word: SubtitleWord
+        var lexicalClass: NLTag?
+    }
+
     private static let strongBreaks: Set<Character> = ["。", "！", "？", "!", "?", ".", ";", "；"]
     private static let softBreaks: Set<Character> = ["，", ",", "、", "：", ":", "—", "–"]
+    private static let weakLineEndWords: Set<String> = [
+        "的", "了", "着", "过", "呢", "吗", "吧", "啊", "呀", "和", "与", "或", "但", "而",
+        "在", "把", "被", "让", "从", "向", "对", "为", "是", "有", "就", "都", "又", "还",
+        "也", "很", "更", "最", "不", "没", "会", "能", "可", "要", "将", "你", "我", "他",
+        "她", "它", "这", "那", "其"
+    ]
 
     static func segment(
         _ input: [SubtitleWord],
         configuration: SubtitleSegmentationConfiguration
     ) -> [SubtitleSegment] {
-        let words = input
+        let normalizedInput = input
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.end > $0.start }
             .sorted { $0.start < $1.start }
+        let words = semanticWords(normalizedInput, configuration: configuration)
         guard !words.isEmpty else { return [] }
 
         var results: [SubtitleSegment] = []
         var current: [SubtitleWord] = []
 
-        func flush() {
-            guard let first = current.first, let last = current.last else { return }
+        func emitPrefix(_ count: Int) {
+            let safeCount = min(max(count, 0), current.count)
+            guard safeCount > 0 else { return }
+            let prefix = Array(current.prefix(safeCount))
+            guard let first = prefix.first, let last = prefix.last else { return }
             results.append(
                 SubtitleSegment(
                     start: first.start,
                     end: max(last.end, first.start + 0.1),
-                    text: joinedText(current),
-                    words: current
+                    text: joinedText(prefix),
+                    words: prefix
                 )
             )
-            current = []
+            current.removeFirst(safeCount)
+        }
+
+        func flush() {
+            emitPrefix(current.count)
         }
 
         for word in words {
-            if shouldFlushBeforeAdding(word, to: current, configuration: configuration) {
+            let pause = word.start - (current.last?.end ?? word.start)
+            if !current.isEmpty && pause > 0.65 {
+                flush()
+            }
+
+            while !current.isEmpty,
+                  joinedText(current + [word]).count > configuration.maxCharacters {
+                emitPrefix(preferredBreakIndex(in: current, upcoming: word, configuration: configuration))
+            }
+
+            if let first = current.first, word.end - first.start > configuration.maxDuration {
                 flush()
             }
 
@@ -66,79 +96,161 @@ enum TimedSubtitleSegmenter {
 
             if strongBreak
                 || duration >= configuration.maxDuration
-                || text.count >= configuration.maxCharacters
                 || (softBreak && (text.count >= preferredLength || duration >= configuration.preferredDuration)) {
                 flush()
             }
         }
 
         flush()
-        return enforceHardCharacterLimit(
-            removeOverlaps(results),
-            maxCharacters: configuration.maxCharacters
-        )
+        return removeOverlaps(results)
     }
 
     static func segmentEstimated(
         _ input: [SubtitleSegment],
         configuration: SubtitleSegmentationConfiguration
     ) -> [SubtitleSegment] {
-        let words = input.flatMap { segment -> [SubtitleWord] in
-            let tokens = lexicalTokens(segment.text)
-            guard !tokens.isEmpty else { return [] }
-
-            let totalUnits = max(tokens.reduce(0) { $0 + max($1.count, 1) }, 1)
-            let duration = max(segment.end - segment.start, 0.1)
-            var cursor = segment.start
-
-            return tokens.enumerated().map { index, token in
-                let weight = Double(max(token.count, 1)) / Double(totalUnits)
-                let end = index == tokens.count - 1
-                    ? segment.end
-                    : min(segment.end, cursor + duration * weight)
-                let word = SubtitleWord(start: cursor, end: max(end, cursor + 0.01), text: token)
-                cursor = end
-                return word
-            }
+        let coarseWords = input.map { segment in
+            SubtitleWord(start: segment.start, end: segment.end, text: segment.text)
         }
-        return segment(words, configuration: configuration)
+        return segment(coarseWords, configuration: configuration)
     }
 
-    private static func shouldFlushBeforeAdding(
-        _ word: SubtitleWord,
-        to current: [SubtitleWord],
+    /// 最大字数是排版目标，不是字符刀。超过目标时在附近的自然词边界回退，
+    /// 宁可让一个不可拆的专名略微超出，也不把词组或英文名称劈开。
+    private static func preferredBreakIndex(
+        in current: [SubtitleWord],
+        upcoming: SubtitleWord,
         configuration: SubtitleSegmentationConfiguration
-    ) -> Bool {
-        guard let first = current.first else { return false }
-        let proposedText = joinedText(current + [word])
-        let proposedDuration = word.end - first.start
-        return proposedText.count > configuration.maxCharacters
-            || proposedDuration > configuration.maxDuration
-            || word.start - (current.last?.end ?? word.start) > 0.65
-    }
+    ) -> Int {
+        guard current.count > 1 else { return current.count }
+        let target = configuration.maxCharacters
+        let minimum = max(4, Int(Double(target) * 0.52))
+        var bestIndex = current.count
+        var bestScore = Int.min
 
-    private static func lexicalTokens(_ text: String) -> [String] {
-        var tokens: [String] = []
-        var latinWord = ""
+        for index in 1...current.count {
+            let prefix = Array(current.prefix(index))
+            let length = joinedText(prefix).count
+            guard length >= minimum, length <= target else { continue }
+            let previous = prefix.last!
+            let next = index < current.count ? current[index] : upcoming
+            var score = -abs(target - length) * 4
 
-        func flushLatinWord() {
-            guard !latinWord.isEmpty else { return }
-            tokens.append(latinWord)
-            latinWord = ""
-        }
+            if let last = previous.text.last, strongBreaks.contains(last) {
+                score += 1_000
+            } else if let last = previous.text.last, softBreaks.contains(last) {
+                score += 650
+            }
 
-        for character in text {
-            if character.isASCIIWordCharacter {
-                latinWord.append(character)
-            } else {
-                flushLatinWord()
-                if !character.isWhitespace {
-                    tokens.append(String(character))
-                }
+            let pause = next.start - previous.end
+            if pause >= 0.25 {
+                score += min(Int(pause * 300), 240)
+            }
+
+            let previousText = previous.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if weakLineEndWords.contains(previousText) {
+                score -= 220
+            }
+            if next.text.count == 1, weakLineEndWords.contains(next.text) {
+                score += 18
+            }
+
+            if score > bestScore {
+                bestScore = score
+                bestIndex = index
             }
         }
-        flushLatinWord()
-        return tokens
+        return bestIndex
+    }
+
+    private static func semanticWords(
+        _ input: [SubtitleWord],
+        configuration: SubtitleSegmentationConfiguration
+    ) -> [SubtitleWord] {
+        let expanded = input.flatMap { source -> [TaggedWord] in
+            let pieces = lexicalPieces(source.text)
+            guard !pieces.isEmpty else { return [] }
+            let totalUnits = max(pieces.reduce(0) { $0 + max($1.text.count, 1) }, 1)
+            let duration = max(source.end - source.start, 0.01)
+            var cursor = source.start
+            return pieces.enumerated().map { index, piece in
+                let weight = Double(max(piece.text.count, 1)) / Double(totalUnits)
+                let end = index == pieces.count - 1
+                    ? source.end
+                    : min(source.end, cursor + duration * weight)
+                let tagged = TaggedWord(
+                    word: SubtitleWord(start: cursor, end: max(end, cursor + 0.005), text: piece.text),
+                    lexicalClass: piece.lexicalClass
+                )
+                cursor = end
+                return tagged
+            }
+        }
+
+        var merged: [TaggedWord] = []
+        let phraseLimit = configuration.maxCharacters + max(2, configuration.maxCharacters / 8)
+        for item in expanded {
+            guard var previous = merged.last,
+                  ((previous.lexicalClass == .noun && item.lexicalClass == .noun)
+                    || (isTitlecaseLatinPhrase(previous.word.text) && isTitlecaseLatinPhrase(item.word.text))),
+                  item.word.start - previous.word.end <= 0.45 else {
+                merged.append(item)
+                continue
+            }
+            let combined = joinedText([previous.word, item.word])
+            guard combined.count <= phraseLimit else {
+                merged.append(item)
+                continue
+            }
+            previous.word.end = item.word.end
+            previous.word.text = combined
+            merged[merged.count - 1] = previous
+        }
+        return merged.map(\.word)
+    }
+
+    private static func isTitlecaseLatinPhrase(_ text: String) -> Bool {
+        let words = text.split(separator: " ")
+        guard !words.isEmpty else { return false }
+        return words.allSatisfy { word in
+            guard let first = word.unicodeScalars.first, ("A"..."Z").contains(first) else { return false }
+            return word.unicodeScalars.allSatisfy { $0.isASCIIAlphaNumeric || $0 == "'" }
+        }
+    }
+
+    private static func lexicalPieces(_ text: String) -> [(text: String, lexicalClass: NLTag?)] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let tagger = NLTagger(tagSchemes: [.lexicalClass])
+        tagger.string = trimmed
+        let fullRange = trimmed.startIndex..<trimmed.endIndex
+        let containsCJK = trimmed.unicodeScalars.contains { (0x3400...0x9FFF).contains(Int($0.value)) }
+        tagger.setLanguage(containsCJK ? .simplifiedChinese : .english, range: fullRange)
+
+        var pieces: [(text: String, lexicalClass: NLTag?)] = []
+        var cursor = trimmed.startIndex
+        tagger.enumerateTags(
+            in: fullRange,
+            unit: .word,
+            scheme: .lexicalClass,
+            options: [.omitWhitespace, .omitPunctuation, .joinNames]
+        ) { tag, range in
+            appendGap(String(trimmed[cursor..<range.lowerBound]), to: &pieces)
+            pieces.append((String(trimmed[range]), tag))
+            cursor = range.upperBound
+            return true
+        }
+        appendGap(String(trimmed[cursor..<trimmed.endIndex]), to: &pieces)
+        return pieces
+    }
+
+    private static func appendGap(
+        _ gap: String,
+        to pieces: inout [(text: String, lexicalClass: NLTag?)]
+    ) {
+        for character in gap where !character.isWhitespace {
+            pieces.append((String(character), nil))
+        }
     }
 
     private static func joinedText(_ words: [SubtitleWord]) -> String {
@@ -179,33 +291,5 @@ enum TimedSubtitleSegmenter {
             normalized.append(segment)
         }
         return normalized
-    }
-
-    /// Sentence heuristics prefer word boundaries, but the user-facing maximum
-    /// is an invariant. A single oversized Latin token or service result must
-    /// still be split instead of escaping the configured limit.
-    private static func enforceHardCharacterLimit(
-        _ segments: [SubtitleSegment],
-        maxCharacters: Int
-    ) -> [SubtitleSegment] {
-        segments.flatMap { segment in
-            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard text.count > maxCharacters else { return [segment] }
-
-            let characters = Array(text)
-            let chunks = stride(from: 0, to: characters.count, by: maxCharacters).map { start in
-                String(characters[start..<min(start + maxCharacters, characters.count)])
-            }
-            let duration = max(segment.end - segment.start, 0.1)
-            let total = Double(characters.count)
-            var consumed = 0
-
-            return chunks.map { chunk in
-                let start = segment.start + duration * Double(consumed) / total
-                consumed += chunk.count
-                let end = segment.start + duration * Double(consumed) / total
-                return SubtitleSegment(start: start, end: max(end, start + 0.01), text: chunk)
-            }
-        }
     }
 }

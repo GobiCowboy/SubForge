@@ -24,6 +24,7 @@
 3. 使用返回的Policy、Signature和对象Key直传`upload_host`。
 4. 提交`oss://`地址并轮询Model API任务。
 5. 完成后把统一字幕片段交给现有编辑器和导出链路。
+6. 用户中途取消时调用任务取消接口；已预留但未结算的秒数由服务端返还，客户端不继续轮询或回填结果。
 
 ## Apple购买
 
@@ -32,6 +33,11 @@
 - 价格、货币和名称只使用StoreKit本地化Product。
 - StoreKit本地验证只用于客户端状态；真正入账只信任Apple Server Notifications V2的服务端签名通知。
 - Billing履约成功后客户端才刷新钱包，客户端purchase success不自行增加额度。
+- 客户端在App Store包中保留已完成消耗型交易历史；购买后、App启动或手动刷新时，把未确认的transaction ID交给Billing，由Billing向Apple主动核验并补偿漏通知订单。
+- Billing每5分钟拉取Apple失败通知历史并走同一验签履约路径，客户端不打开也能恢复漏单。
+- 本地、Sandbox Development和App Store使用独立钥匙串service，构建包显式声明签名渠道，避免开发包读取TestFlight凭证而反复弹窗。
+- StoreKit交易只在Billing确认额度已发放后调用`finish()`；未到账交易保持unfinished，应用重启后继续恢复。
+- 到账等待最长约40秒，超时后恢复按钮并提示稍后刷新，不再持续转圈三分钟。
 - 用户取消不报错；pending、失败和未验证交易给出明确状态。
 
 ## 区域扩展

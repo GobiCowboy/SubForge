@@ -61,6 +61,13 @@ case "$MODE" in
   *) usage; exit 2 ;;
 esac
 
+SIGNING_CHANNEL="local"
+if [ "$MODE" = "--sandbox" ]; then
+  SIGNING_CHANNEL="development"
+elif [ "$MODE" != "--unsigned" ]; then
+  SIGNING_CHANNEL="app-store"
+fi
+
 find_codesigning_identity() {
   local explicit="$1"
   shift
@@ -185,6 +192,10 @@ stage_bundle() {
   <string>SubForge 需要语音识别权限，将用户选择的音频转写为字幕。</string>
   <key>NSAppleEventsUsageDescription</key>
   <string>SubForge 需要控制 Final Cut Pro 来导入导出的 FCPXML。</string>
+  <key>SKIncludeConsumableInAppPurchaseHistory</key>
+  <true/>
+  <key>SubForgeSigningChannel</key>
+  <string>$SIGNING_CHANNEL</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
 </dict>

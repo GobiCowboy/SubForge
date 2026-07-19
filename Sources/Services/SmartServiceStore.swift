@@ -39,6 +39,11 @@ private struct BillingOrderResponse: Decodable {
     let status: String
 }
 
+private struct AppleReconciliationResponse: Decodable {
+    let orderId: String
+    let status: String
+}
+
 private struct BillingErrorResponse: Decodable {
     let error: String
 }
@@ -62,6 +67,7 @@ final class SmartServiceStore: ObservableObject {
     private let profile = OfficialServiceConfiguration.activeProfile
     private let session: URLSession
     private var hasLoaded = false
+    private var isReconcilingTransactions = false
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -88,14 +94,24 @@ final class SmartServiceStore: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         await loadProductPrice()
+        await reconcileUnconfirmedAppleTransactions()
         if KeychainStore.read(.officialServiceKey) == nil {
             _ = await activateTrialIfNeeded()
         } else {
-            await refreshWallet()
+            await refreshWalletBalance()
         }
     }
 
     func refreshWallet() async {
+        await reconcileUnconfirmedAppleTransactions()
+        await refreshWalletBalance()
+    }
+
+    func reconcilePurchasesAtLaunch() async {
+        await reconcileUnconfirmedAppleTransactions()
+    }
+
+    private func refreshWalletBalance() async {
         guard let key = KeychainStore.read(.officialServiceKey), !key.isEmpty else {
             balanceSeconds = 0
             statusMessage = "尚未购买智能字幕时长"
@@ -209,11 +225,22 @@ final class SmartServiceStore: ObservableObject {
                 guard transaction.productID == order.appleProductId else {
                     throw SmartPurchaseError.verificationFailed
                 }
-                await transaction.finish()
-                statusMessage = "购买已完成，等待 Apple 服务端通知…"
-                let paid = try await waitForFulfillment(orderID: order.orderId)
+                let transactionID = String(transaction.id)
+                statusMessage = "购买已完成，正在确认到账…"
+                if await reconcileAppleTransaction(transactionID) == .paid {
+                    AppleTransactionReconciliationStore.markReconciled(transactionID)
+                    await transaction.finish()
+                    await refreshWalletBalance()
+                    return true
+                }
+                let paid = try await waitForFulfillment(
+                    orderID: order.orderId,
+                    transactionID: transactionID
+                )
                 if paid {
-                    await refreshWallet()
+                    AppleTransactionReconciliationStore.markReconciled(transactionID)
+                    await transaction.finish()
+                    await refreshWalletBalance()
                     return true
                 }
                 statusMessage = "购买已完成，额度正在到账，请稍后刷新"
@@ -295,14 +322,89 @@ final class SmartServiceStore: ObservableObject {
         return try await send(request)
     }
 
-    private func waitForFulfillment(orderID: String) async throws -> Bool {
-        for _ in 0..<90 {
+    private enum ReconciliationResult {
+        case paid
+        case pending
+        case unavailable
+    }
+
+    private func reconcileAppleTransaction(_ transactionID: String) async -> ReconciliationResult {
+        let url = profile.billingBaseURL.appending(path: "v1/apple/reconcile")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode([
+            "applicationId": OfficialServiceConfiguration.applicationID,
+            "transactionId": transactionID
+        ])
+        request.timeoutInterval = 30
+        do {
+            let response: AppleReconciliationResponse = try await send(request)
+            return response.status == "paid" ? .paid : .pending
+        } catch SmartPurchaseError.server(let code) where code == "APPLE_RECONCILIATION_UNAVAILABLE" {
+            return .unavailable
+        } catch {
+            AppLog.settings.warning(
+                "applePurchaseReconciliationFailed error=\(error.localizedDescription, privacy: .public)"
+            )
+            return .pending
+        }
+    }
+
+    private func reconcileUnconfirmedAppleTransactions() async {
+        guard !isReconcilingTransactions else { return }
+        isReconcilingTransactions = true
+        defer { isReconcilingTransactions = false }
+
+        let known = AppleTransactionReconciliationStore.reconciledIDs()
+        let supportedProducts = Set(OfficialServiceConfiguration.purchasePlans.map(\.appleProductID))
+        var candidates: [Transaction] = []
+        for await result in Transaction.all {
+            guard case .verified(let transaction) = result,
+                  supportedProducts.contains(transaction.productID),
+                  transaction.revocationDate == nil,
+                  !known.contains(String(transaction.id)) else { continue }
+            candidates.append(transaction)
+        }
+
+        AppLog.settings.info(
+            "applePurchaseReconciliationStarted candidates=\(candidates.count, privacy: .public)"
+        )
+
+        for transaction in candidates.sorted(by: { $0.purchaseDate > $1.purchaseDate }).prefix(50) {
+            let transactionID = String(transaction.id)
+            switch await reconcileAppleTransaction(transactionID) {
+            case .paid:
+                AppleTransactionReconciliationStore.markReconciled(transactionID)
+                await transaction.finish()
+                AppLog.settings.info("applePurchaseReconciliationCompleted")
+            case .pending:
+                continue
+            case .unavailable:
+                return
+            }
+        }
+    }
+
+    private func waitForFulfillment(orderID: String, transactionID: String) async throws -> Bool {
+        var reconciliationUnavailable = false
+        for attempt in 0..<20 {
             try Task.checkCancellation()
             let url = profile.billingBaseURL.appending(path: "v1/orders/\(orderID)")
             var request = URLRequest(url: url)
             request.timeoutInterval = 15
             let order: BillingOrderResponse = try await send(request)
             if order.status == "paid" { return true }
+            if !reconciliationUnavailable, (attempt == 4 || attempt == 12) {
+                switch await reconcileAppleTransaction(transactionID) {
+                case .paid:
+                    return true
+                case .pending:
+                    break
+                case .unavailable:
+                    reconciliationUnavailable = true
+                }
+            }
             try await Task.sleep(for: .seconds(2))
         }
         return false

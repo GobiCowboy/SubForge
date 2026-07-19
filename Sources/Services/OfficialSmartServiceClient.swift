@@ -2,10 +2,11 @@ import AVFoundation
 import Foundation
 
 struct OfficialSmartProgressUpdate: Sendable {
-    enum Phase: Sendable {
+    enum Phase: Sendable, Equatable {
         case securingUpload
         case uploading
-        case processing
+        case transcribing
+        case proofreading
         case finishing
     }
 
@@ -25,6 +26,7 @@ enum OfficialSmartServiceError: LocalizedError {
     case additionalCreditsRequired(Int)
     case fileUnreadable
     case timeout
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -39,6 +41,7 @@ enum OfficialSmartServiceError: LocalizedError {
         case .additionalCreditsRequired(let seconds): "实际时长超出预估，还需 \(seconds) 秒额度"
         case .fileUnreadable: "无法读取音频文件的大小或时长"
         case .timeout: "智能字幕处理超时，任务可能仍在服务端继续"
+        case .cancelled: "智能字幕任务已取消"
         }
     }
 }
@@ -97,6 +100,23 @@ struct OfficialSmartServiceClient {
     }
 
     func process(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+        let cancellation = OfficialSmartCancellationContext(
+            baseURL: profile.modelBaseURL,
+            apiKey: apiKey,
+            session: session
+        )
+        return try await withTaskCancellationHandler {
+            try await performProcess(audioURL: audioURL, language: language, cancellation: cancellation)
+        } onCancel: {
+            Task { await cancellation.cancelIfNeeded() }
+        }
+    }
+
+    private func performProcess(
+        audioURL: URL,
+        language: String,
+        cancellation: OfficialSmartCancellationContext
+    ) async throws -> [SubtitleSegment] {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw OfficialSmartServiceError.keyMissing
         }
@@ -122,9 +142,11 @@ struct OfficialSmartServiceClient {
             path: "subtitle-smart/uploads", method: "POST", body: body,
             requestID: UUID().uuidString.lowercased()
         )
+        await cancellation.register(taskID: upload.taskId)
         onProgress?(.init(phase: .uploading, progress: 0.32))
         try await OSSMultipartUploader.upload(audioURL: audioURL, policy: upload.upload, session: session)
-        onProgress?(.init(phase: .processing, progress: 0.48))
+        try Task.checkCancellation()
+        onProgress?(.init(phase: .transcribing, progress: 0.48))
         let submitBody = try JSONSerialization.data(withJSONObject: ["ossUrl": "oss://\(upload.upload.objectKey)"])
         let _: SmartTaskResponse = try await request(
             path: "subtitle-smart/tasks/\(upload.taskId)/submit", method: "POST", body: submitBody
@@ -146,7 +168,7 @@ struct OfficialSmartServiceClient {
                     "official task poll transient; retrying attempt=\(attempt + 1, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
                 )
                 let progress = min(0.88, 0.50 + Double(attempt) * 0.012)
-                onProgress?(.init(phase: .processing, progress: progress))
+                onProgress?(.init(phase: .transcribing, progress: min(progress, 0.76)))
                 try await Task.sleep(for: .seconds(2))
                 continue
             }
@@ -157,13 +179,18 @@ struct OfficialSmartServiceClient {
                     throw OfficialSmartServiceError.invalidResponse
                 }
                 return segments.map { SubtitleSegment(start: $0.start, end: $0.end, text: $0.text) }
+            case "proofreading":
+                onProgress?(.init(phase: .proofreading, progress: min(0.90, 0.78 + Double(attempt) * 0.008)))
+                try await Task.sleep(for: .seconds(2))
+            case "cancelled":
+                throw OfficialSmartServiceError.cancelled
             case "awaiting_balance":
                 throw OfficialSmartServiceError.additionalCreditsRequired(task.shortfallSeconds ?? 1)
             case "failed", "expired":
                 throw OfficialSmartServiceError.taskFailed(task.errorCode ?? task.status)
             default:
-                let progress = min(0.88, 0.50 + Double(attempt) * 0.012)
-                onProgress?(.init(phase: .processing, progress: progress))
+                let progress = min(0.76, 0.50 + Double(attempt) * 0.009)
+                onProgress?(.init(phase: .transcribing, progress: progress))
                 try await Task.sleep(for: .seconds(2))
             }
         }
@@ -224,6 +251,62 @@ struct OfficialSmartServiceClient {
     static func providerLanguage(_ language: String) -> String {
         let first = language.split(separator: ",").first.map(String.init) ?? language
         return first.split(separator: "-").first.map(String.init) ?? "zh"
+    }
+
+    static func progressPhase(forTaskStatus status: String) -> OfficialSmartProgressUpdate.Phase? {
+        switch status {
+        case "submitted", "processing": .transcribing
+        case "proofreading": .proofreading
+        case "completed": .finishing
+        default: nil
+        }
+    }
+}
+
+private actor OfficialSmartCancellationContext {
+    private let baseURL: URL
+    private let apiKey: String
+    private let session: URLSession
+    private var taskID: String?
+    private var cancellationRequested = false
+
+    init(baseURL: URL, apiKey: String, session: URLSession) {
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.session = session
+    }
+
+    func register(taskID: String) async {
+        self.taskID = taskID
+        if cancellationRequested {
+            await sendCancel(taskID: taskID)
+        }
+    }
+
+    func cancelIfNeeded() async {
+        cancellationRequested = true
+        guard let taskID else { return }
+        await sendCancel(taskID: taskID)
+    }
+
+    private func sendCancel(taskID: String) async {
+        var request = URLRequest(
+            url: baseURL.appending(path: "subtitle-smart/tasks/\(taskID)/cancel")
+        )
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
+        do {
+            let (_, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            AppLog.transcription.info(
+                "official task cancellation requested task=\(taskID, privacy: .public) status=\(status, privacy: .public)"
+            )
+        } catch {
+            AppLog.transcription.warning(
+                "official task cancellation not confirmed task=\(taskID, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 }
 

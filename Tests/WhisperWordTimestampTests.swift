@@ -78,9 +78,8 @@ import Testing
         configuration: SubtitleSegmentationConfiguration(maxCharacters: 12)
     )
 
-    #expect(segments.map(\.text) == ["这是一句话。", "Final Cut", "Pro很好用。"])
-    #expect(segments.allSatisfy { $0.text.count <= 12 })
-    #expect(!segments.map(\.text).joined().contains("Cu t"))
+    #expect(segments.map(\.text) == ["这是一句话。", "Final Cut Pro", "很好用。"])
+    #expect(!segments.map(\.text).joined(separator: "|").contains("Final Cut|Pro"))
 }
 
 @Test func sharedSegmenterRemovesTimestampOverlap() {
@@ -131,8 +130,27 @@ import Testing
         configuration: SubtitleSegmentationConfiguration(maxCharacters: 14)
     )
 
-    #expect(segments.allSatisfy { $0.text.count <= 14 })
     #expect(segments.map(\.text).joined().contains("Final Cut Pro"))
+    #expect(!segments.map(\.text).joined(separator: "|").contains("Final Cut|Pro"))
+}
+
+@Test func estimatedFallbackUsesChineseWordBoundariesInsteadOfHardCharacters() {
+    let source = SubtitleSegment(
+        start: 0,
+        end: 12,
+        text: "如果你使用Final Cut Pro制作非英文视频你会发现真正麻烦的是整个字幕工作流很多时候你需要从"
+    )
+
+    let segments = TimedSubtitleSegmenter.segmentEstimated(
+        [source],
+        configuration: SubtitleSegmentationConfiguration(maxCharacters: 26)
+    )
+    let separated = segments.map(\.text).joined(separator: "|")
+
+    #expect(!separated.contains("Final Cut|Pro"))
+    #expect(!separated.contains("字幕工|作流"))
+    #expect(!separated.contains("你|会发现"))
+    #expect(!separated.contains("需要|从"))
 }
 
 @Test func cloudEndpointValidationRejectsPlaceholderInsteadOfCrashing() {

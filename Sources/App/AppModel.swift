@@ -191,8 +191,7 @@ final class AppModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            let activation = await self.smartService.activateTrialIfNeeded()
-            self.presentTrialActivation(activation)
+            await self.smartService.reconcilePurchasesAtLaunch()
         }
     }
 
@@ -374,6 +373,7 @@ final class AppModel: ObservableObject {
 
     func resetWorkspace() {
         stopPlayback(captureTimestamp: false)
+        let wasProcessing = mode == .progress
         pipelineTask?.cancel()
         pipelineTask = nil
         stopPipelineClock()
@@ -398,6 +398,9 @@ final class AppModel: ObservableObject {
         editorFocusContext = .none
         activeEditorSurface = .table
         clearPlaybackMedia()
+        if wasProcessing {
+            showToast("已取消当前任务", level: .info, duration: 3)
+        }
     }
 
     func importDocument(at url: URL) {
@@ -616,28 +619,20 @@ final class AppModel: ObservableObject {
                 } else {
                     provider = TranscriptionService.createProvider(settings: transcriptionSettings)
                 }
-                self.markStageActive(.transcribe, progress: 0.36, message: "")
-                self.setPipelinePhase("转写中", progress: 0.36)
+                if engine == .officialSmart {
+                    // 官方智能字幕的上传是独立可见阶段，后续状态由服务端回调推进。
+                    self.markStageActive(.prepare, progress: 0.2, message: "")
+                    self.setPipelinePhase("准备上传", progress: 0.2)
+                } else {
+                    self.markStageActive(.transcribe, progress: 0.36, message: "")
+                    self.setPipelinePhase("转写中", progress: 0.36)
+                }
 
                 var transcribedSegments = try await provider.transcribe(audioURL: url, language: transcriptionSettings.language)
                 if engine == .officialSmart {
                     await self.smartService.refreshWallet()
                 }
                 transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
-                if engine == .officialSmart {
-                    // Treat the shared maximum as a final client-side invariant.
-                    // The server may return already-proofread but unsplit lines.
-                    transcribedSegments = OfficialSmartSubtitleProvider.applySegmentation(
-                        transcribedSegments,
-                        configuration: SubtitleSegmentationConfiguration(
-                            maxCharacters: transcriptionSettings.effectiveMaxSubtitleLength
-                        )
-                    )
-                    transcribedSegments = self.normalizeSegments(
-                        transcribedSegments,
-                        stripTrailingPunctuation: true
-                    )
-                }
                 guard !Task.isCancelled else {
                     self.stopPipelineClock()
                     return
@@ -645,16 +640,21 @@ final class AppModel: ObservableObject {
 
                 let usesOfficialProofreading = engine == .officialSmart
                 let willAttemptProofread = usesOfficialProofreading || self.settings.proofreadingEnabled
-                self.markStageDone(.transcribe, progress: willAttemptProofread ? 0.72 : 0.92)
 
                 var finalSegments = transcribedSegments
                 var proofreadingNote: String?
                 if usesOfficialProofreading {
-                    self.markStageActive(.proofread, progress: 0.84, message: "")
-                    self.setPipelinePhase("AI 校对已完成", progress: 0.92)
-                    self.markStageDone(.proofread, progress: 0.92)
+                    self.markStageDone(.prepare, progress: 0.94)
+                    self.markStageDone(.transcribe, progress: 0.94)
+                    self.markStageDone(.proofread, progress: 0.94)
+                    self.markStageActive(.complete, progress: 0.96, message: "")
+                    self.setPipelinePhase("完成字幕", progress: 0.96)
                     proofreadingNote = "官方 AI 校对已完成"
-                } else if willAttemptProofread {
+                } else {
+                    self.markStageDone(.transcribe, progress: willAttemptProofread ? 0.72 : 0.92)
+                }
+
+                if !usesOfficialProofreading, willAttemptProofread {
                     var proofSettings = self.settings
                     SettingsStore.hydrateSecrets(into: &proofSettings, includeASR: false, includeLLM: true)
                     if let warning = proofSettings.proofreadingConfigWarning {
@@ -697,6 +697,12 @@ final class AppModel: ObservableObject {
                     }
                 }
 
+                guard !Task.isCancelled else {
+                    self.stopPipelineClock()
+                    self.pipelineTask = nil
+                    return
+                }
+
                 let totalSeconds = self.pipelineElapsedSeconds()
                 self.pipelinePhaseLabel = "完成"
                 self.pipelineMessage = "\(modelLabel) · 完成 · \(totalSeconds)s"
@@ -716,6 +722,11 @@ final class AppModel: ObservableObject {
                 self.showToast("已生成 \(finalSegments.count) 条字幕", level: .success)
                 self.pipelineTask = nil
             } catch {
+                if Task.isCancelled {
+                    self.stopPipelineClock()
+                    self.pipelineTask = nil
+                    return
+                }
                 if self.settings.transcriptionEngine == .officialSmart {
                     await self.smartService.refreshWallet()
                 }
@@ -778,21 +789,26 @@ final class AppModel: ObservableObject {
         return (resolved, false, nil)
     }
 
-    private static func makePipelineStages(
+    static func makePipelineStages(
         proofreadingEnabled: Bool,
         officialSmart: Bool
     ) -> [PipelineStageState] {
-        let stages: [PipelineStage] = proofreadingEnabled
-            ? [.prepare, .transcribe, .proofread, .complete]
-            : [.prepare, .transcribe, .complete]
+        let stages: [PipelineStage]
+        if officialSmart {
+            stages = [.prepare, .transcribe, .proofread, .complete]
+        } else {
+            stages = proofreadingEnabled
+                ? [.prepare, .transcribe, .proofread, .complete]
+                : [.prepare, .transcribe, .complete]
+        }
         return stages.map { stage in
             let title: String
             if officialSmart {
                 switch stage {
-                case .prepare: title = "准备文件"
-                case .transcribe: title = "上传音频"
-                case .proofread: title = "云端转写与 AI 校对"
-                case .complete: title = "生成字幕"
+                case .prepare: title = "准备上传"
+                case .transcribe: title = "语音转写"
+                case .proofread: title = "智能校对"
+                case .complete: title = "完成字幕"
                 }
             } else {
                 title = stage.rawValue
@@ -805,19 +821,26 @@ final class AppModel: ObservableObject {
         guard mode == .progress else { return }
         switch update.phase {
         case .securingUpload:
-            markStageActive(.transcribe, progress: update.progress, message: "")
+            markStageActive(.prepare, progress: update.progress, message: "")
             setPipelinePhase("准备安全上传", progress: update.progress)
         case .uploading:
-            markStageActive(.transcribe, progress: update.progress, message: "")
+            markStageActive(.prepare, progress: update.progress, message: "")
             setPipelinePhase("上传音频", progress: update.progress)
-        case .processing:
+        case .transcribing:
+            markStageDone(.prepare, progress: update.progress)
+            markStageActive(.transcribe, progress: update.progress, message: "")
+            setPipelinePhase("语音转写", progress: update.progress)
+        case .proofreading:
+            markStageDone(.prepare, progress: update.progress)
             markStageDone(.transcribe, progress: update.progress)
             markStageActive(.proofread, progress: update.progress, message: "")
-            setPipelinePhase("云端转写与 AI 校对", progress: update.progress)
+            setPipelinePhase("智能校对", progress: update.progress)
         case .finishing:
+            markStageDone(.prepare, progress: update.progress)
             markStageDone(.transcribe, progress: update.progress)
             markStageDone(.proofread, progress: update.progress)
-            setPipelinePhase("生成字幕", progress: update.progress)
+            markStageActive(.complete, progress: update.progress, message: "")
+            setPipelinePhase("完成字幕", progress: update.progress)
         }
     }
 

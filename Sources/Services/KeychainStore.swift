@@ -100,24 +100,34 @@ enum KeychainStore {
         return query
     }
 
-    /// The official wallet key is deliberately isolated by signing channel.
-    /// A locally/ad-hoc signed build must not touch a TestFlight/App Store item
-    /// with the same bundle identifier, which otherwise prompts for the login
-    /// keychain password on every visit to the official plan.
+    /// Development/local builds must not touch TestFlight/App Store items with
+    /// the same bundle identifier. Their code-signing ACLs differ and macOS can
+    /// otherwise prompt for the login-keychain password on every rebuilt app.
+    /// Production keeps the legacy cloud-key service so upgrades retain keys.
     static func serviceName(for account: Account, signingChannel: String? = nil) -> String {
-        guard account == .officialServiceKey else { return baseService }
-        return "\(baseService).official-service.v2.\(signingChannel ?? currentSigningChannel)"
+        let channel = signingChannel ?? currentSigningChannel
+        if account == .officialServiceKey {
+            return "\(baseService).official-service.v2.\(channel)"
+        }
+        if channel == "app-store" {
+            return baseService
+        }
+        return "\(baseService).\(account.rawValue).v2.\(channel)"
     }
 
     private static var currentSigningChannel: String {
-        if Bundle.main.appStoreReceiptURL.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
-            return "app-store"
+        if let declared = Bundle.main.object(forInfoDictionaryKey: "SubForgeSigningChannel") as? String,
+           ["local", "development", "app-store"].contains(declared) {
+            return declared
+        }
+        if entitlement("get-task-allow") as? Bool == true {
+            return "development"
         }
         guard entitlement("com.apple.application-identifier") as? String != nil else {
             return "local"
         }
-        if entitlement("get-task-allow") as? Bool == true {
-            return "development"
+        if Bundle.main.appStoreReceiptURL.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
+            return "app-store"
         }
         return "app-store"
     }
