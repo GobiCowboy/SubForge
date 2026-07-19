@@ -604,7 +604,11 @@ final class AppModel: ObservableObject {
 
                 let provider: TranscriptionProvider
                 if engine == .officialSmart {
-                    provider = OfficialSmartSubtitleProvider { [weak self] update in
+                    provider = OfficialSmartSubtitleProvider(
+                        segmentationConfiguration: SubtitleSegmentationConfiguration(
+                            maxCharacters: transcriptionSettings.effectiveMaxSubtitleLength
+                        )
+                    ) { [weak self] update in
                         Task { @MainActor in
                             self?.handleOfficialSmartProgress(update)
                         }

@@ -9,18 +9,19 @@ private enum SubtitlePlan: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .official: "官方（推荐）"
+        case .official: "官方"
         case .custom: "自定义"
-        case .local: "本地（实验）"
+        case .local: "本地"
         }
     }
-}
 
-private enum SubtitleConfigurationTab: String, CaseIterable, Identifiable {
-    case transcription = "转写"
-    case proofreading = "AI 校对"
-
-    var id: String { rawValue }
+    var badge: String? {
+        switch self {
+        case .official: "推荐"
+        case .custom: nil
+        case .local: "实验"
+        }
+    }
 }
 
 struct SubtitleSettingsPane: View {
@@ -77,6 +78,7 @@ struct SubtitleSettingsPane: View {
                     .strokeBorder(Color(nsColor: .separatorColor).opacity(0.22), lineWidth: 1)
             )
 
+            SharedSubtitleSegmentationSettings(settings: $settings)
             selectedPlanContent
         }
         .onAppear(perform: rememberLocalEngineIfNeeded)
@@ -153,6 +155,15 @@ struct SubtitleSettingsPane: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
+                if let badge = plan.badge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.11), in: Capsule())
+                }
+
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 14)
@@ -176,15 +187,24 @@ struct SubtitleSettingsPane: View {
     }
 
     private var configurationTabs: some View {
-        Picker("", selection: $configurationTab) {
-            ForEach(SubtitleConfigurationTab.allCases) { tab in
-                Text(tab.rawValue).tag(tab)
+        HStack(spacing: 16) {
+            Picker("", selection: $configurationTab) {
+                ForEach(SubtitleConfigurationTab.allCases) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.large)
+            .frame(width: 280)
+
+            Spacer(minLength: 12)
+
+            SubtitleConfigurationStatusView(
+                status: .resolve(tab: configurationTab, settings: settings)
+            )
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.large)
-        .frame(minWidth: 584, maxWidth: .infinity)
+        .frame(maxWidth: .infinity)
     }
 
     private var localExperimentalNotice: some View {

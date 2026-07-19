@@ -84,10 +84,10 @@ struct OfficialSmartServicePanel: View {
                             Text("购买")
                                 .font(.system(size: 15, weight: .semibold))
                         }
-                        .frame(minWidth: 280, minHeight: 28)
+                        .frame(minWidth: 180, minHeight: 24)
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .controlSize(.regular)
                     .disabled(service.isPurchasing)
 
                     Button("刷新额度") {
@@ -97,6 +97,7 @@ struct OfficialSmartServicePanel: View {
                     .controlSize(.regular)
                     .disabled(service.isLoading || service.isPurchasing)
                 }
+                .padding(.top, 12)
             }
         }
     }

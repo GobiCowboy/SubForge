@@ -22,7 +22,6 @@ struct TranscriptionSettingsPane: View {
             SettingsGroup(title: "转写配置") {
                 SettingsListSection {
                     languagePickerControl
-                    subtitleSegmentationControls
                     if showsEnginePicker {
                         enginePickerControl
                     }
@@ -156,25 +155,6 @@ struct TranscriptionSettingsPane: View {
             // 官方服务按实际秒数扣费，不用设置页测试音频隐式消耗。
             return true
         }
-    }
-
-    private var subtitleSegmentationControls: some View {
-        SettingsListRow(title: "单条字幕最大字数") {
-            SettingsTrailingControl(width: SettingsListMetrics.controlWidth) {
-                Stepper(value: maxSubtitleLengthBinding, in: 10...50, step: 2) {
-                    Text("\(settings.effectiveMaxSubtitleLength) 字")
-                        .monospacedDigit()
-                        .frame(width: 48, alignment: .trailing)
-                }
-            }
-        }
-    }
-
-    private var maxSubtitleLengthBinding: Binding<Int> {
-        Binding(
-            get: { settings.effectiveMaxSubtitleLength },
-            set: { settings.maxSubtitleLength = $0 }
-        )
     }
 
     private var whisperSection: some View {
