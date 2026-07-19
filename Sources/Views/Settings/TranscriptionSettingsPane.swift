@@ -110,7 +110,6 @@ struct TranscriptionSettingsPane: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: SettingsListMetrics.pickerWidth)
             }
         }
     }
@@ -127,7 +126,6 @@ struct TranscriptionSettingsPane: View {
                     Text("한국어").tag("ko-KR")
                 }
                 .labelsHidden()
-                .frame(width: SettingsListMetrics.pickerWidth)
             }
         }
     }
@@ -168,7 +166,6 @@ struct TranscriptionSettingsPane: View {
                         .monospacedDigit()
                         .frame(width: 48, alignment: .trailing)
                 }
-                .frame(width: 156)
             }
         }
     }
