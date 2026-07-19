@@ -4,6 +4,7 @@ import SwiftUI
 struct TranscriptionSettingsPane: View {
     @EnvironmentObject private var model: AppModel
     @Binding var settings: AppSettings
+    var allowsOfficialSmart: Bool = true
 
     @State private var isTesting = false
     @State private var validationState = SettingsValidationState()
@@ -107,7 +108,7 @@ struct TranscriptionSettingsPane: View {
         HStack(spacing: 12) {
             SettingsCompactPicker(title: "转写引擎", systemImage: "waveform") {
                 Picker("转写引擎", selection: $settings.transcriptionEngine) {
-                    ForEach(TranscriptionEngine.allCases) { engine in
+                    ForEach(TranscriptionEngine.allCases.filter { allowsOfficialSmart || $0 != .officialSmart }) { engine in
                         Text(engine.rawValue).tag(engine)
                     }
                 }

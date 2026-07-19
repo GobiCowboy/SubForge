@@ -23,13 +23,9 @@ struct SettingsView: View {
                     switch selection {
                     case .general:
                         GeneralSettingsPane(settings: settingsBinding)
-                    case .smartService:
-                        SmartServiceSettingsPane(settings: settingsBinding, service: model.smartService)
-                    case .transcription:
-                        TranscriptionSettingsPane(settings: settingsBinding)
-                    case .proofreading:
-                        ProofreadingSettingsPane(settings: settingsBinding)
-                    case .subtitle:
+                    case .subtitles:
+                        SubtitleSettingsPane(settings: settingsBinding, service: model.smartService)
+                    case .style:
                         SubtitleStyleSettingsPane(settings: settingsBinding)
                     case .export:
                         ExportSettingsPane(settings: settingsBinding)
