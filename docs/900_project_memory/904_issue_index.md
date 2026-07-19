@@ -15,6 +15,7 @@
 | ISSUE-011 | P0 | 已解决 | DashScope filetrans 长音频 413 RequestTooLarge | 原实现把整文件 Base64 塞进 `file_url` 导致请求体超限。现改为百炼临时上传拿 `oss://` URL，提交时带 `X-DashScope-OssResourceResolve: enable` |
 | ISSUE-012 | P0 | 发布前联调 | 智能字幕尚未经StoreKit Sandbox与阿里真实云端到端验收 | 需验证商品、Server Notification、pending Key激活、Policy直传、ASR、AI校对和按秒结算 |
 | ISSUE-013 | P1 | 预期限制 | Developer ID站外包不能完成Mac App Store消耗型内购 | 购买入口以StoreKit商品可用性为准；正式付费能力在Mac App Store包验收 |
+| ISSUE-014 | P0 | 修复中 | TestFlight首装无法领取10分钟体验 | `AppTransaction.shared`返回`SKInternalErrorDomain Code=13`，需按StoreKit恢复路径调用`AppTransaction.refresh()`并保留可重试入口 |
 
 ## 使用规则
 
