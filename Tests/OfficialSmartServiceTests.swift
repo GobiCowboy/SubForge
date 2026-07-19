@@ -33,6 +33,24 @@ import Testing
     #expect(!OfficialSmartServiceClient.shouldRetryPolling(URLError(.badURL)))
 }
 
+@Test func officialSmartResultsUseSharedSubtitleLengthLimit() {
+    let input = [
+        SubtitleSegment(
+            start: 0,
+            end: 8,
+            text: "这是一段需要按照公共字数限制重新切分的官方智能字幕结果"
+        )
+    ]
+
+    let output = OfficialSmartSubtitleProvider.applySegmentation(
+        input,
+        configuration: SubtitleSegmentationConfiguration(maxCharacters: 10)
+    )
+
+    #expect(output.count > 1)
+    #expect(output.allSatisfy { $0.text.count <= 10 })
+}
+
 @MainActor
 @Test func appTransactionRefreshesWhenSharedValueIsUnavailable() async throws {
     enum ExpectedFailure: Error { case unavailable }
