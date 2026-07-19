@@ -5,6 +5,7 @@
 SubForge 已具备 App Store 打包与上传链路；历史上已有成功上传构建 `1.0 (2026070403)`。
 
 - `script/release_appstore.sh --unsigned`：生成 release app bundle，仅做结构检查，使用 ad-hoc 调试签名。
+- `script/release_appstore.sh --sandbox`：使用 Mac App Development Profile 和 Apple Development 证书签名并启动，直接连接真实 StoreKit Sandbox。
 - `script/release_appstore.sh --signed` / `--package` / `--upload`：都会调用 `sign_app`，使用 Mac App Store 分发证书正式签名。
 - 若缺少 app signing identity，上述正式签名模式会主动停止，这是预期保护。
 - 注意：`--upload` 必须走正式签名；漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会拒绝上传。
@@ -21,6 +22,7 @@ App Store 发布准备使用：
 
 ```bash
 ./script/release_appstore.sh --unsigned
+./script/release_appstore.sh --sandbox
 ./script/release_appstore.sh --signed
 ./script/release_appstore.sh --package
 ./script/release_appstore.sh --upload
@@ -31,6 +33,7 @@ App Store 发布准备使用：
 | 模式 | 签名 | 产物 / 行为 |
 |------|------|-------------|
 | `--unsigned` | ad-hoc（调试） | `dist/appstore/SubForge.app` 结构检查 |
+| `--sandbox` | Apple Development | 启动真实 StoreKit Sandbox；用于商品、Apple 签名交易和服务端链路联调 |
 | `--signed` | Mac App Store 分发 | 已签名 `.app` |
 | `--package` | Mac App Store 分发 + Installer | 已签名 `.app` + `.pkg` |
 | `--upload` | 与 `--package` 相同 | 生成 `.pkg` 后上传 App Store Connect |
@@ -41,6 +44,8 @@ App Store 发布准备使用：
 APP_VERSION=1.0
 APP_BUILD=1
 TEAM_ID=4UNNXY925R
+DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"
+DEVELOPMENT_PROVISIONING_PROFILE="/path/to/SubForge_Mac_Development.provisionprofile"
 APP_SIGN_IDENTITY="3rd Party Mac Developer Application: ..."
 INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: ..."
 APP_STORE_USER="apple-id@example.com"
@@ -52,6 +57,7 @@ APP_STORE_PASSWORD="app-specific-password"
 需要安装或配置：
 
 - Mac App Store app signing identity（脚本自动查找 `Apple Distribution` / `3rd Party Mac Developer Application`）
+- 本机 Sandbox 联调需要 `Apple Development` 证书，以及包含当前 Mac UDID 的 `Mac App Development` Profile
 - Mac App Store installer signing identity（脚本用 `security find-certificate` 查找，不会出现在 `security find-identity -p codesigning`）
 - Bundle ID: `com.jago.subforge`
 - Team ID: `4UNNXY925R`
@@ -155,6 +161,7 @@ No account is required. No sample login credentials are needed.
 - `swift build`
 - `./script/build_and_run.sh --verify`
 - `./script/release_appstore.sh --unsigned`
+- `./script/release_appstore.sh --sandbox`（真实 StoreKit Sandbox，不使用 Xcode 本地 StoreKit 模拟）
 - 安装 Mac App Store 分发证书后运行 `./script/release_appstore.sh --package`
 - 需要直传 App Store Connect 时运行 `./script/release_appstore.sh --upload`（必须能找到分发证书与 Installer 证书；不要期望 ad-hoc 包可通过审核上传）
 - 在干净机器或新用户账户测试首次启动、文件选择、Apple Speech、导出 SRT、导出 FCPXML

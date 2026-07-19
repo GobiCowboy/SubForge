@@ -27,13 +27,16 @@ PKG_PATH="$DIST_DIR/$APP_NAME.pkg"
 APP_SIGN_IDENTITY="${APP_SIGN_IDENTITY:-}"
 INSTALLER_SIGN_IDENTITY="${INSTALLER_SIGN_IDENTITY:-}"
 PROVISIONING_PROFILE="${PROVISIONING_PROFILE:-}"
+DEVELOPMENT_SIGN_IDENTITY="${DEVELOPMENT_SIGN_IDENTITY:-}"
+DEVELOPMENT_PROVISIONING_PROFILE="${DEVELOPMENT_PROVISIONING_PROFILE:-}"
 
 usage() {
   cat >&2 <<EOF
-usage: $0 [--unsigned|--signed|--package|--upload]
+usage: $0 [--unsigned|--sandbox|--signed|--package|--upload]
 
 Modes:
   --unsigned  Build a release .app and run local structural checks.
+  --sandbox   Build, development-sign, and launch against the real StoreKit sandbox.
   --signed    Build and sign the .app for Mac App Store distribution.
   --package   Build, sign, and create a signed .pkg for App Store upload.
   --upload    Build, sign, package, and upload the .pkg to App Store Connect.
@@ -42,6 +45,8 @@ Optional environment:
   APP_VERSION=1.0.4
   APP_BUILD=$(date +%Y%m%d%H%M%S)
   TEAM_ID=$TEAM_ID
+  DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"
+  DEVELOPMENT_PROVISIONING_PROFILE="/path/to/SubForge_Mac_Development.provisionprofile"
   APP_SIGN_IDENTITY="Apple Distribution: ..."
   INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: ..."
   PROVISIONING_PROFILE="/path/to/SubForge_Mac_App_Store.provisionprofile"
@@ -52,7 +57,7 @@ EOF
 
 MODE="${1:---unsigned}"
 case "$MODE" in
-  --unsigned|--signed|--package|--upload) ;;
+  --unsigned|--sandbox|--signed|--package|--upload) ;;
   *) usage; exit 2 ;;
 esac
 
@@ -75,6 +80,17 @@ find_codesigning_identity() {
   done
 
   return 1
+}
+
+find_development_identity() {
+  local explicit="$1"
+  if [ -n "$explicit" ]; then
+    printf '%s\n' "$explicit"
+    return 0
+  fi
+
+  security find-identity -p codesigning -v 2>/dev/null \
+    | awk '/"Apple Development:/ {print $2; exit}'
 }
 
 find_certificate_label() {
@@ -177,10 +193,18 @@ PLIST
 }
 
 embed_provisioning_profile() {
-  local profile="$PROVISIONING_PROFILE"
+  local profile=""
 
-  if [ -z "$profile" ]; then
-    profile="$(find_provisioning_profile || true)"
+  if [ "$MODE" = "--sandbox" ]; then
+    profile="$DEVELOPMENT_PROVISIONING_PROFILE"
+    if [ -z "$profile" ]; then
+      profile="$(find_development_provisioning_profile || true)"
+    fi
+  else
+    profile="$PROVISIONING_PROFILE"
+    if [ -z "$profile" ]; then
+      profile="$(find_provisioning_profile || true)"
+    fi
   fi
 
   if [ -z "$profile" ]; then
@@ -188,8 +212,13 @@ embed_provisioning_profile() {
       return
     fi
 
-    echo "missing Mac App Store provisioning profile for $BUNDLE_ID" >&2
-    echo "Set PROVISIONING_PROFILE=/path/to/SubForge_Mac_App_Store.provisionprofile." >&2
+    if [ "$MODE" = "--sandbox" ]; then
+      echo "missing Mac App Development provisioning profile for $BUNDLE_ID and this Mac" >&2
+      echo "Set DEVELOPMENT_PROVISIONING_PROFILE=/path/to/SubForge_Mac_Development.provisionprofile." >&2
+    else
+      echo "missing Mac App Store provisioning profile for $BUNDLE_ID" >&2
+      echo "Set PROVISIONING_PROFILE=/path/to/SubForge_Mac_App_Store.provisionprofile." >&2
+    fi
     exit 1
   fi
 
@@ -199,8 +228,74 @@ embed_provisioning_profile() {
     exit 1
   fi
 
+  if [ "$MODE" = "--sandbox" ] && ! provisioning_profile_contains_current_mac "$profile"; then
+    echo "development provisioning profile does not contain this Mac: $profile" >&2
+    exit 1
+  fi
+
   echo "Using provisioning profile: $profile"
   cp "$profile" "$APP_CONTENTS/embedded.provisionprofile"
+}
+
+find_development_provisioning_profile() {
+  local direct_candidates=(
+    "$ROOT_DIR/Config/SubForge_Mac_Development.provisionprofile"
+    "$HOME/Downloads/SubForge_Mac_Development.provisionprofile"
+  )
+
+  local profile
+  for profile in "${direct_candidates[@]}"; do
+    if [ -f "$profile" ] \
+      && provisioning_profile_matches_bundle "$profile" \
+      && provisioning_profile_contains_current_mac "$profile"; then
+      printf '%s\n' "$profile"
+      return 0
+    fi
+  done
+
+  local search_dirs=(
+    "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+    "$HOME/Library/MobileDevice/Provisioning Profiles"
+  )
+
+  local dir
+  for dir in "${search_dirs[@]}"; do
+    [ -d "$dir" ] || continue
+    while IFS= read -r profile; do
+      if provisioning_profile_matches_bundle "$profile" \
+        && provisioning_profile_contains_current_mac "$profile"; then
+        printf '%s\n' "$profile"
+        return 0
+      fi
+    done < <(find "$dir" -type f \( -name "*.provisionprofile" -o -name "*.mobileprovision" \) 2>/dev/null)
+  done
+
+  return 1
+}
+
+provisioning_profile_contains_current_mac() {
+  local profile="$1"
+  local temp_plist hardware_uuid
+  temp_plist="$(mktemp)"
+  if ! security cms -D -i "$profile" >"$temp_plist" 2>/dev/null; then
+    rm -f "$temp_plist"
+    return 1
+  fi
+
+  hardware_uuid="$(system_profiler SPHardwareDataType 2>/dev/null | awk -F': ' '/Hardware UUID/ {print $2}')"
+  if [ -z "$hardware_uuid" ]; then
+    rm -f "$temp_plist"
+    return 1
+  fi
+
+  if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$temp_plist" 2>/dev/null \
+    | grep -Fq "$hardware_uuid"; then
+    rm -f "$temp_plist"
+    return 0
+  fi
+
+  rm -f "$temp_plist"
+  return 1
 }
 
 find_provisioning_profile() {
@@ -439,6 +534,7 @@ clean_bundle_metadata() {
 
 sign_nested_code() {
   local identity="$1"
+  local signing_channel="${2:-distribution}"
 
   if [ -d "$APP_FRAMEWORKS" ]; then
     find "$APP_FRAMEWORKS" -type f -print0 | while IFS= read -r -d '' mach_o; do
@@ -448,7 +544,7 @@ sign_nested_code() {
       base="$(basename "$mach_o")"
       local timestamp_arg="--timestamp"
       local options_arg="--options runtime"
-      if [ "$identity" = "-" ]; then
+      if [ "$identity" = "-" ] || [ "$signing_channel" = "development" ]; then
         timestamp_arg="--timestamp=none"
         options_arg=""
       fi
@@ -481,6 +577,21 @@ sign_app() {
   sign_nested_code "$identity"
   codesign --force --timestamp --options runtime \
     --entitlements "$ENTITLEMENTS" \
+    --sign "$identity" "$APP_BUNDLE"
+}
+
+sign_app_for_sandbox() {
+  local identity
+  identity="$(find_development_identity "$DEVELOPMENT_SIGN_IDENTITY")"
+  if [ -z "$identity" ]; then
+      echo "missing Apple Development signing identity" >&2
+      echo "Create or install one for team $TEAM_ID, or set DEVELOPMENT_SIGN_IDENTITY." >&2
+      exit 1
+  fi
+
+  sign_nested_code "$identity" development
+  codesign --force --timestamp=none --options runtime \
+    --entitlements "$DEBUG_ENTITLEMENTS" \
     --sign "$identity" "$APP_BUNDLE"
 }
 
@@ -566,7 +677,9 @@ main() {
   stage_bundle
 
   # --upload 也必须正式签名；此前漏掉导致 ad-hoc 包上传被 App Store 拒绝
-  if [ "$MODE" = "--signed" ] || [ "$MODE" = "--package" ] || [ "$MODE" = "--upload" ]; then
+  if [ "$MODE" = "--sandbox" ]; then
+    sign_app_for_sandbox
+  elif [ "$MODE" = "--signed" ] || [ "$MODE" = "--package" ] || [ "$MODE" = "--upload" ]; then
     sign_app
   else
     sign_app_ad_hoc_for_testing
@@ -584,6 +697,20 @@ main() {
 
   if [ "$MODE" = "--upload" ]; then
     upload_app
+  fi
+
+  if [ "$MODE" = "--sandbox" ]; then
+    pkill -x "$APP_NAME" 2>/dev/null || true
+    open -n "$APP_BUNDLE"
+    for _ in {1..20}; do
+      if pgrep -x "$APP_NAME" >/dev/null; then
+        echo "StoreKit sandbox app launched: $APP_BUNDLE"
+        return 0
+      fi
+      sleep 0.25
+    done
+    echo "sandbox-signed app did not stay running" >&2
+    exit 1
   fi
 }
 
