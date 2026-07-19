@@ -16,7 +16,7 @@
 | ISSUE-012 | P0 | 发布前联调 | 智能字幕尚未经StoreKit Sandbox与阿里真实云端到端验收 | 需验证商品、Server Notification、pending Key激活、Policy直传、ASR、AI校对和按秒结算 |
 | ISSUE-013 | P1 | 预期限制 | Developer ID站外包不能完成Mac App Store消耗型内购 | 购买入口以StoreKit商品可用性为准；正式付费能力在Mac App Store包验收 |
 | ISSUE-014 | P0 | 待TestFlight验收 | TestFlight首装无法领取10分钟体验 | 根因是`AppTransaction.shared`返回`SKInternalErrorDomain Code=13`；已增加`AppTransaction.refresh()`恢复路径、设置页重试与可见错误提示 |
-| ISSUE-015 | P0 | 待修复 | 智能字幕轮询遇到临时服务错误后丢失任务 | 服务端短暂返回 5xx 时客户端直接结束轮询且未保留任务 ID；服务端任务继续处理，随后重试只得到 `ACTIVE_TASK_EXISTS` |
+| ISSUE-015 | P0 | 待TestFlight验收 | 智能字幕轮询遇到临时服务错误后丢失任务 | 客户端现对轮询阶段的 5xx 和可恢复网络错误继续重试，不再因单次临时故障直接退出并触发后续 `ACTIVE_TASK_EXISTS` |
 
 ## 使用规则
 

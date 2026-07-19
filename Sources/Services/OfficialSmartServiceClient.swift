@@ -19,6 +19,7 @@ enum OfficialSmartServiceError: LocalizedError {
     case invalidResponse
     case insufficientCredits
     case activeTaskExists
+    case transientService(Int)
     case uploadFailed(Int)
     case taskFailed(String)
     case additionalCreditsRequired(Int)
@@ -32,6 +33,7 @@ enum OfficialSmartServiceError: LocalizedError {
         case .invalidResponse: "智能服务返回了无效数据"
         case .insufficientCredits: "智能字幕剩余时长不足，请先购买"
         case .activeTaskExists: "已有一个智能字幕任务在处理，请稍后再试"
+        case .transientService(let status): "智能字幕服务暂时不可用（HTTP \(status)）"
         case .uploadFailed(let status): "音频直传失败（HTTP \(status)）"
         case .taskFailed(let code): "智能字幕处理失败：\(code)"
         case .additionalCreditsRequired(let seconds): "实际时长超出预估，还需 \(seconds) 秒额度"
@@ -133,9 +135,21 @@ struct OfficialSmartServiceClient {
     private func poll(taskID: String) async throws -> [SubtitleSegment] {
         for attempt in 0..<300 {
             try Task.checkCancellation()
-            let task: SmartTaskResponse = try await request(
-                path: "subtitle-smart/tasks/\(taskID)", method: "GET", body: nil
-            )
+            let task: SmartTaskResponse
+            do {
+                task = try await request(
+                    path: "subtitle-smart/tasks/\(taskID)", method: "GET", body: nil
+                )
+            } catch {
+                guard Self.shouldRetryPolling(error) else { throw error }
+                AppLog.transcription.warning(
+                    "official task poll transient; retrying attempt=\(attempt + 1, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+                )
+                let progress = min(0.88, 0.50 + Double(attempt) * 0.012)
+                onProgress?(.init(phase: .processing, progress: progress))
+                try await Task.sleep(for: .seconds(2))
+                continue
+            }
             switch task.status {
             case "completed":
                 onProgress?(.init(phase: .finishing, progress: 0.92))
@@ -156,6 +170,22 @@ struct OfficialSmartServiceClient {
         throw OfficialSmartServiceError.timeout
     }
 
+    static func shouldRetryPolling(_ error: Error) -> Bool {
+        if case OfficialSmartServiceError.transientService = error {
+            return true
+        }
+        guard let urlError = error as? URLError else { return false }
+        return [
+            .timedOut,
+            .cannotFindHost,
+            .cannotConnectToHost,
+            .networkConnectionLost,
+            .dnsLookupFailed,
+            .notConnectedToInternet,
+            .secureConnectionFailed
+        ].contains(urlError.code)
+    }
+
     private func request<T: Decodable>(
         path: String,
         method: String,
@@ -173,6 +203,9 @@ struct OfficialSmartServiceClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OfficialSmartServiceError.invalidResponse
+        }
+        if (500..<600).contains(http.statusCode) {
+            throw OfficialSmartServiceError.transientService(http.statusCode)
         }
         guard (200..<300).contains(http.statusCode) else {
             let code = (try? JSONDecoder().decode(SmartAPIError.self, from: data).error) ?? "HTTP_\(http.statusCode)"

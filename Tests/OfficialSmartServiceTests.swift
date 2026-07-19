@@ -25,6 +25,14 @@ import Testing
     #expect(OfficialPurchasePlan.standard.minutes == 300)
 }
 
+@Test func officialTaskPollingRetriesOnlyRecoverableFailures() {
+    #expect(OfficialSmartServiceClient.shouldRetryPolling(OfficialSmartServiceError.transientService(503)))
+    #expect(OfficialSmartServiceClient.shouldRetryPolling(URLError(.timedOut)))
+    #expect(OfficialSmartServiceClient.shouldRetryPolling(URLError(.networkConnectionLost)))
+    #expect(!OfficialSmartServiceClient.shouldRetryPolling(OfficialSmartServiceError.activeTaskExists))
+    #expect(!OfficialSmartServiceClient.shouldRetryPolling(URLError(.badURL)))
+}
+
 @MainActor
 @Test func appTransactionRefreshesWhenSharedValueIsUnavailable() async throws {
     enum ExpectedFailure: Error { case unavailable }
