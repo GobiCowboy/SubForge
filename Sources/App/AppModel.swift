@@ -809,7 +809,9 @@ final class AppModel: ObservableObject {
             showToast("首次安装已赠送 \(seconds / 60) 分钟智能字幕体验", level: .success, duration: 5)
         case .restored(let seconds):
             showToast("已恢复 \(seconds / 60) 分钟智能字幕体验凭证", level: .info, duration: 4)
-        case .notNeeded, .unavailable:
+        case .unavailable(let message):
+            showToast("暂时无法领取体验额度：\(message)", level: .error, duration: 5)
+        case .notNeeded:
             break
         }
     }

@@ -79,7 +79,11 @@ final class SmartServiceStore: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         await loadProductPrice()
-        await refreshWallet()
+        if KeychainStore.read(.officialServiceKey) == nil {
+            _ = await activateTrialIfNeeded()
+        } else {
+            await refreshWallet()
+        }
     }
 
     func refreshWallet() async {
@@ -111,7 +115,15 @@ final class SmartServiceStore: ObservableObject {
         }
 
         do {
-            let verification = try await AppTransaction.shared
+            let verification = try await Self.loadWithRefreshFallback(
+                shared: { try await AppTransaction.shared },
+                refresh: { try await AppTransaction.refresh() },
+                onSharedFailure: { error in
+                    AppLog.settings.warning(
+                        "AppTransaction.shared failed; refreshing error=\(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            )
             guard case .verified = verification else {
                 throw SmartPurchaseError.verificationFailed
             }
@@ -129,6 +141,21 @@ final class SmartServiceStore: ObservableObject {
             let message = error.localizedDescription
             statusMessage = message
             return .unavailable(message)
+        }
+    }
+
+    /// StoreKit recommends refreshing the signed app transaction when its cached
+    /// `shared` value is unavailable (for example, a fresh TestFlight install).
+    static func loadWithRefreshFallback<T>(
+        shared: () async throws -> T,
+        refresh: () async throws -> T,
+        onSharedFailure: ((Error) -> Void)? = nil
+    ) async throws -> T {
+        do {
+            return try await shared()
+        } catch {
+            onSharedFailure?(error)
+            return try await refresh()
         }
     }
 
