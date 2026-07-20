@@ -42,10 +42,22 @@ enum TimedSubtitleSegmenter {
         _ input: [SubtitleWord],
         configuration: SubtitleSegmentationConfiguration
     ) -> [SubtitleSegment] {
+        segment(input, configuration: configuration, expandCoarseTokens: false)
+    }
+
+    private static func segment(
+        _ input: [SubtitleWord],
+        configuration: SubtitleSegmentationConfiguration,
+        expandCoarseTokens: Bool
+    ) -> [SubtitleSegment] {
         let normalizedInput = input
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.end > $0.start }
             .sorted { $0.start < $1.start }
-        let words = semanticWords(normalizedInput, configuration: configuration)
+        let words = semanticWords(
+            normalizedInput,
+            configuration: configuration,
+            expandCoarseTokens: expandCoarseTokens
+        )
         guard !words.isEmpty else { return [] }
 
         var results: [SubtitleSegment] = []
@@ -112,7 +124,96 @@ enum TimedSubtitleSegmenter {
         let coarseWords = input.map { segment in
             SubtitleWord(start: segment.start, end: segment.end, text: segment.text)
         }
-        return segment(coarseWords, configuration: configuration)
+        return segment(
+            coarseWords,
+            configuration: configuration,
+            expandCoarseTokens: true
+        )
+    }
+
+    /// 官方服务会校对句子文本，但时间戳仍来自 ASR 原词。先按真实词时间得到边界，
+    /// 再把校对后的文本按相同语义比例放回这些边界，避免校对后退化为整句均匀估时。
+    static func segmentPreservingCorrectedText(
+        _ input: [SubtitleSegment],
+        configuration: SubtitleSegmentationConfiguration
+    ) -> [SubtitleSegment] {
+        let results = input.flatMap { source -> [SubtitleSegment] in
+            guard let sourceWords = source.words, !sourceWords.isEmpty else {
+                return segmentEstimated([source], configuration: configuration)
+            }
+            let timed = segment(sourceWords, configuration: configuration)
+            guard !timed.isEmpty else { return [] }
+
+            let corrected = source.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let recognized = joinedText(sourceWords)
+            if normalizedComparisonText(corrected) == normalizedComparisonText(recognized) {
+                return timed
+            }
+
+            guard let chunks = correctedTextChunks(
+                corrected,
+                weights: timed.map { max($0.text.count, 1) }
+            ), chunks.count == timed.count else {
+                return segmentEstimated([source], configuration: configuration)
+            }
+
+            return zip(timed, chunks).map { timedSegment, text in
+                SubtitleSegment(
+                    start: timedSegment.start,
+                    end: timedSegment.end,
+                    text: text
+                )
+            }
+        }
+        return removeOverlaps(results)
+    }
+
+    private static func normalizedComparisonText(_ text: String) -> String {
+        text.filter { !$0.isWhitespace }
+    }
+
+    private static func correctedTextChunks(_ text: String, weights: [Int]) -> [String]? {
+        guard !text.isEmpty, !weights.isEmpty else { return nil }
+        if weights.count == 1 { return [text] }
+
+        let pieces = lexicalPieces(text).map(\.text)
+        guard pieces.count >= weights.count else { return nil }
+
+        let totalWeight = max(weights.reduce(0, +), 1)
+        let pieceLengths = pieces.map { max($0.count, 1) }
+        let totalLength = max(pieceLengths.reduce(0, +), 1)
+        var boundaries: [Int] = [0]
+        var consumedWeight = 0
+        var previousBoundary = 0
+
+        for groupIndex in 0..<(weights.count - 1) {
+            consumedWeight += weights[groupIndex]
+            let target = Double(totalLength) * Double(consumedWeight) / Double(totalWeight)
+            let remainingGroups = weights.count - groupIndex - 1
+            let lower = previousBoundary + 1
+            let upper = pieces.count - remainingGroups
+            guard lower <= upper else { return nil }
+
+            var best = lower
+            var bestDistance = Double.greatestFiniteMagnitude
+            for candidate in lower...upper {
+                let length = pieceLengths.prefix(candidate).reduce(0, +)
+                let distance = abs(Double(length) - target)
+                if distance < bestDistance {
+                    best = candidate
+                    bestDistance = distance
+                }
+            }
+            boundaries.append(best)
+            previousBoundary = best
+        }
+        boundaries.append(pieces.count)
+
+        return zip(boundaries, boundaries.dropFirst()).map { lower, upper in
+            joinedText(pieces[lower..<upper].map {
+                SubtitleWord(start: 0, end: 0.01, text: $0)
+            })
+        }
     }
 
     /// 最大字数是排版目标，不是字符刀。超过目标时在附近的自然词边界回退，
@@ -165,25 +266,37 @@ enum TimedSubtitleSegmenter {
 
     private static func semanticWords(
         _ input: [SubtitleWord],
-        configuration: SubtitleSegmentationConfiguration
+        configuration: SubtitleSegmentationConfiguration,
+        expandCoarseTokens: Bool
     ) -> [SubtitleWord] {
-        let expanded = input.flatMap { source -> [TaggedWord] in
-            let pieces = lexicalPieces(source.text)
-            guard !pieces.isEmpty else { return [] }
-            let totalUnits = max(pieces.reduce(0) { $0 + max($1.text.count, 1) }, 1)
-            let duration = max(source.end - source.start, 0.01)
-            var cursor = source.start
-            return pieces.enumerated().map { index, piece in
-                let weight = Double(max(piece.text.count, 1)) / Double(totalUnits)
-                let end = index == pieces.count - 1
-                    ? source.end
-                    : min(source.end, cursor + duration * weight)
-                let tagged = TaggedWord(
-                    word: SubtitleWord(start: cursor, end: max(end, cursor + 0.005), text: piece.text),
-                    lexicalClass: piece.lexicalClass
+        let expanded: [TaggedWord]
+        if expandCoarseTokens {
+            expanded = input.flatMap { source -> [TaggedWord] in
+                let pieces = lexicalPieces(source.text)
+                guard !pieces.isEmpty else { return [] }
+                let totalUnits = max(pieces.reduce(0) { $0 + max($1.text.count, 1) }, 1)
+                let duration = max(source.end - source.start, 0.01)
+                var cursor = source.start
+                return pieces.enumerated().map { index, piece in
+                    let weight = Double(max(piece.text.count, 1)) / Double(totalUnits)
+                    let end = index == pieces.count - 1
+                        ? source.end
+                        : min(source.end, cursor + duration * weight)
+                    let tagged = TaggedWord(
+                        word: SubtitleWord(start: cursor, end: max(end, cursor + 0.005), text: piece.text),
+                        lexicalClass: piece.lexicalClass
+                    )
+                    cursor = end
+                    return tagged
+                }
+            }
+        } else {
+            expanded = input.map { source in
+                let pieces = lexicalPieces(source.text)
+                return TaggedWord(
+                    word: source,
+                    lexicalClass: pieces.count == 1 ? pieces[0].lexicalClass : nil
                 )
-                cursor = end
-                return tagged
             }
         }
 

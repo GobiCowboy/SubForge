@@ -1024,72 +1024,33 @@ final class CloudASRProvider: TranscriptionProvider {
         }
 
         let (data, _) = try await URLSession.shared.data(from: resolvedURL)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw TranscriptionError.cloudResponseInvalid
+        let parsed = try DashScopeTranscriptionParser.parse(data)
+
+        if !parsed.words.isEmpty {
+            return TimedSubtitleSegmenter.segment(
+                parsed.words,
+                configuration: segmentationConfiguration
+            )
         }
 
-        if let transcripts = json["transcripts"] as? [[String: Any]],
-           let first = transcripts.first,
-           let sentences = first["sentences"] as? [[String: Any]] {
-            var timedWords: [SubtitleWord] = []
-
-            for sentence in sentences {
-                if let words = dashScopeSentenceWords(sentence), !words.isEmpty {
-                    timedWords.append(contentsOf: words)
-                    continue
-                }
-
-                guard let text = (sentence["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !text.isEmpty else {
-                    continue
-                }
-
-                let start = (sentence["begin_time"] as? Double ?? 0) / 1000.0
-                let end = (sentence["end_time"] as? Double ?? 0) / 1000.0
-                timedWords.append(
-                    SubtitleWord(start: start, end: max(end, start + 0.1), text: text)
-                )
-            }
-
-            if !timedWords.isEmpty {
-                return TimedSubtitleSegmenter.segment(
-                    timedWords,
-                    configuration: segmentationConfiguration
-                )
-            }
-        }
-
-        if let transcripts = json["transcripts"] as? [[String: Any]],
-           let first = transcripts.first,
-           let text = first["text"] as? String,
-           !text.isEmpty {
-            let duration = await audioDuration(url: audioURL)
+        if !parsed.sentences.isEmpty {
+            AppLog.transcription.warning("cloudASR result has sentence timestamps only; using estimated word timing")
             return TimedSubtitleSegmenter.segmentEstimated(
-                approximateSegments(from: text, duration: duration),
+                parsed.sentences,
+                configuration: segmentationConfiguration
+            )
+        }
+
+        if !parsed.text.isEmpty {
+            let duration = await audioDuration(url: audioURL)
+            AppLog.transcription.warning("cloudASR result has no timestamps; using full-audio estimation")
+            return TimedSubtitleSegmenter.segmentEstimated(
+                approximateSegments(from: parsed.text, duration: duration),
                 configuration: segmentationConfiguration
             )
         }
 
         throw TranscriptionError.cloudResponseInvalid
-    }
-
-    private func dashScopeSentenceWords(_ sentence: [String: Any]) -> [SubtitleWord]? {
-        guard let words = sentence["words"] as? [[String: Any]], !words.isEmpty else {
-            return nil
-        }
-
-        let results = words.compactMap { word -> SubtitleWord? in
-            guard let token = word["text"] as? String else { return nil }
-            let punctuation = word["punctuation"] as? String ?? ""
-            let start = (word["begin_time"] as? Double ?? 0) / 1000.0
-            let end = (word["end_time"] as? Double ?? start * 1000) / 1000.0
-            return SubtitleWord(
-                start: start,
-                end: max(end, start + 0.1),
-                text: token + punctuation
-            )
-        }
-        return results.isEmpty ? nil : results
     }
 
     private func resolvedDashScopeResultURL(from rawURL: String) -> URL? {
@@ -1119,6 +1080,7 @@ final class CloudASRProvider: TranscriptionProvider {
         appendField("model", value: model)
         appendField("language", value: language.hasPrefix("zh") ? "zh" : language)
         appendField("response_format", value: "verbose_json")
+        appendField("timestamp_granularities[]", value: "word")
 
         let audioData = try Data(contentsOf: audioURL)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
@@ -1144,6 +1106,22 @@ final class CloudASRProvider: TranscriptionProvider {
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw TranscriptionError.cloudResponseInvalid
+        }
+
+        if let wordsData = json["words"] as? [[String: Any]] {
+            let words = wordsData.compactMap { dict -> SubtitleWord? in
+                let token = (dict["word"] as? String) ?? (dict["text"] as? String)
+                guard let token,
+                      let start = Self.doubleValue(dict["start"]),
+                      let end = Self.doubleValue(dict["end"]),
+                      !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return nil
+                }
+                return SubtitleWord(start: start, end: max(end, start + 0.01), text: token)
+            }
+            if !words.isEmpty {
+                return TimedSubtitleSegmenter.segment(words, configuration: segmentationConfiguration)
+            }
         }
 
         if let segmentsData = json["segments"] as? [[String: Any]] {
@@ -1186,6 +1164,17 @@ final class CloudASRProvider: TranscriptionProvider {
             return seconds.isNaN ? 10.0 : seconds
         } catch {
             return 10.0
+        }
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        switch value {
+        case let number as NSNumber:
+            number.doubleValue
+        case let text as String:
+            Double(text)
+        default:
+            nil
         }
     }
 }

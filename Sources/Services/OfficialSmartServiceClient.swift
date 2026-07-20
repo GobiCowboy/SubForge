@@ -23,6 +23,7 @@ enum OfficialSmartServiceError: LocalizedError {
     case transientService(Int)
     case uploadFailed(Int)
     case taskFailed(String)
+    case proofreadingNotApplied
     case additionalCreditsRequired(Int)
     case fileUnreadable
     case timeout
@@ -38,6 +39,7 @@ enum OfficialSmartServiceError: LocalizedError {
         case .transientService(let status): "智能字幕服务暂时不可用（HTTP \(status)）"
         case .uploadFailed(let status): "音频直传失败（HTTP \(status)）"
         case .taskFailed(let code): "智能字幕处理失败：\(code)"
+        case .proofreadingNotApplied: "官方智能字幕未完成 AI 校对，请稍后重试"
         case .additionalCreditsRequired(let seconds): "实际时长超出预估，还需 \(seconds) 秒额度"
         case .fileUnreadable: "无法读取音频文件的大小或时长"
         case .timeout: "智能字幕处理超时，任务可能仍在服务端继续"
@@ -74,13 +76,21 @@ struct SmartUploadSession: Decodable {
 private struct SmartTaskResponse: Decodable {
     struct Result: Decodable {
         struct Segment: Decodable {
+            struct Word: Decodable {
+                let start: TimeInterval
+                let end: TimeInterval
+                let text: String
+            }
+
             let start: TimeInterval
             let end: TimeInterval
             let text: String
+            let words: [Word]?
         }
 
         let segments: [Segment]
         let actualSeconds: Int
+        let proofreadingApplied: Bool
     }
 
     let status: String
@@ -155,6 +165,7 @@ struct OfficialSmartServiceClient {
     }
 
     private func poll(taskID: String) async throws -> [SubtitleSegment] {
+        var observedProofreading = false
         for attempt in 0..<300 {
             try Task.checkCancellation()
             let task: SmartTaskResponse
@@ -174,12 +185,32 @@ struct OfficialSmartServiceClient {
             }
             switch task.status {
             case "completed":
-                onProgress?(.init(phase: .finishing, progress: 0.92))
-                guard let segments = task.result?.segments, !segments.isEmpty else {
+                guard let result = task.result else {
                     throw OfficialSmartServiceError.invalidResponse
                 }
-                return segments.map { SubtitleSegment(start: $0.start, end: $0.end, text: $0.text) }
+                guard result.proofreadingApplied else {
+                    throw OfficialSmartServiceError.proofreadingNotApplied
+                }
+                guard !result.segments.isEmpty else {
+                    throw OfficialSmartServiceError.invalidResponse
+                }
+                if !observedProofreading {
+                    onProgress?(.init(phase: .proofreading, progress: 0.88))
+                    try await Task.sleep(for: .milliseconds(500))
+                }
+                onProgress?(.init(phase: .finishing, progress: 0.92))
+                return result.segments.map { segment in
+                    SubtitleSegment(
+                        start: segment.start,
+                        end: segment.end,
+                        text: segment.text,
+                        words: segment.words?.map {
+                            SubtitleWord(start: $0.start, end: $0.end, text: $0.text)
+                        }
+                    )
+                }
             case "proofreading":
+                observedProofreading = true
                 onProgress?(.init(phase: .proofreading, progress: min(0.90, 0.78 + Double(attempt) * 0.008)))
                 try await Task.sleep(for: .seconds(2))
             case "cancelled":
@@ -338,6 +369,9 @@ final class OfficialSmartSubtitleProvider: TranscriptionProvider {
         _ segments: [SubtitleSegment],
         configuration: SubtitleSegmentationConfiguration
     ) -> [SubtitleSegment] {
-        TimedSubtitleSegmenter.segmentEstimated(segments, configuration: configuration)
+        TimedSubtitleSegmenter.segmentPreservingCorrectedText(
+            segments,
+            configuration: configuration
+        )
     }
 }
