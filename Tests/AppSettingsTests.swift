@@ -45,3 +45,11 @@ import Testing
     #expect(settings.exportToFinalCutPro)
     #expect(settings.overwriteExisting)
 }
+
+@Test func subtitlePlanGroupsTranscriptionEngines() {
+    #expect(SubtitlePlan(engine: .officialSmart) == .official)
+    #expect(SubtitlePlan(engine: .cloudASR) == .custom)
+    #expect(SubtitlePlan(engine: .funASRLocal) == .local)
+    #expect(SubtitlePlan(engine: .whisperLocal) == .local)
+    #expect(SubtitlePlan(engine: .appleSpeech) == .local)
+}

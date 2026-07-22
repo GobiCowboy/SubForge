@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsSidebar: View {
     @Binding var selection: SettingsSection
+    let selectedSubtitlePlan: SubtitlePlan
+    let onSelectSubtitlePlan: (SubtitlePlan) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,7 +14,9 @@ struct SettingsSidebar: View {
                 .padding(.bottom, 22)
 
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(SettingsSection.allCases) { section in
+                sidebarButton(.general)
+                subtitlePlanGroup
+                ForEach([SettingsSection.style, .export, .watch]) { section in
                     sidebarButton(section)
                 }
             }
@@ -23,6 +27,21 @@ struct SettingsSidebar: View {
         .frame(width: 240, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial)
+    }
+
+    private var subtitlePlanGroup: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("字幕方案")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
+
+            ForEach(SubtitlePlan.allCases) { plan in
+                subtitlePlanButton(plan)
+            }
+        }
     }
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
@@ -48,5 +67,46 @@ struct SettingsSidebar: View {
         .onTapGesture {
             selection = section
         }
+    }
+
+    private func subtitlePlanButton(_ plan: SubtitlePlan) -> some View {
+        let isSelected = selectedSubtitlePlan == plan
+        let isCurrentPage = isSelected && selection == .subtitles
+
+        return Button {
+            onSelectSubtitlePlan(plan)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 20, alignment: .center)
+                    .foregroundStyle(isCurrentPage ? Color.white : (isSelected ? Color.accentColor : .secondary))
+
+                Text(plan.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+
+                if let badge = plan.badge {
+                    Text(badge)
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(isCurrentPage ? Color.white.opacity(0.18) : Color.accentColor.opacity(0.11), in: Capsule())
+                }
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isCurrentPage ? Color.white : Color.primary)
+            .padding(.horizontal, 12)
+            .frame(width: 216, height: 36, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isCurrentPage ? Color.accentColor : Color.clear)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(plan.title)
+        .accessibilityValue(isSelected ? "已选择" : "未选择")
     }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum SubtitlePlan: String, CaseIterable, Identifiable {
+enum SubtitlePlan: String, CaseIterable, Identifiable {
     case official
     case custom
     case local
@@ -9,9 +9,9 @@ private enum SubtitlePlan: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .official: "官方"
-        case .custom: "自定义"
-        case .local: "本地"
+        case .official: "官方智能字幕"
+        case .custom: "自定义服务"
+        case .local: "本地识别"
         }
     }
 
@@ -22,69 +22,38 @@ private enum SubtitlePlan: String, CaseIterable, Identifiable {
         case .local: "实验"
         }
     }
+
+    static let localEngines: [TranscriptionEngine] = [
+        .funASRLocal,
+        .whisperLocal,
+        .appleSpeech
+    ]
+
+    init(engine: TranscriptionEngine) {
+        switch engine {
+        case .officialSmart:
+            self = .official
+        case .cloudASR:
+            self = .custom
+        case .funASRLocal, .whisperLocal, .appleSpeech:
+            self = .local
+        }
+    }
 }
 
 struct SubtitleSettingsPane: View {
     @Binding var settings: AppSettings
     @ObservedObject var service: SmartServiceStore
 
-    @AppStorage("subforge.localTranscriptionEngine")
-    private var storedLocalTranscriptionEngine = TranscriptionEngine.funASRLocal.rawValue
     @State private var configurationTab: SubtitleConfigurationTab = .transcription
     @State private var isLocalLimitationsExpanded = false
 
     private var selectedPlan: SubtitlePlan {
-        switch settings.transcriptionEngine {
-        case .officialSmart:
-            .official
-        case .cloudASR:
-            .custom
-        case .funASRLocal, .whisperLocal, .appleSpeech:
-            .local
-        }
+        SubtitlePlan(engine: settings.transcriptionEngine)
     }
-
-    private var localTranscriptionEngine: TranscriptionEngine {
-        guard let engine = TranscriptionEngine(rawValue: storedLocalTranscriptionEngine),
-              Self.localEngines.contains(engine) else {
-            return .funASRLocal
-        }
-        return engine
-    }
-
-    private static let localEngines: [TranscriptionEngine] = [
-        .funASRLocal,
-        .whisperLocal,
-        .appleSpeech
-    ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(Array(SubtitlePlan.allCases.enumerated()), id: \.element.id) { index, plan in
-                    if index > 0 {
-                        Divider()
-                            .frame(height: 52)
-                    }
-                    planCard(plan)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
-            )
-            .padding(.bottom, 22)
-
-            Divider()
-            selectedPlanContent
-        }
-        .onAppear(perform: rememberLocalEngineIfNeeded)
-        .onChange(of: settings.transcriptionEngine) { _, engine in
-            guard Self.localEngines.contains(engine) else { return }
-            storedLocalTranscriptionEngine = engine.rawValue
-        }
+        selectedPlanContent
     }
 
     @ViewBuilder
@@ -116,7 +85,7 @@ struct SubtitleSettingsPane: View {
                     TranscriptionSettingsPane(
                         settings: $settings,
                         allowsOfficialSmart: false,
-                        allowedEngines: Self.localEngines,
+                        allowedEngines: SubtitlePlan.localEngines,
                         enginePickerTitle: "本地模型"
                     )
                 } else {
@@ -126,46 +95,6 @@ struct SubtitleSettingsPane: View {
             .padding(.top, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private func planCard(_ plan: SubtitlePlan) -> some View {
-        let isSelected = selectedPlan == plan
-
-        return Button {
-            select(plan)
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-
-                Text(plan.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                if let badge = plan.badge {
-                    Text(badge)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.accentColor.opacity(0.11), in: Capsule())
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .background(
-                isSelected ? Color.accentColor.opacity(0.07) : Color.clear
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, minHeight: 52)
-        .accessibilityLabel(plan.title)
-        .accessibilityValue(isSelected ? "已选择" : "未选择")
     }
 
     private var configurationTabs: some View {
@@ -210,25 +139,4 @@ struct SubtitleSettingsPane: View {
         )
     }
 
-    private func select(_ plan: SubtitlePlan) {
-        isLocalLimitationsExpanded = false
-        switch plan {
-        case .official:
-            rememberLocalEngineIfNeeded()
-            settings.transcriptionEngine = .officialSmart
-            configurationTab = .transcription
-        case .custom:
-            rememberLocalEngineIfNeeded()
-            settings.transcriptionEngine = .cloudASR
-            configurationTab = .transcription
-        case .local:
-            settings.transcriptionEngine = localTranscriptionEngine
-            configurationTab = .transcription
-        }
-    }
-
-    private func rememberLocalEngineIfNeeded() {
-        guard Self.localEngines.contains(settings.transcriptionEngine) else { return }
-        storedLocalTranscriptionEngine = settings.transcriptionEngine.rawValue
-    }
 }
