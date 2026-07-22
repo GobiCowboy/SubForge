@@ -80,6 +80,7 @@ struct SubtitleSettingsPane: View {
             VStack(alignment: .leading, spacing: 28) {
                 configurationTabs
                 if configurationTab == .transcription {
+                    localRecognitionLimitation
                     TranscriptionSettingsPane(
                         settings: $settings,
                         allowsOfficialSmart: false,
@@ -97,6 +98,13 @@ struct SubtitleSettingsPane: View {
 
     private var configurationTabs: some View {
         SubtitleConfigurationTabs(selection: $configurationTab, settings: settings)
+    }
+
+    private var localRecognitionLimitation: some View {
+        Label("实验功能：时间轴精度较低，不建议用于正式字幕制作。", systemImage: "exclamationmark.triangle.fill")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.orange)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
 }
