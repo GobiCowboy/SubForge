@@ -29,3 +29,19 @@ import Testing
     #expect(decoded.effectiveMaxSubtitleLength(for: .custom) == 18)
     #expect(decoded.effectiveMaxSubtitleLength(for: .local) == 18)
 }
+
+@Test func defaultExportSettingsMatchFinalCutWorkflow() {
+    let settings = ExportSettings()
+
+    #expect(settings.format == .srtAndFCPXML)
+    #expect(settings.exportToFinalCutPro)
+    #expect(settings.saveLocation == .sameAsSource)
+    #expect(settings.overwriteExisting)
+}
+
+@Test func missingExportPreferencesUseNewDefaults() throws {
+    let settings = try JSONDecoder().decode(ExportSettings.self, from: Data("{}".utf8))
+
+    #expect(settings.exportToFinalCutPro)
+    #expect(settings.overwriteExisting)
+}

@@ -159,9 +159,9 @@ struct ExportSettings: Equatable, Codable {
     var saveLocation: SaveLocation = .sameAsSource
     var customOutputPath: String = ""
     var customOutputBookmarkData: Data?
-    var overwriteExisting = false
+    var overwriteExisting = true
     var includeLog = true
-    var exportToFinalCutPro = false
+    var exportToFinalCutPro = true
 
     enum CodingKeys: String, CodingKey {
         case format
@@ -190,9 +190,9 @@ struct ExportSettings: Equatable, Codable {
         saveLocation = try container.decodeIfPresent(SaveLocation.self, forKey: .saveLocation) ?? .sameAsSource
         customOutputPath = try container.decodeIfPresent(String.self, forKey: .customOutputPath) ?? ""
         customOutputBookmarkData = try container.decodeIfPresent(Data.self, forKey: .customOutputBookmarkData)
-        overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? false
+        overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? true
         includeLog = try container.decodeIfPresent(Bool.self, forKey: .includeLog) ?? true
-        exportToFinalCutPro = try container.decodeIfPresent(Bool.self, forKey: .exportToFinalCutPro) ?? false
+        exportToFinalCutPro = try container.decodeIfPresent(Bool.self, forKey: .exportToFinalCutPro) ?? true
     }
 }
 

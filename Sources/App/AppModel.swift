@@ -1440,6 +1440,8 @@ final class AppModel: ObservableObject {
     func exportArtifacts() {
         guard !segments.isEmpty else { return }
 
+        configureWatchFolderOnFirstExportIfNeeded()
+
         do {
             guard let directoryChoice = chooseExportDirectory() else { return }
             let directory = directoryChoice.url
@@ -1458,11 +1460,9 @@ final class AppModel: ObservableObject {
                 exportedURLs.append(fcpxmlURL)
             }
 
-            if settings.exportSettings.exportToFinalCutPro {
-                guard let fcpxmlURL = plan.fcpxmlURL else {
-                    showToast("导出到 FCP 需要选择 FCPXML 或 SRT + FCPXML", level: .error)
-                    return
-                }
+            if settings.exportSettings.exportToFinalCutPro,
+               let fcpxmlURL = plan.fcpxmlURL,
+               !finalCutProApplicationURLs().isEmpty {
                 try importIntoFinalCutPro(fcpxmlURL)
                 showToast("已导出并发送到 Final Cut Pro", level: .success)
             } else {
@@ -1472,6 +1472,20 @@ final class AppModel: ObservableObject {
         } catch {
             showToast("导出失败：\(error.localizedDescription)", level: .error)
         }
+    }
+
+    private func configureWatchFolderOnFirstExportIfNeeded() {
+        guard FirstExportWatchFolderOnboarding.shouldPresent(for: settings),
+              let directoryURL = FirstExportWatchFolderOnboarding.present()
+        else { return }
+
+        var updated = settings
+        updated.watchSettings.directoryPath = directoryURL.path
+        updated.watchSettings.directoryBookmarkData = SecurityScopedResourceAccess.bookmarkData(for: directoryURL)
+        updated.watchSettings.autoStart = true
+        settings = updated
+        AppLog.watcher.info("watch onboarding configured directory=\(directoryURL.path, privacy: .public)")
+        showToast("已启用自动监听：\(directoryURL.lastPathComponent)", level: .success)
     }
 
     func dismissToast(_ toast: ToastMessage) {
