@@ -56,7 +56,7 @@ struct SettingsSidebar: View {
                 .font(.system(size: 15, weight: .medium))
                 .frame(width: 20, alignment: .center)
 
-            Text(section.rawValue)
+            Text(section.sidebarTitle)
                 .font(.system(size: 15, weight: .medium))
                 .lineLimit(1)
 

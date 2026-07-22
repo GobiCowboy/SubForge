@@ -122,7 +122,7 @@ struct SubtitleConfigurationTabs: View {
                     .font(.system(size: 16, weight: .semibold))
 
                 Image(systemName: isConfigured ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(isConfigured ? .green : .secondary)
             }
             .foregroundStyle(selected ? Color.accentColor : .primary)
