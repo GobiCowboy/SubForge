@@ -14,19 +14,13 @@ enum SettingsVisualTokens {
 }
 
 struct SettingsPageHeader: View {
-    let section: SettingsSection
+    let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(section.rawValue)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.primary)
-
-            Text(section.pageSubtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(title)
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

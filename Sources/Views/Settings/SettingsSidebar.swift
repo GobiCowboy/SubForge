@@ -30,13 +30,19 @@ struct SettingsSidebar: View {
     }
 
     private var subtitlePlanGroup: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("字幕方案")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.top, 16)
-                .padding(.bottom, 4)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                Image(systemName: SettingsSection.subtitles.icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 20, alignment: .center)
+
+                Text(SettingsSection.subtitles.rawValue)
+                    .font(.system(size: 15, weight: .medium))
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 4)
 
             ForEach(SubtitlePlan.allCases) { plan in
                 subtitlePlanButton(plan)
@@ -79,7 +85,7 @@ struct SettingsSidebar: View {
             HStack(spacing: 9) {
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 14, weight: .medium))
-                    .frame(width: 20, alignment: .center)
+                    .frame(width: 16, alignment: .center)
                     .foregroundStyle(isCurrentPage ? Color.white : (isSelected ? Color.accentColor : .secondary))
 
                 Text(plan.title)
@@ -97,15 +103,17 @@ struct SettingsSidebar: View {
                 Spacer(minLength: 0)
             }
             .foregroundStyle(isCurrentPage ? Color.white : Color.primary)
-            .padding(.horizontal, 12)
-            .frame(width: 216, height: 36, alignment: .leading)
+            .padding(.leading, 38)
+            .padding(.trailing, 12)
+            .frame(width: 216, height: 34, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isCurrentPage ? Color.accentColor : Color.clear)
+                    .fill(isCurrentPage ? Color.accentColor.opacity(0.14) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .accessibilityLabel(plan.title)
         .accessibilityValue(isSelected ? "已选择" : "未选择")
     }

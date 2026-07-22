@@ -4,9 +4,7 @@ struct ExportSettingsPane: View {
     @Binding var settings: AppSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "导出配置") {
-                SettingsListSection {
+        SettingsListSection {
                     SettingsListRow(title: "导出格式") {
                         SettingsTrailingControl {
                             Picker("导出格式", selection: $settings.exportSettings.format) {
@@ -58,8 +56,6 @@ struct ExportSettingsPane: View {
                         Toggle("", isOn: $settings.exportSettings.overwriteExisting)
                             .labelsHidden()
                     }
-                }
-            }
         }
     }
 }

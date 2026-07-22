@@ -32,9 +32,7 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "基本样式") {
-                SettingsListSection {
+        SettingsListSection {
                     SettingsListRow(title: "画幅") {
                         HStack(spacing: 0) {
                             ForEach(SubtitleCanvasOrientation.allCases) { orientation in
@@ -95,8 +93,6 @@ struct SubtitleStyleSettingsPane: View {
                         }
                         .frame(width: SettingsListMetrics.controlWidth, alignment: .trailing)
                     }
-                }
-            }
         }
         .onAppear(perform: syncPresetFromCurrentStyle)
     }

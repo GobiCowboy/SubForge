@@ -25,6 +25,15 @@ struct SettingsView: View {
         return engine
     }
 
+    private var pageTitle: String {
+        switch selection {
+        case .subtitles:
+            "字幕 - \(selectedSubtitlePlan.title)"
+        default:
+            selection.rawValue
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(
@@ -38,7 +47,7 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    SettingsPageHeader(section: selection)
+                    SettingsPageHeader(title: pageTitle)
 
                     switch selection {
                     case .general:
