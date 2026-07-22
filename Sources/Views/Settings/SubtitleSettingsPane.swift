@@ -96,7 +96,7 @@ struct SubtitleSettingsPane: View {
     }
 
     private var configurationTabs: some View {
-        SubtitleConfigurationTabs(selection: $configurationTab)
+        SubtitleConfigurationTabs(selection: $configurationTab, settings: settings)
     }
 
 }

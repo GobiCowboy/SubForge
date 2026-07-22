@@ -15,12 +15,20 @@ enum SettingsVisualTokens {
 
 struct SettingsPageHeader: View {
     let title: String
+    var detail: String? = nil
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(title)
+                .font(.system(size: 22, weight: .semibold))
+
+            if let detail {
+                Text(" - \(detail)")
+                    .font(.system(size: 18, weight: .semibold))
+            }
+        }
+        .foregroundStyle(.primary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

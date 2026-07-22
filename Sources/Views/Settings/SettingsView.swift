@@ -25,13 +25,8 @@ struct SettingsView: View {
         return engine
     }
 
-    private var pageTitle: String {
-        switch selection {
-        case .subtitles:
-            "字幕 - \(selectedSubtitlePlan.title)"
-        default:
-            selection.rawValue
-        }
+    private var pageTitleDetail: String? {
+        selection == .subtitles ? selectedSubtitlePlan.title : nil
     }
 
     var body: some View {
@@ -47,7 +42,7 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    SettingsPageHeader(title: pageTitle)
+                    SettingsPageHeader(title: selection.rawValue, detail: pageTitleDetail)
 
                     switch selection {
                     case .general:

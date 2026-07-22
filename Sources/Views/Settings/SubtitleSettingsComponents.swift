@@ -95,6 +95,7 @@ struct SubtitleConfigurationStatusView: View {
 
 struct SubtitleConfigurationTabs: View {
     @Binding var selection: SubtitleConfigurationTab
+    let settings: AppSettings
 
     var body: some View {
         HStack(spacing: 28) {
@@ -111,20 +112,27 @@ struct SubtitleConfigurationTabs: View {
 
     private func tabButton(_ tab: SubtitleConfigurationTab) -> some View {
         let selected = selection == tab
+        let isConfigured = SubtitleConfigurationStatus.resolve(tab: tab, settings: settings).isConfigured
 
         return Button {
             selection = tab
         } label: {
-            Text(tab.rawValue)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(selected ? Color.accentColor : .primary)
-                .frame(height: 42)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(selected ? Color.accentColor : Color.clear)
-                        .frame(height: 2)
-                }
-                .contentShape(Rectangle())
+            HStack(spacing: 7) {
+                Text(tab.rawValue)
+                    .font(.system(size: 16, weight: .semibold))
+
+                Image(systemName: isConfigured ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isConfigured ? .green : .secondary)
+            }
+            .foregroundStyle(selected ? Color.accentColor : .primary)
+            .frame(height: 42)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(selected ? Color.accentColor : Color.clear)
+                    .frame(height: 2)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .focusable(false)
