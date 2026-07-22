@@ -95,62 +95,39 @@ struct SubtitleConfigurationStatusView: View {
 
 struct SubtitleConfigurationTabs: View {
     @Binding var selection: SubtitleConfigurationTab
-    let settings: AppSettings
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 28) {
             ForEach(SubtitleConfigurationTab.allCases) { tab in
                 tabButton(tab)
             }
+            Spacer(minLength: 0)
         }
-        .padding(3)
-        .frame(maxWidth: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
-        )
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 
     private func tabButton(_ tab: SubtitleConfigurationTab) -> some View {
         let selected = selection == tab
-        let status = SubtitleConfigurationStatus.resolve(tab: tab, settings: settings)
 
         return Button {
             selection = tab
         } label: {
-            HStack(spacing: 8) {
-                Text(tab.rawValue)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-
-                compactBadge(
-                    status.isConfigured ? "已配置" : "未配置",
-                    systemImage: status.isConfigured ? "checkmark.circle.fill" : "circle.dashed",
-                    color: status.isConfigured ? .accentColor : .secondary
-                )
-                compactBadge(
-                    status.validationText,
-                    systemImage: status.validationIcon,
-                    color: status.validationColor
-                )
-            }
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .padding(.horizontal, 12)
-            .background(
-                selected ? Color.accentColor.opacity(0.11) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .contentShape(Rectangle())
+            Text(tab.rawValue)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(selected ? Color.accentColor : .primary)
+                .frame(height: 42)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(selected ? Color.accentColor : Color.clear)
+                        .frame(height: 2)
+                }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private func compactBadge(_ text: String, systemImage: String, color: Color) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(color)
-            .lineLimit(1)
+        .focusable(false)
     }
 }
 

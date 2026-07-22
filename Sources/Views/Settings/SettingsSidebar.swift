@@ -93,11 +93,7 @@ struct SettingsSidebar: View {
                     .lineLimit(1)
 
                 if let badge = plan.badge {
-                    Text(badge)
-                        .font(.system(size: 10, weight: .semibold))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(isCurrentPage ? Color.white.opacity(0.18) : Color.accentColor.opacity(0.11), in: Capsule())
+                    planBadge(badge, isCurrentPage: isCurrentPage)
                 }
 
                 Spacer(minLength: 0)
@@ -108,7 +104,7 @@ struct SettingsSidebar: View {
             .frame(width: 216, height: 34, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isCurrentPage ? Color.accentColor.opacity(0.14) : Color.clear)
+                    .fill(isCurrentPage ? Color.accentColor : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
@@ -116,5 +112,20 @@ struct SettingsSidebar: View {
         .focusable(false)
         .accessibilityLabel(plan.title)
         .accessibilityValue(isSelected ? "已选择" : "未选择")
+    }
+
+    private func planBadge(_ text: String, isCurrentPage: Bool) -> some View {
+        let isRecommended = text == "推荐"
+        let tint: Color = isRecommended ? .accentColor : .secondary
+
+        return Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(
+                isCurrentPage ? Color.white : tint.opacity(0.11),
+                in: Capsule()
+            )
     }
 }

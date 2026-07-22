@@ -14,8 +14,7 @@ struct ProofreadingSettingsPane: View {
                 SettingsTipBox(text: configurationStatusText)
             }
 
-            SettingsGroup(title: "AI 校对配置") {
-                SettingsListSection {
+            SettingsListSection {
                     SettingsListRow(title: "启用模型纠正") {
                         Toggle("", isOn: $settings.proofreadingEnabled)
                             .labelsHidden()
@@ -70,7 +69,6 @@ struct ProofreadingSettingsPane: View {
                                 )
                         }
                     }
-                }
             }
 
             SettingsValidationSection(

@@ -19,38 +19,29 @@ struct TranscriptionSettingsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SettingsGroup(title: "转写配置") {
-                SettingsListSection {
-                    languagePickerControl
-                    if showsEnginePicker {
-                        enginePickerControl
-                    }
+            SettingsListSection {
+                languagePickerControl
+                if showsEnginePicker {
+                    enginePickerControl
+                }
 
-                    switch settings.transcriptionEngine {
-                    case .cloudASR:
-                        cloudASRControls
-                    case .officialSmart:
-                        SettingsListRow(title: "智能字幕") {
-                            Text("在「智能服务」中购买与查看额度")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
-                        }
-                    case .appleSpeech:
-                        SettingsListRow(title: "Apple 语音") {
-                            Text("已启用")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                    case .whisperLocal, .funASRLocal:
-                        EmptyView()
+                switch settings.transcriptionEngine {
+                case .cloudASR:
+                    cloudASRControls
+                case .officialSmart:
+                    SettingsListRow(title: "智能字幕") {
+                        Text("在「智能服务」中购买与查看额度")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
                     }
-
-                    SettingsListRow(title: "单条字幕最大字数", controlWidth: 360) {
-                        SubtitleLengthSlider(
-                            settings: $settings,
-                            profile: settings.subtitleLengthProfile
-                        )
+                case .appleSpeech:
+                    SettingsListRow(title: "Apple 语音") {
+                        Text("已启用")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
+                case .whisperLocal, .funASRLocal:
+                    EmptyView()
                 }
             }
 
@@ -61,6 +52,15 @@ struct TranscriptionSettingsPane: View {
                 funASRSection
             case .cloudASR, .officialSmart, .appleSpeech:
                 EmptyView()
+            }
+
+            SettingsListSection {
+                SettingsListRow(title: "单条字幕最大字数", controlWidth: 360) {
+                    SubtitleLengthSlider(
+                        settings: $settings,
+                        profile: settings.subtitleLengthProfile
+                    )
+                }
             }
 
             SettingsValidationSection(
