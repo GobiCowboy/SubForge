@@ -66,6 +66,7 @@ struct SubtitleSettingsPane: View {
                 if configurationTab == .transcription {
                     TranscriptionSettingsPane(
                         settings: $settings,
+                        validationScope: .custom,
                         allowsOfficialSmart: false,
                         allowedEngines: [.cloudASR],
                         showsEnginePicker: false
@@ -83,6 +84,7 @@ struct SubtitleSettingsPane: View {
                     localRecognitionLimitation
                     TranscriptionSettingsPane(
                         settings: $settings,
+                        validationScope: .local,
                         allowsOfficialSmart: false,
                         allowedEngines: SubtitlePlan.localEngines,
                         enginePickerTitle: "本地模型"

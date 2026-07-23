@@ -67,3 +67,98 @@ import Testing
     #expect(SubtitlePlan(engine: .whisperLocal) == .local)
     #expect(SubtitlePlan(engine: .appleSpeech) == .local)
 }
+
+@Test func transcriptionEngineIdentifiesLocalProcessing() {
+    #expect(TranscriptionEngine.funASRLocal.isLocal)
+    #expect(TranscriptionEngine.whisperLocal.isLocal)
+    #expect(TranscriptionEngine.appleSpeech.isLocal)
+    #expect(!TranscriptionEngine.cloudASR.isLocal)
+    #expect(!TranscriptionEngine.officialSmart.isLocal)
+}
+
+@Test func transcriptionValidationStateIsIndependentByPlan() {
+    var settings = AppSettings()
+    let customState = SettingsValidationState(hasValidated: true, passed: true, resultText: "custom ok")
+    let localState = SettingsValidationState(hasValidated: true, passed: false, resultText: "local failed")
+
+    settings.transcriptionEngine = .cloudASR
+    settings.setActiveTranscriptionValidationState(customState)
+
+    settings.transcriptionEngine = .funASRLocal
+    settings.setActiveTranscriptionValidationState(localState)
+
+    settings.transcriptionEngine = .cloudASR
+    #expect(settings.activeTranscriptionValidationState.hasValidated)
+    #expect(settings.activeTranscriptionValidationState.resultText == customState.resultText)
+
+    settings.transcriptionEngine = .funASRLocal
+    #expect(settings.activeTranscriptionValidationState.hasValidated)
+    #expect(settings.activeTranscriptionValidationState.resultText == localState.resultText)
+}
+
+@Test func customValidationClearsOnlyWhenCustomFieldsChange() {
+    var settings = AppSettings()
+    let passed = SettingsValidationState(hasValidated: true, passed: true, resultText: "ok")
+    settings.customTranscriptionValidationState = passed
+    settings.localTranscriptionValidationState = passed
+
+    settings.setCustomASRURL("https://example.com")
+
+    #expect(!settings.customTranscriptionValidationState.hasValidated)
+    #expect(settings.localTranscriptionValidationState.hasValidated)
+}
+
+@Test func customKeyHydrationDoesNotRestoreOrClearValidation() {
+    var settings = AppSettings()
+    settings.customTranscriptionValidationState = SettingsValidationState()
+
+    settings.hydrateCustomASRKey("key-from-keychain")
+
+    #expect(settings.cloudASRKey == "key-from-keychain")
+    #expect(!settings.customTranscriptionValidationState.hasValidated)
+}
+
+@Test func localAndProofreadingValidationResetIndependently() {
+    var settings = AppSettings()
+    let passed = SettingsValidationState(hasValidated: true, passed: true, resultText: "ok")
+    settings.customTranscriptionValidationState = passed
+    settings.localTranscriptionValidationState = passed
+    settings.proofreadingValidationState = passed
+
+    settings.setLocalWhisperModel(.small)
+    #expect(settings.customTranscriptionValidationState.hasValidated)
+    #expect(!settings.localTranscriptionValidationState.hasValidated)
+    #expect(settings.proofreadingValidationState.hasValidated)
+
+    settings.setProofreadingModel("another-model")
+    #expect(settings.customTranscriptionValidationState.hasValidated)
+    #expect(!settings.proofreadingValidationState.hasValidated)
+}
+
+@Test func workflowAllowsUnverifiedAndBlocksOnlyExplicitFailure() {
+    var settings = AppSettings()
+    settings.transcriptionEngine = .cloudASR
+    settings.proofreadingEnabled = true
+
+    #expect(settings.allowsTranscriptionAfterValidation)
+    #expect(settings.shouldRunProofreading)
+
+    settings.customTranscriptionValidationState = SettingsValidationState(
+        hasValidated: true,
+        passed: false,
+        resultText: "failed"
+    )
+    settings.proofreadingValidationState = SettingsValidationState(
+        hasValidated: true,
+        passed: false,
+        resultText: "failed"
+    )
+
+    #expect(!settings.allowsTranscriptionAfterValidation)
+    #expect(!settings.shouldRunProofreading)
+
+    settings.customTranscriptionValidationState.passed = true
+    settings.proofreadingValidationState.passed = true
+    #expect(settings.allowsTranscriptionAfterValidation)
+    #expect(settings.shouldRunProofreading)
+}

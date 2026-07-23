@@ -5,8 +5,12 @@ struct ProofreadingSettingsPane: View {
     @Binding var settings: AppSettings
 
     @State private var isTesting = false
-    @State private var validationState = SettingsValidationState()
     @State private var isValidationExpanded = false
+    @State var validationTask: Task<Void, Never>?
+
+    private var validationState: SettingsValidationState {
+        settings.proofreadingValidationState
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
@@ -16,46 +20,41 @@ struct ProofreadingSettingsPane: View {
 
             SettingsListSection {
                     SettingsListRow(title: "启用模型纠正") {
-                        Toggle("", isOn: $settings.proofreadingEnabled)
+                        Toggle("", isOn: proofreadingEnabledBinding)
                             .labelsHidden()
                     }
 
                     if settings.proofreadingEnabled {
                         SettingsListRow(title: "服务预设") {
                             SettingsTrailingControl {
-                                Picker("服务预设", selection: $settings.cloudLLMPreset) {
+                                Picker("服务预设", selection: proofreadingPresetBinding) {
                                     ForEach(CloudLLMPreset.allCases) { preset in
                                         Text(preset.rawValue).tag(preset)
                                     }
                                 }
                                 .labelsHidden()
-                                .onChange(of: settings.cloudLLMPreset) { _, preset in
-                                    settings.cloudLLMURL = preset.defaultURL
-                                    settings.cloudLLMModel = preset.defaultModel
-                                    settings.proofreadingEngine = .cloudLLM
-                                }
                             }
                         }
 
                         SettingsListRow(title: "Base URL") {
-                            TextField("Base URL", text: $settings.cloudLLMURL)
+                            TextField("Base URL", text: proofreadingURLBinding)
                                 .textFieldStyle(.roundedBorder)
                                 .help(settings.cloudLLMURL)
                         }
 
                         SettingsListRow(title: "API Key") {
-                            SecureField("API Key", text: $settings.cloudLLMKey)
+                            SecureField("API Key", text: proofreadingKeyBinding)
                                 .textFieldStyle(.roundedBorder)
                         }
 
                         SettingsListRow(title: "模型") {
-                            TextField("模型名", text: $settings.cloudLLMModel)
+                            TextField("模型名", text: proofreadingModelBinding)
                                 .textFieldStyle(.roundedBorder)
                                 .help(settings.cloudLLMModel)
                         }
 
                         SettingsListRow(title: "提示词", alignment: .top) {
-                            TextEditor(text: $settings.proofreadingPrompt)
+                            TextEditor(text: proofreadingPromptBinding)
                                 .font(.system(size: 14))
                                 .frame(height: 88)
                                 .padding(10)
@@ -72,7 +71,7 @@ struct ProofreadingSettingsPane: View {
             }
 
             SettingsValidationSection(
-                title: "AI 校对验证",
+                title: proofreadingValidationTitle,
                 isExpanded: $isValidationExpanded,
                 state: validationState,
                 action: {
@@ -112,7 +111,6 @@ struct ProofreadingSettingsPane: View {
                 settings.proofreadingEngine = .cloudLLM
             }
             hydrateCloudLLMKeyIfNeeded()
-            validationState = settings.proofreadingValidationState
         }
         .onChange(of: settings.proofreadingEnabled) { _, enabled in
             if enabled {
@@ -121,17 +119,6 @@ struct ProofreadingSettingsPane: View {
                 if let warning = settings.proofreadingConfigWarning {
                     model.notifyUser(warning + "。转写时将跳过校对。", level: .error, duration: 4.5)
                 }
-            }
-        }
-        .onChange(of: settings.cloudLLMKey) { oldValue, newValue in
-            if !oldValue.isEmpty, newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                SettingsStore.deleteLLMKey()
-            }
-            // Key 被清空且仍开着校对：立刻提醒
-            if settings.proofreadingEnabled,
-               newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               let warning = settings.proofreadingConfigWarning {
-                model.notifyUser(warning, level: .error, duration: 3.5)
             }
         }
     }
@@ -146,12 +133,19 @@ struct ProofreadingSettingsPane: View {
         return nil
     }
 
+    private var proofreadingValidationTitle: String {
+        if validationState.hasValidated, !validationState.passed {
+            return "AI 校对验证失败"
+        }
+        return "AI 校对验证"
+    }
+
     private func runProofreadingTest() {
+        validationTask?.cancel()
         isTesting = true
-        validationState.resultText = "正在调用当前模型纠正链路..."
         settings.proofreadingEngine = .cloudLLM
 
-        Task {
+        validationTask = Task {
             var testSettings = settings
             SettingsStore.hydrateSecrets(into: &testSettings, includeASR: false, includeLLM: true)
             let provider = CloudLLMProvider(
@@ -168,6 +162,7 @@ struct ProofreadingSettingsPane: View {
                     strictCorrections: settings.proofreadingStrictCorrections
                 )
                 let result = corrected.first?.text ?? ""
+                try Task.checkCancellation()
                 await MainActor.run {
                     let state = SettingsValidationState(
                         hasValidated: true,
@@ -178,6 +173,12 @@ struct ProofreadingSettingsPane: View {
                     isTesting = false
                 }
             } catch {
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        isTesting = false
+                    }
+                    return
+                }
                 await MainActor.run {
                     let state = SettingsValidationState(
                         hasValidated: true,
@@ -196,13 +197,18 @@ struct ProofreadingSettingsPane: View {
         var hydratedSettings = settings
         SettingsStore.hydrateSecrets(into: &hydratedSettings, includeASR: false, includeLLM: true)
         if hydratedSettings.cloudLLMKey != settings.cloudLLMKey {
-            settings.cloudLLMKey = hydratedSettings.cloudLLMKey
+            settings.hydrateProofreadingKey(hydratedSettings.cloudLLMKey)
         }
     }
 
     private func persistValidationState(_ state: SettingsValidationState) {
-        validationState = state
         settings.proofreadingValidationState = state
+    }
+
+    func cancelValidation() {
+        validationTask?.cancel()
+        validationTask = nil
+        isTesting = false
     }
 
 }

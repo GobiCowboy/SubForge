@@ -12,7 +12,7 @@ struct RootView: View {
             HStack(spacing: 0) {
                 ProjectSidebar(
                     onImport: { model.openImportPanel() },
-                    onOpenSettings: { openSettings() }
+                    onOpenSettings: { model.presentSettings() }
                 )
 
                 Group {
@@ -36,6 +36,11 @@ struct RootView: View {
         .sheet(isPresented: $model.isShortcutGuidePresented) {
             ShortcutGuideSheet()
                 .environmentObject(model)
+        }
+        .onAppear {
+            model.settingsWindowPresenter = {
+                openSettings()
+            }
         }
         .background(MainWindowCloseBehavior().frame(width: 0, height: 0))
     }

@@ -22,7 +22,7 @@ struct SubtitleConfigurationStatus {
 
         switch tab {
         case .transcription:
-            validation = settings.transcriptionValidationState
+            validation = settings.activeTranscriptionValidationState
             isConfigured = isTranscriptionConfigured(settings)
         case .proofreading:
             validation = settings.proofreadingValidationState
@@ -43,8 +43,8 @@ struct SubtitleConfigurationStatus {
         return SubtitleConfigurationStatus(
             isConfigured: isConfigured,
             validationText: validation.passed ? "验证通过" : "验证失败",
-            validationIcon: validation.passed ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
-            validationColor: validation.passed ? .green : .orange
+            validationIcon: validation.passed ? "checkmark.shield.fill" : "xmark.circle.fill",
+            validationColor: validation.passed ? .green : .red
         )
     }
 
@@ -112,7 +112,7 @@ struct SubtitleConfigurationTabs: View {
 
     private func tabButton(_ tab: SubtitleConfigurationTab) -> some View {
         let selected = selection == tab
-        let isConfigured = SubtitleConfigurationStatus.resolve(tab: tab, settings: settings).isConfigured
+        let status = SubtitleConfigurationStatus.resolve(tab: tab, settings: settings)
 
         return Button {
             selection = tab
@@ -121,9 +121,9 @@ struct SubtitleConfigurationTabs: View {
                 Text(tab.rawValue)
                     .font(.system(size: 16, weight: .semibold))
 
-                Image(systemName: isConfigured ? "checkmark.circle.fill" : "checkmark.circle")
+                Image(systemName: tabIcon(for: status))
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(isConfigured ? .green : .secondary)
+                    .foregroundStyle(tabIconColor(for: status))
             }
             .foregroundStyle(selected ? Color.accentColor : .primary)
             .frame(height: 42)
@@ -136,6 +136,20 @@ struct SubtitleConfigurationTabs: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
+    }
+
+    private func tabIcon(for status: SubtitleConfigurationStatus) -> String {
+        if status.validationText == "验证失败" {
+            return "xmark.circle.fill"
+        }
+        return status.isConfigured ? "checkmark.circle.fill" : "checkmark.circle"
+    }
+
+    private func tabIconColor(for status: SubtitleConfigurationStatus) -> Color {
+        if status.validationText == "验证失败" {
+            return .red
+        }
+        return status.isConfigured ? .green : .secondary
     }
 }
 

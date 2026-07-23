@@ -65,7 +65,6 @@ struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .background(SettingsWindowChromeConfigurator())
         .onAppear(perform: rememberLocalEngineIfNeeded)
         .onChange(of: model.settings.transcriptionEngine) { _, engine in
             guard SubtitlePlan.localEngines.contains(engine) else { return }

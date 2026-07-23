@@ -12,6 +12,14 @@ struct SubForgeApp: App {
         settingsWindow
     }
 
+    private var settingsWindow: some Scene {
+        Settings {
+            SettingsView()
+                .environmentObject(model)
+                .frame(width: 900, height: 760)
+        }
+    }
+
     private var mainWindow: some Scene {
         // The app has one primary workspace. A WindowGroup lets macOS restore
         // or create multiple copies of that workspace (for example via ⌘N),
@@ -75,11 +83,4 @@ struct SubForgeApp: App {
         }
     }
 
-    private var settingsWindow: some Scene {
-        Settings {
-            SettingsView()
-                .environmentObject(model)
-                .frame(width: 900, height: 760)
-        }
-    }
 }
