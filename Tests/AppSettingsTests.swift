@@ -44,6 +44,20 @@ import Testing
 
     #expect(settings.exportToFinalCutPro)
     #expect(settings.overwriteExisting)
+    #expect(settings.sourceOutputPath.isEmpty)
+    #expect(settings.sourceOutputBookmarkData == nil)
+}
+
+@Test func sourceExportDirectoryAuthorizationPersists() throws {
+    var settings = ExportSettings()
+    settings.sourceOutputPath = "/tmp/video-project"
+    settings.sourceOutputBookmarkData = Data([1, 2, 3])
+
+    let data = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(ExportSettings.self, from: data)
+
+    #expect(decoded.sourceOutputPath == settings.sourceOutputPath)
+    #expect(decoded.sourceOutputBookmarkData == settings.sourceOutputBookmarkData)
 }
 
 @Test func subtitlePlanGroupsTranscriptionEngines() {

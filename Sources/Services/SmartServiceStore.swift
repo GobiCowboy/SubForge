@@ -62,6 +62,7 @@ final class SmartServiceStore: ObservableObject {
     @Published private(set) var hasLoadedProductCatalog = false
     @Published private(set) var statusMessage = "尚未购买智能字幕时长"
     @Published private(set) var isLoading = false
+    @Published private(set) var isRefreshingWallet = false
     @Published private(set) var isPurchasing = false
 
     private let profile = OfficialServiceConfiguration.activeProfile
@@ -103,6 +104,11 @@ final class SmartServiceStore: ObservableObject {
     }
 
     func refreshWallet() async {
+        guard !isRefreshingWallet else { return }
+        isRefreshingWallet = true
+        statusMessage = "正在查询最新额度…"
+        defer { isRefreshingWallet = false }
+
         await reconcileUnconfirmedAppleTransactions()
         await refreshWalletBalance()
     }

@@ -1442,35 +1442,52 @@ final class AppModel: ObservableObject {
 
         configureWatchFolderOnFirstExportIfNeeded()
 
+        guard let directoryChoice = chooseExportDirectory() else { return }
+        let baseName = currentDocumentURL?.deletingPathExtension().lastPathComponent ?? "SubForge Export"
+
         do {
-            guard let directoryChoice = chooseExportDirectory() else { return }
-            let directory = directoryChoice.url
-
-            let baseName = currentDocumentURL?.deletingPathExtension().lastPathComponent ?? "SubForge Export"
-            let plan = makeExportPlan(baseName: baseName, directory: directory)
-            var exportedURLs: [URL] = []
-
-            if let srtURL = plan.srtURL {
-                try SRTCodec.generate(segments).write(to: srtURL, atomically: true, encoding: .utf8)
-                exportedURLs.append(srtURL)
-            }
-
-            if let fcpxmlURL = plan.fcpxmlURL {
-                try makeFCPXML(projectName: baseName, segments: segments).write(to: fcpxmlURL, atomically: true, encoding: .utf8)
-                exportedURLs.append(fcpxmlURL)
-            }
-
-            if settings.exportSettings.exportToFinalCutPro,
-               let fcpxmlURL = plan.fcpxmlURL,
-               !finalCutProApplicationURLs().isEmpty {
-                try importIntoFinalCutPro(fcpxmlURL)
-                showToast("已导出并发送到 Final Cut Pro", level: .success)
-            } else {
-                NSWorkspace.shared.activateFileViewerSelecting(exportedURLs)
-                showToast("已导出 \(plan.summary)", level: .success)
-            }
+            try performExport(baseName: baseName, directory: directoryChoice.url)
         } catch {
+            if isFileWritePermissionError(error),
+               settings.exportSettings.saveLocation == .sameAsSource,
+               let sourceDirectory = currentDocumentURL?.deletingLastPathComponent() {
+                guard let authorizedDirectory = authorizeSourceExportDirectory(sourceDirectory) else {
+                    return
+                }
+                do {
+                    try performExport(baseName: baseName, directory: authorizedDirectory.url)
+                    return
+                } catch {
+                    showToast("导出失败：\(error.localizedDescription)", level: .error)
+                    return
+                }
+            }
             showToast("导出失败：\(error.localizedDescription)", level: .error)
+        }
+    }
+
+    private func performExport(baseName: String, directory: URL) throws {
+        let plan = makeExportPlan(baseName: baseName, directory: directory)
+        var exportedURLs: [URL] = []
+
+        if let srtURL = plan.srtURL {
+            try SRTCodec.generate(segments).write(to: srtURL, atomically: true, encoding: .utf8)
+            exportedURLs.append(srtURL)
+        }
+
+        if let fcpxmlURL = plan.fcpxmlURL {
+            try makeFCPXML(projectName: baseName, segments: segments).write(to: fcpxmlURL, atomically: true, encoding: .utf8)
+            exportedURLs.append(fcpxmlURL)
+        }
+
+        if settings.exportSettings.exportToFinalCutPro,
+           let fcpxmlURL = plan.fcpxmlURL,
+           !finalCutProApplicationURLs().isEmpty {
+            try importIntoFinalCutPro(fcpxmlURL)
+            showToast("已导出并发送到 Final Cut Pro", level: .success)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting(exportedURLs)
+            showToast("已导出 \(plan.summary)", level: .success)
         }
     }
 
@@ -1580,6 +1597,24 @@ final class AppModel: ObservableObject {
         switch settings.exportSettings.saveLocation {
         case .sameAsSource:
             if let directory = currentDocumentURL?.deletingLastPathComponent() {
+                if settings.exportSettings.sourceOutputPath == directory.path,
+                   let access = SecurityScopedResourceAccess(
+                       bookmarkData: settings.exportSettings.sourceOutputBookmarkData,
+                       fallbackPath: settings.exportSettings.sourceOutputPath,
+                       isDirectory: true
+                   ), access.hasAccess {
+                    return ExportDirectoryChoice(url: directory, access: access)
+                }
+
+                if let watchAccess = SecurityScopedResourceAccess(
+                    bookmarkData: settings.watchSettings.directoryBookmarkData,
+                    fallbackPath: settings.watchSettings.directoryPath,
+                    isDirectory: true
+                ), watchAccess.hasAccess,
+                   directoryIsInside(directory, root: watchAccess.url) {
+                    return ExportDirectoryChoice(url: directory, access: watchAccess)
+                }
+
                 return ExportDirectoryChoice(url: directory, access: SecurityScopedResourceAccess(url: directory))
             }
             return askForExportDirectory()
@@ -1597,6 +1632,44 @@ final class AppModel: ObservableObject {
             }
             return askForExportDirectory()
         }
+    }
+
+    private func authorizeSourceExportDirectory(_ sourceDirectory: URL) -> ExportDirectoryChoice? {
+        guard let directory = ExportDirectoryAuthorization.requestAccess(to: sourceDirectory) else {
+            return nil
+        }
+
+        var updated = settings
+        updated.exportSettings.sourceOutputPath = directory.path
+        updated.exportSettings.sourceOutputBookmarkData = SecurityScopedResourceAccess.bookmarkData(for: directory)
+        settings = updated
+
+        return ExportDirectoryChoice(
+            url: directory,
+            access: SecurityScopedResourceAccess(url: directory)
+        )
+    }
+
+    private func directoryIsInside(_ directory: URL, root: URL) -> Bool {
+        let directoryPath = directory.standardizedFileURL.path
+        let rootPath = root.standardizedFileURL.path
+        return directoryPath == rootPath || directoryPath.hasPrefix(rootPath + "/")
+    }
+
+    private func isFileWritePermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain,
+           nsError.code == NSFileWriteNoPermissionError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain,
+           (nsError.code == Int(EACCES) || nsError.code == Int(EPERM)) {
+            return true
+        }
+        if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isFileWritePermissionError(underlyingError)
+        }
+        return false
     }
 
     private func askForExportDirectory() -> ExportDirectoryChoice? {

@@ -88,12 +88,21 @@ struct OfficialSmartServicePanel: View {
                 .controlSize(.regular)
                 .disabled(service.isPurchasing)
 
-                Button("刷新额度") {
+                Button {
                     Task { await service.refreshWallet() }
+                } label: {
+                    HStack(spacing: 7) {
+                        if isQueryingBalance {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(isQueryingBalance ? "查询中" : "刷新额度")
+                    }
+                    .frame(minWidth: 78)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(service.isLoading || service.isPurchasing)
+                .disabled(isQueryingBalance || service.isPurchasing)
             }
             .padding(.top, 18)
 
@@ -217,20 +226,24 @@ struct OfficialSmartServicePanel: View {
     }
 
     private var purchaseStatusText: String {
-        if service.isPurchasing { return service.statusMessage }
+        if service.isPurchasing || service.isRefreshingWallet { return service.statusMessage }
         return service.productCatalogMessage ?? service.statusMessage
     }
 
     private var purchaseStatusIcon: String {
-        if service.isPurchasing { return "hourglass" }
+        if service.isPurchasing || isQueryingBalance { return "hourglass" }
         if purchaseStatusIsError { return "exclamationmark.triangle.fill" }
         return "checkmark.circle.fill"
     }
 
     private var purchaseStatusColor: Color {
-        if service.isPurchasing { return .accentColor }
+        if service.isPurchasing || isQueryingBalance { return .accentColor }
         if purchaseStatusIsError { return .orange }
         return .secondary
+    }
+
+    private var isQueryingBalance: Bool {
+        service.isLoading || service.isRefreshingWallet
     }
 
     private var purchaseStatusIsError: Bool {

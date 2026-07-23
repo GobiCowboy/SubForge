@@ -159,6 +159,8 @@ struct ExportSettings: Equatable, Codable {
     var saveLocation: SaveLocation = .sameAsSource
     var customOutputPath: String = ""
     var customOutputBookmarkData: Data?
+    var sourceOutputPath: String = ""
+    var sourceOutputBookmarkData: Data?
     var overwriteExisting = true
     var includeLog = true
     var exportToFinalCutPro = true
@@ -172,6 +174,8 @@ struct ExportSettings: Equatable, Codable {
         case saveLocation
         case customOutputPath
         case customOutputBookmarkData
+        case sourceOutputPath
+        case sourceOutputBookmarkData
         case overwriteExisting
         case includeLog
         case exportToFinalCutPro
@@ -190,6 +194,8 @@ struct ExportSettings: Equatable, Codable {
         saveLocation = try container.decodeIfPresent(SaveLocation.self, forKey: .saveLocation) ?? .sameAsSource
         customOutputPath = try container.decodeIfPresent(String.self, forKey: .customOutputPath) ?? ""
         customOutputBookmarkData = try container.decodeIfPresent(Data.self, forKey: .customOutputBookmarkData)
+        sourceOutputPath = try container.decodeIfPresent(String.self, forKey: .sourceOutputPath) ?? ""
+        sourceOutputBookmarkData = try container.decodeIfPresent(Data.self, forKey: .sourceOutputBookmarkData)
         overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? true
         includeLog = try container.decodeIfPresent(Bool.self, forKey: .includeLog) ?? true
         exportToFinalCutPro = try container.decodeIfPresent(Bool.self, forKey: .exportToFinalCutPro) ?? true
