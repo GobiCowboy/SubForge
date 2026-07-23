@@ -7,6 +7,7 @@ enum SmartPurchaseError: LocalizedError {
     case keychainSaveFailed
     case verificationFailed
     case appTransactionUnavailable
+    case keychainUnavailable
     case server(String)
 
     var errorDescription: String? {
@@ -16,6 +17,7 @@ enum SmartPurchaseError: LocalizedError {
         case .keychainSaveFailed: "无法将官方服务凭证安全保存到钥匙串"
         case .verificationFailed: "StoreKit 交易验证失败"
         case .appTransactionUnavailable: "暂时无法验证本次 App Store 安装"
+        case .keychainUnavailable: "无法访问官方服务凭证，请打开正式版 App 或在系统钥匙串中允许 SubForge 访问"
         case .server(let code): "购买服务错误：\(code)"
         }
     }
@@ -96,10 +98,13 @@ final class SmartServiceStore: ObservableObject {
         defer { isLoading = false }
         await loadProductPrice()
         await reconcileUnconfirmedAppleTransactions()
-        if KeychainStore.read(.officialServiceKey) == nil {
+        switch KeychainStore.readResult(.officialServiceKey) {
+        case .notFound:
             _ = await activateTrialIfNeeded()
-        } else {
+        case .value:
             await refreshWalletBalance()
+        case .unavailable(let status):
+            reportKeychainUnavailable(status)
         }
     }
 
@@ -118,10 +123,22 @@ final class SmartServiceStore: ObservableObject {
     }
 
     private func refreshWalletBalance() async {
-        guard let key = KeychainStore.read(.officialServiceKey), !key.isEmpty else {
+        let key: String
+        switch KeychainStore.readResult(.officialServiceKey) {
+        case .notFound:
             balanceSeconds = 0
             statusMessage = "尚未购买智能字幕时长"
             return
+        case .unavailable(let status):
+            reportKeychainUnavailable(status)
+            return
+        case .value(let value):
+            guard !value.isEmpty else {
+                balanceSeconds = 0
+                statusMessage = "尚未购买智能字幕时长"
+                return
+            }
+            key = value
         }
         do {
             let wallet = try await OfficialSmartServiceClient(
@@ -140,9 +157,15 @@ final class SmartServiceStore: ObservableObject {
     /// Billing verifies that JWS and Model API derives an idempotent trial wallet
     /// from its one-way digest, so reinstalling cannot create extra trial time.
     func activateTrialIfNeeded() async -> SmartTrialActivation {
-        if let key = KeychainStore.read(.officialServiceKey), !key.isEmpty {
+        switch KeychainStore.readResult(.officialServiceKey) {
+        case .value(let key) where !key.isEmpty:
             await refreshWallet()
             return .notNeeded
+        case .unavailable(let status):
+            reportKeychainUnavailable(status)
+            return .unavailable(statusMessage)
+        case .value, .notFound:
+            break
         }
 
         do {
@@ -201,6 +224,9 @@ final class SmartServiceStore: ObservableObject {
         isPurchasing = true
         defer { isPurchasing = false }
         do {
+            if case .unavailable = KeychainStore.readResult(.officialServiceKey) {
+                throw SmartPurchaseError.keychainUnavailable
+            }
             statusMessage = "正在连接 App Store…"
             let products = try await Product.products(for: [plan.appleProductID])
             guard let product = products.first(where: { $0.id == plan.appleProductID }) else {
@@ -293,6 +319,13 @@ final class SmartServiceStore: ObservableObject {
                 "storeKitProductsLoadFailed error=\(error.localizedDescription, privacy: .public)"
             )
         }
+    }
+
+    private func reportKeychainUnavailable(_ status: OSStatus) {
+        statusMessage = "无法访问官方服务凭证（钥匙串状态 \(status)）。请打开正式版 App，或在系统钥匙串中允许 SubForge 访问。"
+        AppLog.settings.error(
+            "officialServiceKeychainUnavailable status=\(status, privacy: .public)"
+        )
     }
 
     private func createOrder(

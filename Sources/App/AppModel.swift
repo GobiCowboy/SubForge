@@ -569,13 +569,17 @@ final class AppModel: ObservableObject {
                     transcriptionSettings = hydrated
                 }
                 if transcriptionSettings.transcriptionEngine == .officialSmart {
-                    if KeychainStore.read(.officialServiceKey) == nil {
+                    switch KeychainStore.readResult(.officialServiceKey) {
+                    case .notFound:
                         let activation = await self.smartService.activateTrialIfNeeded()
                         self.presentTrialActivation(activation)
-                    } else {
+                    case .value:
                         await self.smartService.refreshWallet()
+                    case .unavailable:
+                        throw OfficialSmartServiceError.keychainUnavailable
                     }
-                    guard KeychainStore.read(.officialServiceKey) != nil else {
+                    guard case .value(let key) = KeychainStore.readResult(.officialServiceKey),
+                          !key.isEmpty else {
                         throw OfficialSmartServiceError.keyMissing
                     }
                     if self.smartService.balanceSeconds > 0 {

@@ -92,17 +92,17 @@ struct OfficialSmartServicePanel: View {
                     Task { await service.refreshWallet() }
                 } label: {
                     HStack(spacing: 7) {
-                        if isQueryingBalance {
+                        if service.isRefreshingWallet {
                             ProgressView()
                                 .controlSize(.small)
                         }
-                        Text(isQueryingBalance ? "查询中" : "刷新额度")
+                        Text(service.isRefreshingWallet ? "查询中" : "刷新额度")
                     }
                     .frame(minWidth: 78)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(isQueryingBalance || service.isPurchasing)
+                .disabled(service.isRefreshingWallet || service.isPurchasing)
             }
             .padding(.top, 18)
 
@@ -248,7 +248,7 @@ struct OfficialSmartServicePanel: View {
 
     private var purchaseStatusIsError: Bool {
         if service.productCatalogMessage != nil { return true }
-        return ["错误", "失败", "无法", "不可用"].contains { service.statusMessage.contains($0) }
+        return ["错误", "失败", "无法", "不可用", "钥匙串", "凭证"].contains { service.statusMessage.contains($0) }
     }
 
 }

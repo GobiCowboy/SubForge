@@ -17,6 +17,7 @@ struct OfficialSmartProgressUpdate: Sendable {
 enum OfficialSmartServiceError: LocalizedError {
     case unavailable
     case keyMissing
+    case keychainUnavailable
     case invalidResponse
     case insufficientCredits
     case activeTaskExists
@@ -33,6 +34,7 @@ enum OfficialSmartServiceError: LocalizedError {
         switch self {
         case .unavailable: "当前区域的智能服务尚未开放"
         case .keyMissing: "尚未购买智能字幕时长"
+        case .keychainUnavailable: "无法访问官方服务凭证，请打开正式版 App 或在系统钥匙串中允许 SubForge 访问"
         case .invalidResponse: "智能服务返回了无效数据"
         case .insufficientCredits: "智能字幕剩余时长不足，请先购买"
         case .activeTaskExists: "已有一个智能字幕任务在处理，请稍后再试"
