@@ -157,6 +157,14 @@ extension AppModel {
                     await self.smartService.refreshWallet()
                 }
                 transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
+                if engine == .officialSmart {
+                    // 校对阶段保留标点用于语义断句；字幕成品按产品规则不显示标点。
+                    transcribedSegments = transcribedSegments.map { segment in
+                        var normalized = segment
+                        normalized.text = SubtitleTextFormatting.removeSubtitlePunctuation(segment.text)
+                        return normalized
+                    }.filter { !$0.text.isEmpty }
+                }
                 guard !Task.isCancelled else {
                     self.stopPipelineClock()
                     return

@@ -64,13 +64,26 @@ extension TimedSubtitleSegmenter {
             guard lower <= upper else { return nil }
 
             var best = lower
-            var bestDistance = Double.greatestFiniteMagnitude
+            var bestScore = -Double.greatestFiniteMagnitude
             for candidate in lower...upper {
                 let length = pieceLengths.prefix(candidate).reduce(0, +)
                 let distance = abs(Double(length) - target)
-                if distance < bestDistance {
+                let previousPiece = pieces[candidate - 1]
+                let boundaryBonus: Double
+                if isStrongCorrectionBoundary(previousPiece) {
+                    boundaryBonus = 1_200
+                } else if isSoftCorrectionBoundary(previousPiece) {
+                    boundaryBonus = 520
+                } else {
+                    boundaryBonus = 0
+                }
+
+                // 先满足时间比例，再尽量把边界落在校对文本的自然断句处。
+                // 这能避免“但是/所以/然后”等连接结构被长度刀口切开。
+                let score = boundaryBonus - distance
+                if score > bestScore {
                     best = candidate
-                    bestDistance = distance
+                    bestScore = score
                 }
             }
             boundaries.append(best)
@@ -83,6 +96,14 @@ extension TimedSubtitleSegmenter {
                 SubtitleWord(start: 0, end: 0.01, text: $0)
             })
         }
+    }
+
+    static func isStrongCorrectionBoundary(_ piece: String) -> Bool {
+        piece.last.map { strongBreaks.contains($0) } ?? false
+    }
+
+    static func isSoftCorrectionBoundary(_ piece: String) -> Bool {
+        piece.last.map { softBreaks.contains($0) } ?? false
     }
 
     /// 最大字数是排版目标，不是字符刀。超过目标时在附近的自然词边界回退，
