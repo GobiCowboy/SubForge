@@ -68,15 +68,6 @@ struct TranscriptionSettingsPane: View {
                 EmptyView()
             }
 
-            SettingsListSection {
-                SettingsListRow(title: "单条字幕最大字数", controlWidth: 360) {
-                    SubtitleLengthSlider(
-                        settings: $settings,
-                        profile: settings.subtitleLengthProfile
-                    )
-                }
-            }
-
             SettingsValidationSection(
                 title: transcriptionValidationTitle,
                 isExpanded: $isValidationExpanded,

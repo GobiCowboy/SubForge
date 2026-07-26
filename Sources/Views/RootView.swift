@@ -37,6 +37,15 @@ struct RootView: View {
             ShortcutGuideSheet()
                 .environmentObject(model)
         }
+        .sheet(item: $model.hotwordPromptRequest) { request in
+            HotwordPromptSheet(
+                request: request,
+                onEnable: { model.enableHotwordsForPendingTranscription(request) },
+                onDisable: { model.disableHotwordsAndContinue(request) },
+                onSubmit: { model.submitHotwords($0, for: request) },
+                onCancel: { model.cancelHotwordPrompt(request) }
+            )
+        }
         .onAppear {
             model.settingsWindowPresenter = {
                 openSettings()

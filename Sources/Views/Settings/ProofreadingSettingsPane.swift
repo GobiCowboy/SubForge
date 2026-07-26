@@ -53,20 +53,6 @@ struct ProofreadingSettingsPane: View {
                                 .help(settings.cloudLLMModel)
                         }
 
-                        SettingsListRow(title: "提示词", alignment: .top) {
-                            TextEditor(text: proofreadingPromptBinding)
-                                .font(.system(size: 14))
-                                .frame(height: 88)
-                                .padding(10)
-                                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(
-                                            SettingsVisualTokens.standardBorder,
-                                            lineWidth: SettingsVisualTokens.borderWidth
-                                        )
-                                )
-                        }
                     }
             }
 

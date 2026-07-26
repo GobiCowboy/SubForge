@@ -13,7 +13,7 @@
 | I-007 | 真实转写服务层 | 已存在 | `TranscriptionService` 工厂 + `AppleSpeechProvider` / `WhisperCppProvider` / `FunASRSenseVoiceProvider` / `CloudASRProvider`；各 provider 只做听写与词元归一，切句交给公共分段器 |
 | I-022 | FunASR SenseVoice 本地引擎 | 已存在 | `FunASRSenseVoiceProvider`、`FunASROutputParser`、`FunASRRuntime` / `FunASRModelStore` / `FunASRModelDownloader`；ModelScope 国内源优先按需下载 SenseVoice q8 + FSMN-VAD |
 | I-021 | DashScope filetrans 临时上传 | 已存在 | `CloudASRProvider`：`getPolicy` → 百炼临时 OSS 上传 → `oss://` → 异步 transcription；避免 Base64 整包导致 413 |
-| I-008 | 模型纠正服务层 | 已存在 | `ProofreadingService` 已接入 OpenAI 兼容模型纠正链路 |
+| I-008 | 模型纠正服务层 | 已存在 | `ProofreadingService` 已接入 OpenAI兼容模型纠正链路；`ProofreadingPromptComposer`组合AI校对提示词、固定热词与本次热词，返回结果严格校验编号 |
 | I-009 | Whisper 模型管理 | 已存在 | `WhisperModelStore`、`WhisperModelDownloader` 负责本地模型下载与检测 |
 | I-010 | 设置验证资源 | 已存在 | `SettingsTestAsset` + 设置页验证结果组件已接入内置测试音频 / 文本 |
 | I-011 | 编辑键盘监视链路 | 已存在 | `EditorKeyboardMonitor` + `AppModel` 统一处理 `Space` / `Tab` / `J K L` / `Esc`，IME marked text 下放行 Space |
@@ -23,10 +23,12 @@
 | I-015 | 应用日志入口 | 已存在 | `AppLog` 已收口 editor / proofreading 等分类日志 |
 | I-016 | FCP 目录监听服务 | 已存在 | `WatchFolderService` 负责轮询监听目录、稳定检测、FCP 元数据识别，并通过 `AppModel.importDocument(at:)` 接入现有处理链路 |
 | I-017 | 菜单栏入口 | 已存在 | `MenuBarController` 持有 `NSStatusItem`，由通用设置控制显隐；`SubForgeAppDelegate` 同步 Dock/菜单栏模式，`MainWindowCloseBehavior` 将主窗口关闭改为隐藏 |
-| I-018 | 带时间词元公共分段器 | 已存在 | `TimedSubtitleSegmenter`：`segment([SubtitleWord])` 与 `segmentEstimated([SubtitleSegment])`；统一标点、字数、时长、停顿、英文边界、去重叠，官方智能字幕返回结果也接入 |
+| I-018 | 带时间词元公共分段器 | 已存在 | `segmentSources`逐个处理ASR source segment；一级标点优先、顿号/冒号超长回退、有效字数、短句合并、NaturalLanguage词边界和真实时间戳统一接入 |
 | I-019 | 双渠道发布脚本 | 已存在 | `script/release_appstore.sh`（MAS：unsigned/signed/package/upload，正式模式统一 `sign_app`）与 `script/release_developer_id.sh`（站外：Developer ID + 公证）；entitlements 分文件，不可混用 |
 | I-020 | Whisper JSON 词级解析 | 已存在 | `WhisperJSONParser` 解析 whisper-cli JSON 词元时间戳，供公共分段器使用 |
 | I-021 | 旧版字幕 refine 工具 | 遗留 / 测试用 | `SubtitleSegmentationService.refine` 仍在测试中出现；主转写链路已改走 `TimedSubtitleSegmenter`，新增逻辑不要再分叉回旧 refine |
-| I-023 | 官方智能字幕客户端 | 已存在 | `OfficialSmartServiceClient` + `OSSMultipartUploader`；钱包、Policy直传、异步任务与中国区路由 |
+| I-023 | 官方智能字幕客户端 | 已存在 | `OfficialSmartServiceClient` + `OSSMultipartUploader`；钱包、Policy直传、异步任务、中国区路由和客户端校对提示词透传 |
 | I-024 | StoreKit购买与钱包状态 | 已存在 | `SmartServiceStore`；下单、Keychain、`appAccountToken`、购买和到账轮询 |
 | I-025 | 智能服务设置页 | 已存在 | `SmartServiceSettingsPane`；余额、价格、购买、刷新和隐私路径 |
+| I-026 | 通用字幕规则设置 | 已存在 | `GeneralSubtitleProcessingSection`统一管理最大字数、默认推荐标点、逐视频热词、固定热词和AI校对提示词 |
+| I-027 | 热词工作流 | 已存在 | `AppModelHotwords` + `HotwordPromptSheet`负责逐视频热词；`TranscriptionRunOptions`合并已启用的固定热词并生成任务快照 |

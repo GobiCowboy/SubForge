@@ -19,7 +19,7 @@ enum SettingsStore {
             return AppSettings()
         }
 
-        normalize(&settings)
+        let didNormalize = normalize(&settings)
 
         if isKeychainPersistenceEnabled {
             let hadPlaintextASRKey = !settings.cloudASRKey.isEmpty
@@ -41,6 +41,10 @@ enum SettingsStore {
             // signatures have different ACLs, and an eager read can summon the
             // login-keychain password dialog before the user needs either key.
             // Each settings/provider path hydrates only the secret it actually uses.
+        }
+
+        if didNormalize {
+            persistPreferences(settings, includeSecrets: false)
         }
 
         return settings
@@ -77,12 +81,39 @@ enum SettingsStore {
         KeychainStore.delete(.cloudLLMKey)
     }
 
-    private static func normalize(_ settings: inout AppSettings) {
-        let legacyLength = min(max(settings.maxSubtitleLength ?? 24, 10), 50)
-        settings.maxSubtitleLength = legacyLength
-        settings.officialMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .official)
-        settings.customMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .custom)
-        settings.localMaxSubtitleLength = settings.effectiveMaxSubtitleLength(for: .local)
+    @discardableResult
+    static func normalize(_ settings: inout AppSettings) -> Bool {
+        var changed = false
+        if (settings.subtitleRulesRevision ?? 0) < AppSettings.currentSubtitleRulesRevision {
+            settings.maxSubtitleLength = 32
+            settings.subtitleRulesRevision = AppSettings.currentSubtitleRulesRevision
+            if settings.proofreadingPrompt == AppSettings.legacyProofreadingPrompt {
+                settings.proofreadingPrompt = AppSettings.defaultProofreadingPrompt
+            }
+            changed = true
+        } else {
+            let clamped = AppSettings.clampSubtitleLength(settings.maxSubtitleLength ?? 32)
+            if settings.maxSubtitleLength != clamped {
+                settings.maxSubtitleLength = clamped
+                changed = true
+            }
+        }
+        if settings.retainedSubtitlePunctuation == nil {
+            settings.retainedSubtitlePunctuation = SubtitlePunctuationGroup.subtitleRecommended
+            changed = true
+        }
+        if settings.hotwordPromptPreference == nil {
+            settings.hotwordPromptPreference = .undecided
+            changed = true
+        }
+        if settings.fixedHotwordsEnabled == nil {
+            settings.fixedHotwordsEnabled = false
+            changed = true
+        }
+        if settings.fixedHotwordsText == nil {
+            settings.fixedHotwordsText = ""
+            changed = true
+        }
 
         if settings.proofreadingEngine == .appleLocal {
             settings.proofreadingEngine = .cloudLLM
@@ -128,6 +159,7 @@ enum SettingsStore {
            let firstAvailableModel = WhisperModelStore.availableModels().first {
             settings.whisperModel = firstAvailableModel
         }
+        return changed
     }
 
     private static func persistPreferences(_ settings: AppSettings, includeSecrets: Bool) {

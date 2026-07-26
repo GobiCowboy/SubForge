@@ -1,5 +1,4 @@
 import Foundation
-import NaturalLanguage
 
 extension TimedSubtitleSegmenter {
     static func segmentPreservingCorrectedText(
@@ -64,26 +63,13 @@ extension TimedSubtitleSegmenter {
             guard lower <= upper else { return nil }
 
             var best = lower
-            var bestScore = -Double.greatestFiniteMagnitude
+            var bestDistance = Double.greatestFiniteMagnitude
             for candidate in lower...upper {
                 let length = pieceLengths.prefix(candidate).reduce(0, +)
                 let distance = abs(Double(length) - target)
-                let previousPiece = pieces[candidate - 1]
-                let boundaryBonus: Double
-                if isStrongCorrectionBoundary(previousPiece) {
-                    boundaryBonus = 1_200
-                } else if isSoftCorrectionBoundary(previousPiece) {
-                    boundaryBonus = 520
-                } else {
-                    boundaryBonus = 0
-                }
-
-                // 先满足时间比例，再尽量把边界落在校对文本的自然断句处。
-                // 这能避免“但是/所以/然后”等连接结构被长度刀口切开。
-                let score = boundaryBonus - distance
-                if score > bestScore {
+                if distance < bestDistance {
                     best = candidate
-                    bestScore = score
+                    bestDistance = distance
                 }
             }
             boundaries.append(best)
@@ -96,61 +82,5 @@ extension TimedSubtitleSegmenter {
                 SubtitleWord(start: 0, end: 0.01, text: $0)
             })
         }
-    }
-
-    static func isStrongCorrectionBoundary(_ piece: String) -> Bool {
-        piece.last.map { strongBreaks.contains($0) } ?? false
-    }
-
-    static func isSoftCorrectionBoundary(_ piece: String) -> Bool {
-        piece.last.map { softBreaks.contains($0) } ?? false
-    }
-
-    /// 最大字数是排版目标，不是字符刀。超过目标时在附近的自然词边界回退，
-    /// 宁可让一个不可拆的专名略微超出，也不把词组或英文名称劈开。
-    static func preferredBreakIndex(
-        in current: [SubtitleWord],
-        upcoming: SubtitleWord,
-        configuration: SubtitleSegmentationConfiguration
-    ) -> Int {
-        guard current.count > 1 else { return current.count }
-        let target = configuration.maxCharacters
-        let minimum = max(4, Int(Double(target) * 0.52))
-        var bestIndex = current.count
-        var bestScore = Int.min
-
-        for index in 1...current.count {
-            let prefix = Array(current.prefix(index))
-            let length = joinedText(prefix).count
-            guard length >= minimum, length <= target else { continue }
-            let previous = prefix.last!
-            let next = index < current.count ? current[index] : upcoming
-            var score = -abs(target - length) * 4
-
-            if let last = previous.text.last, strongBreaks.contains(last) {
-                score += 1_000
-            } else if let last = previous.text.last, softBreaks.contains(last) {
-                score += 650
-            }
-
-            let pause = next.start - previous.end
-            if pause >= 0.25 {
-                score += min(Int(pause * 300), 240)
-            }
-
-            let previousText = previous.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if weakLineEndWords.contains(previousText) {
-                score -= 220
-            }
-            if next.text.count == 1, weakLineEndWords.contains(next.text) {
-                score += 18
-            }
-
-            if score > bestScore {
-                bestScore = score
-                bestIndex = index
-            }
-        }
-        return bestIndex
     }
 }

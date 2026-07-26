@@ -23,19 +23,30 @@ enum DashScopeTranscriptionParser {
             }
             let sentences = transcript["sentences"] as? [[String: Any]] ?? []
             for sentence in sentences {
-                if let text = cleanText(sentence["text"]) {
-                    let start = milliseconds(sentence["begin_time"])
-                    let end = max(milliseconds(sentence["end_time"]), start + 0.1)
-                    parsedSentences.append(SubtitleSegment(start: start, end: end, text: text))
-                }
-
+                var sentenceWords: [SubtitleWord] = []
                 for word in sentence["words"] as? [[String: Any]] ?? [] {
                     guard let token = cleanText(word["text"]) else { continue }
                     let punctuation = cleanText(word["punctuation"]) ?? ""
                     let text = punctuation.isEmpty || token.hasSuffix(punctuation) ? token : token + punctuation
                     let start = milliseconds(word["begin_time"])
                     let end = max(milliseconds(word["end_time"]), start + 0.01)
-                    parsedWords.append(SubtitleWord(start: start, end: end, text: text))
+                    let parsedWord = SubtitleWord(start: start, end: end, text: text)
+                    sentenceWords.append(parsedWord)
+                    parsedWords.append(parsedWord)
+                }
+
+                if let text = cleanText(sentence["text"]) ?? sentenceWordsText(sentenceWords) {
+                    let start = sentenceWords.first?.start ?? milliseconds(sentence["begin_time"])
+                    let end = sentenceWords.last?.end
+                        ?? max(milliseconds(sentence["end_time"]), start + 0.1)
+                    parsedSentences.append(
+                        SubtitleSegment(
+                            start: start,
+                            end: max(end, start + 0.1),
+                            text: text,
+                            words: sentenceWords.isEmpty ? nil : sentenceWords
+                        )
+                    )
                 }
             }
         }
@@ -63,5 +74,11 @@ enum DashScopeTranscriptionParser {
         default:
             0
         }
+    }
+
+    private static func sentenceWordsText(_ words: [SubtitleWord]) -> String? {
+        let text = TimedSubtitleSegmenter.joinedText(words)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 }

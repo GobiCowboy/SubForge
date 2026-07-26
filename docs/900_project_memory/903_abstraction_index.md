@@ -10,6 +10,7 @@
 | A-004 | 设置页分组框架 | 306 | 已部分抽象 | 目前已按 pane 拆分，但布局 token 仍可继续收敛 |
 | A-005 | 大型 View 拆分规则 | 301、304、306 | 已立规 | 已写入通用编程规范，后续开发需按规则执行 |
 | A-006 | 设置页验证控制器 | 302、303、306 | 待抽象 | 转写验证、音频试听、模型下载、校对验证目前仍有状态逻辑分散 |
-| A-007 | 多 ASR 时间词元分段 | 302 | 已抽象 | 架构边界：引擎只产出词元，`TimedSubtitleSegmenter` 统一切句；Apple / Whisper / FunASR / DashScope 已接入；无词级时间走 `segmentEstimated`。禁止再为新引擎复制切句逻辑 |
+| A-007 | 多 ASR 时间词元分段 | 302 | 已抽象 | 架构边界：引擎输出source segment和词元，`TimedSubtitleSegmenter.segmentSources`逐源切句；Apple / Whisper / FunASR / DashScope 已接入；无词级时间逐源估算。禁止跨source或为新引擎复制切句逻辑 |
 | A-008 | 官方智能服务客户端 | 309 | 已实现 | 钱包、上传会话、异步任务和中国区协议；国际区只保留类型 |
 | A-009 | StoreKit购买服务 | 309 | 已实现 | 商品、购买、本地验证和等待服务端通知履约 |
+| A-010 | 转写任务不可变选项 | 302、303 | 已实现 | `TranscriptionRunOptions`冻结最大字数、标点、通用提示词和本次热词，任务进行中不受设置变更影响 |

@@ -22,4 +22,5 @@ import Testing
     #expect(parsed.words.map(\.text) == ["你好，", "世界", "第二句"])
     #expect(parsed.words.map(\.start) == [0.1, 0.52, 1.2])
     #expect(parsed.sentences.map(\.text) == ["你好，世界", "第二句"])
+    #expect(parsed.sentences.map { $0.words?.count } == [2, 1])
 }

@@ -51,6 +51,19 @@ import Testing
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "completed") == .finishing)
 }
 
+@Test func officialTaskSubmitBodyCarriesClientProofreadingPrompt() throws {
+    let data = try OfficialSmartServiceClient.makeSubmitBody(
+        ossURL: "oss://audio/task.mp3",
+        proofreadingPrompt: "统一使用 subForge"
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: data) as? [String: String]
+    )
+
+    #expect(json["ossUrl"] == "oss://audio/task.mp3")
+    #expect(json["proofreadingPrompt"] == "统一使用 subForge")
+}
+
 @MainActor
 @Test func officialSmartPipelineUsesFourUserFacingStages() {
     let titles = AppModel.makePipelineStages(
@@ -146,30 +159,6 @@ import Testing
     #expect(!output.map(\.text).joined().contains("交对"))
     #expect(output.first?.start == 0.20)
     #expect(output.last?.end == 4.58)
-}
-
-@Test func officialSmartSegmentationPrefersCorrectedSentenceBoundaries() {
-    let words = [
-        SubtitleWord(start: 0.0, end: 0.5, text: "工具体验非常好"),
-        SubtitleWord(start: 0.5, end: 1.0, text: "但是识别能力不行"),
-        SubtitleWord(start: 1.2, end: 1.7, text: "我用了官方推荐的方式"),
-        SubtitleWord(start: 1.7, end: 2.2, text: "六元体验了识别字幕")
-    ]
-    let input = [SubtitleSegment(
-        start: 0,
-        end: 3,
-        text: "工具体验非常好，但是识别能力不行。我用了官方推荐的方式，六元体验了识别字幕。",
-        words: words
-    )]
-
-    let output = OfficialSmartSubtitleProvider.applySegmentation(
-        input,
-        configuration: SubtitleSegmentationConfiguration(maxCharacters: 14)
-    )
-
-    #expect(output.map(\.text).joined() == input[0].text)
-    #expect(output.contains { $0.text.hasSuffix("。") })
-    #expect(output.contains { $0.text.contains("但是") && !$0.text.hasSuffix("但是") })
 }
 
 @Test func officialWalletUsesSeparateLocalAndAppStoreKeychainServices() {

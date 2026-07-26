@@ -10,6 +10,7 @@ enum SettingsListMetrics {
 
 struct SettingsListRow<Control: View>: View {
     let title: String
+    var titleDetail: String? = nil
     var description: String? = nil
     var alignment: VerticalAlignment = .center
     var titleWidth: CGFloat = SettingsListMetrics.titleWidth
@@ -18,6 +19,7 @@ struct SettingsListRow<Control: View>: View {
 
     init(
         title: String,
+        titleDetail: String? = nil,
         description: String? = nil,
         alignment: VerticalAlignment = .center,
         titleWidth: CGFloat = SettingsListMetrics.titleWidth,
@@ -25,6 +27,7 @@ struct SettingsListRow<Control: View>: View {
         @ViewBuilder control: () -> Control
     ) {
         self.title = title
+        self.titleDetail = titleDetail
         self.description = description
         self.alignment = alignment
         self.titleWidth = titleWidth
@@ -35,11 +38,19 @@ struct SettingsListRow<Control: View>: View {
     var body: some View {
         HStack(alignment: alignment, spacing: 16) {
             VStack(alignment: .leading, spacing: description == nil ? 0 : 4) {
-                Text(title)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .help(title)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.primary)
+
+                    if let titleDetail {
+                        Text(titleDetail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .lineLimit(1)
+                .help([title, titleDetail].compactMap { $0 }.joined(separator: " "))
 
                 if let description {
                     Text(description)

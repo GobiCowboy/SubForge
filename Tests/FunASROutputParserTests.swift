@@ -51,11 +51,6 @@ import Testing
     #expect(SubtitleTextFormatting.stripTrailingLineEndPunctuation("什么？。") == "什么？")
 }
 
-@Test func subtitleOutputRemovesPunctuationWithoutRemovingWords() {
-    #expect(SubtitleTextFormatting.removeSubtitlePunctuation("工具体验很好，但是识别不行。") == "工具体验很好但是识别不行")
-    #expect(SubtitleTextFormatting.removeSubtitlePunctuation("Final Cut Pro") == "Final Cut Pro")
-}
-
 @Test func funASRTimingMapperSkipsLeadingSilenceViaVAD() {
     let text = "第一句内容。第二句内容。"
     let intervals = [

@@ -2,32 +2,66 @@ import Foundation
 import Testing
 @testable import SubForge
 
-@Test func subtitleLengthSettingsAreIndependentByPlan() {
+@Test func subtitleLengthSettingIsSharedByEveryPlan() {
     var settings = AppSettings()
-    settings.officialMaxSubtitleLength = 12
-    settings.customMaxSubtitleLength = 20
-    settings.localMaxSubtitleLength = 30
+    settings.maxSubtitleLength = 38
 
     settings.transcriptionEngine = .officialSmart
-    #expect(settings.effectiveMaxSubtitleLength == 12)
+    #expect(settings.effectiveMaxSubtitleLength == 38)
 
     settings.transcriptionEngine = .cloudASR
-    #expect(settings.effectiveMaxSubtitleLength == 20)
+    #expect(settings.effectiveMaxSubtitleLength == 38)
 
     settings.transcriptionEngine = .funASRLocal
-    #expect(settings.effectiveMaxSubtitleLength == 30)
+    #expect(settings.effectiveMaxSubtitleLength == 38)
 }
 
-@Test func legacySubtitleLengthSeedsEveryPlan() throws {
+@Test func subtitleRulesMigrationForces32OnlyOnce() {
     var legacy = AppSettings()
-    legacy.maxSubtitleLength = 18
+    legacy.maxSubtitleLength = 40
+    legacy.subtitleRulesRevision = nil
+    legacy.proofreadingPrompt = AppSettings.legacyProofreadingPrompt
 
-    let data = try JSONEncoder().encode(legacy)
-    let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+    #expect(SettingsStore.normalize(&legacy))
+    #expect(legacy.maxSubtitleLength == 32)
+    #expect(legacy.subtitleRulesRevision == AppSettings.currentSubtitleRulesRevision)
+    #expect(legacy.proofreadingPrompt == AppSettings.defaultProofreadingPrompt)
 
-    #expect(decoded.effectiveMaxSubtitleLength(for: .official) == 18)
-    #expect(decoded.effectiveMaxSubtitleLength(for: .custom) == 18)
-    #expect(decoded.effectiveMaxSubtitleLength(for: .local) == 18)
+    legacy.maxSubtitleLength = 24
+    #expect(!SettingsStore.normalize(&legacy))
+    #expect(legacy.maxSubtitleLength == 24)
+}
+
+@Test func settingsDecodeWhenNewSubtitleFieldsAreMissing() throws {
+    let encoded = try JSONEncoder().encode(AppSettings())
+    var json = try #require(
+        JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    json.removeValue(forKey: "subtitleRulesRevision")
+    json.removeValue(forKey: "retainedSubtitlePunctuation")
+    json.removeValue(forKey: "hotwordPromptPreference")
+    json.removeValue(forKey: "fixedHotwordsEnabled")
+    json.removeValue(forKey: "fixedHotwordsText")
+
+    let legacyData = try JSONSerialization.data(withJSONObject: json)
+    var decoded = try JSONDecoder().decode(AppSettings.self, from: legacyData)
+
+    #expect(decoded.subtitleRulesRevision == nil)
+    #expect(decoded.effectiveRetainedSubtitlePunctuation == SubtitlePunctuationGroup.subtitleRecommended)
+    #expect(decoded.effectiveHotwordPromptPreference == .undecided)
+    #expect(!decoded.effectiveFixedHotwordsEnabled)
+    #expect(decoded.effectiveFixedHotwordsText.isEmpty)
+    #expect(SettingsStore.normalize(&decoded))
+    #expect(decoded.maxSubtitleLength == 32)
+}
+
+@Test func newSettingsUseRecommendedSubtitlePunctuation() {
+    let settings = AppSettings()
+
+    #expect(
+        settings.effectiveRetainedSubtitlePunctuation
+            == SubtitlePunctuationGroup.subtitleRecommended
+    )
 }
 
 @Test func defaultExportSettingsMatchFinalCutWorkflow() {

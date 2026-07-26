@@ -89,6 +89,7 @@ extension AppModel {
 
     func resetWorkspace() {
         stopPlayback(captureTimestamp: false)
+        hotwordPromptRequest = nil
         let wasProcessing = mode == .progress
         pipelineTask?.cancel()
         pipelineTask = nil
@@ -203,7 +204,7 @@ extension AppModel {
     }
 
     func handleDetectedFCPAudio(_ url: URL) -> Bool {
-        guard pipelineTask == nil else {
+        guard pipelineTask == nil, hotwordPromptRequest == nil else {
             AppLog.watcher.info("watch detected \(url.lastPathComponent, privacy: .public), but pipeline is busy")
             return false
         }

@@ -91,6 +91,7 @@ final class AppModel: ObservableObject {
     @Published var activeEditorSurface: EditorSurface = .table
     @Published var showInspector = true
     @Published var isShortcutGuidePresented = false
+    @Published var hotwordPromptRequest: HotwordPromptRequest?
     @Published var toast: ToastMessage?
     @Published var isWatchingDirectory = false
     @Published var watchStatusMessage = "未启动"
@@ -196,6 +197,10 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             await self.smartService.reconcilePurchasesAtLaunch()
         }
+    }
+
+    func persistSettingsImmediately() {
+        SettingsStore.save(settings)
     }
 
     deinit {

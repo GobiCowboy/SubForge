@@ -17,6 +17,10 @@ struct SettingsValidationState: Equatable, Codable {
 }
 
 struct AppSettings: Equatable, Codable {
+    static let currentSubtitleRulesRevision = 1
+    static let defaultProofreadingPrompt = "只修正错别字、漏字、明显 ASR 错误和专有名词，不润色、不改写原意。"
+    static let legacyProofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。"
+
     var interfaceLanguage: InterfaceLanguage = .simplifiedChinese
     var showMenuBarIcon = true
 
@@ -29,11 +33,13 @@ struct AppSettings: Equatable, Codable {
     var cloudASRModel: String = CloudASRPreset.dashscope.defaultModel
     var language: String = "zh-CN"
     var sentenceSplitStrategy: SentenceSplitStrategy = .punctuation
-    /// 旧版公共设置，保留用于迁移未分方案的历史配置。
-    var maxSubtitleLength: Int? = 24
-    var officialMaxSubtitleLength: Int?
-    var customMaxSubtitleLength: Int?
-    var localMaxSubtitleLength: Int?
+    var maxSubtitleLength: Int? = 32
+    var subtitleRulesRevision: Int? = Self.currentSubtitleRulesRevision
+    var retainedSubtitlePunctuation: Set<SubtitlePunctuationGroup>? =
+        SubtitlePunctuationGroup.subtitleRecommended
+    var hotwordPromptPreference: HotwordPromptPreference? = .undecided
+    var fixedHotwordsEnabled: Bool? = false
+    var fixedHotwordsText: String? = ""
     var keepFillerWords = false
     var transcriptionValidationState = SettingsValidationState()
     var customTranscriptionValidationState = SettingsValidationState()
@@ -45,7 +51,7 @@ struct AppSettings: Equatable, Codable {
     var cloudLLMURL: String = CloudLLMPreset.deepseek.defaultURL
     var cloudLLMKey: String = ""
     var cloudLLMModel: String = CloudLLMPreset.deepseek.defaultModel
-    var proofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。"
+    var proofreadingPrompt = Self.defaultProofreadingPrompt
     var proofreadingStrictCorrections = true
     var proofreadingValidationState = SettingsValidationState()
 
@@ -97,46 +103,26 @@ struct AppSettings: Equatable, Codable {
     }
 
     var effectiveMaxSubtitleLength: Int {
-        effectiveMaxSubtitleLength(for: subtitleLengthProfile)
+        Self.clampSubtitleLength(maxSubtitleLength ?? 32)
     }
 
-    var subtitleLengthProfile: SubtitleLengthProfile {
-        switch transcriptionEngine {
-        case .officialSmart:
-            .official
-        case .cloudASR:
-            .custom
-        case .funASRLocal, .whisperLocal, .appleSpeech:
-            .local
-        }
+    var effectiveRetainedSubtitlePunctuation: Set<SubtitlePunctuationGroup> {
+        retainedSubtitlePunctuation ?? SubtitlePunctuationGroup.subtitleRecommended
     }
 
-    func effectiveMaxSubtitleLength(for profile: SubtitleLengthProfile) -> Int {
-        let configured: Int?
-        switch profile {
-        case .official:
-            configured = officialMaxSubtitleLength
-        case .custom:
-            configured = customMaxSubtitleLength
-        case .local:
-            configured = localMaxSubtitleLength
-        }
-        return Self.clampSubtitleLength(configured ?? maxSubtitleLength ?? 24)
+    var effectiveHotwordPromptPreference: HotwordPromptPreference {
+        hotwordPromptPreference ?? .undecided
     }
 
-    mutating func setMaxSubtitleLength(_ value: Int, for profile: SubtitleLengthProfile) {
-        let clamped = Self.clampSubtitleLength(value)
-        switch profile {
-        case .official:
-            officialMaxSubtitleLength = clamped
-        case .custom:
-            customMaxSubtitleLength = clamped
-        case .local:
-            localMaxSubtitleLength = clamped
-        }
+    var effectiveFixedHotwordsEnabled: Bool {
+        fixedHotwordsEnabled ?? false
     }
 
-    private static func clampSubtitleLength(_ value: Int) -> Int {
+    var effectiveFixedHotwordsText: String {
+        fixedHotwordsText ?? ""
+    }
+
+    static func clampSubtitleLength(_ value: Int) -> Int {
         min(max(value, 10), 50)
     }
 
@@ -173,12 +159,6 @@ struct AppSettings: Equatable, Codable {
         }
         return "已开启 AI 校对，但配置不完整"
     }
-}
-
-enum SubtitleLengthProfile {
-    case official
-    case custom
-    case local
 }
 
 enum InterfaceLanguage: String, CaseIterable, Codable, Identifiable {

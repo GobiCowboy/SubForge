@@ -2,13 +2,14 @@
 
 ## 1. 当前结论
 
-SubForge 已具备 App Store 打包与上传链路；历史上已有成功上传构建 `1.0 (2026070403)`。
+SubForge 已具备 App Store 打包与上传链路；历史上已有成功上传构建 `1.0 (2026070403)`，并于 2026-07-26 成功上传 TestFlight 构建 `1.0.6 (20260726201820)`。
 
 - `script/release_appstore.sh --unsigned`：生成 release app bundle，仅做结构检查，使用 ad-hoc 调试签名。
 - `script/release_appstore.sh --sandbox`：使用 Mac App Development Profile 和 Apple Development 证书签名并启动，直接连接真实 StoreKit Sandbox。
 - `script/release_appstore.sh --signed` / `--package` / `--upload`：都会调用 `sign_app`，使用 Mac App Store 分发证书正式签名。
 - 若缺少 app signing identity，上述正式签名模式会主动停止，这是预期保护。
 - 注意：`--upload` 必须走正式签名；漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会拒绝上传。
+- 最近一次上传：版本 `1.0.6`，Build `20260726201820`，Delivery UUID `14d38beb-65f2-4b2b-a5cd-090a9c04b8f4`；上传成功后等待 App Store Connect 处理。
 
 ## 2. 构建入口
 
@@ -171,3 +172,11 @@ No account is required. No sample login credentials are needed.
 - 在 App Store Connect 创建两个消耗型商品：`com.jago.subforge.smart.60min`（60分钟，¥6）与 `com.jago.subforge.smart.300min`（300分钟，¥18），并确认价格和本地化状态可销售。
 - 使用StoreKit Sandbox验证购买、取消、pending、Server Notifications V2、只发放一次额度和到账轮询。
 - App Store Connect隐私问卷与`PrivacyInfo.xcprivacy`一致，声明Audio Data、Other User Content、User ID和Purchase History用于App Functionality且不追踪。
+
+## 10. 2026-07-26 TestFlight 交付记录
+
+- 本版本包含字幕公共分段、可选标点、逐视频热词、固定热词和 AI 校对提示词改造。
+- 热词校对规则要求严格区分大小写、空格和符号，并使用清单中的原始写法。
+- 设置项修改后立即自动保存，返回主页面但不关闭设置窗口时也能保留输入。
+- 上传命令：`APP_VERSION=1.0.6 ./script/release_appstore.sh --upload`
+- 上传前完成 `swift build`、App Store 签名、Installer 签名、bundle/entitlements/PrivacyInfo 校验；无内置 FunASR 模型权重。

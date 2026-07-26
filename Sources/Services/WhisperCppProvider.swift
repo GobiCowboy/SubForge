@@ -37,10 +37,10 @@ final class WhisperCppProvider: TranscriptionProvider {
         }.value
 
         let rawSegments = whisperResult.segments
-        let timedWords = rawSegments.flatMap { $0.words ?? [] }
-        let parsed = timedWords.isEmpty
-            ? TimedSubtitleSegmenter.segmentEstimated(rawSegments, configuration: segmentationConfiguration)
-            : TimedSubtitleSegmenter.segment(timedWords, configuration: segmentationConfiguration)
+        let parsed = TimedSubtitleSegmenter.segmentSources(
+            rawSegments,
+            configuration: segmentationConfiguration
+        )
         guard !parsed.isEmpty else {
             throw TranscriptionError.emptyResult
         }

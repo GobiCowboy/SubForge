@@ -6,13 +6,6 @@ struct SettingsView: View {
     @AppStorage("subforge.localTranscriptionEngine")
     private var storedLocalTranscriptionEngine = TranscriptionEngine.funASRLocal.rawValue
 
-    private var settingsBinding: Binding<AppSettings> {
-        Binding(
-            get: { model.settings },
-            set: { model.settings = $0 }
-        )
-    }
-
     private var selectedSubtitlePlan: SubtitlePlan {
         SubtitlePlan(engine: model.settings.transcriptionEngine)
     }
@@ -27,6 +20,16 @@ struct SettingsView: View {
 
     private var pageTitleDetail: String? {
         selection == .subtitles ? selectedSubtitlePlan.title : nil
+    }
+
+    private var settingsBinding: Binding<AppSettings> {
+        Binding(
+            get: { model.settings },
+            set: { newSettings in
+                model.settings = newSettings
+                model.persistSettingsImmediately()
+            }
+        )
     }
 
     var body: some View {
@@ -69,6 +72,12 @@ struct SettingsView: View {
         .onChange(of: model.settings.transcriptionEngine) { _, engine in
             guard SubtitlePlan.localEngines.contains(engine) else { return }
             storedLocalTranscriptionEngine = engine.rawValue
+        }
+        .onChange(of: selection) { _, _ in
+            model.persistSettingsImmediately()
+        }
+        .onDisappear {
+            model.persistSettingsImmediately()
         }
     }
 

@@ -11,17 +11,16 @@ extension CloudASRProvider {
         let (data, _) = try await URLSession.shared.data(from: resolvedURL)
         let parsed = try DashScopeTranscriptionParser.parse(data)
 
-        if !parsed.words.isEmpty {
-            return TimedSubtitleSegmenter.segment(
-                parsed.words,
+        if !parsed.sentences.isEmpty {
+            return TimedSubtitleSegmenter.segmentSources(
+                parsed.sentences,
                 configuration: segmentationConfiguration
             )
         }
 
-        if !parsed.sentences.isEmpty {
-            AppLog.transcription.warning("cloudASR result has sentence timestamps only; using estimated word timing")
-            return TimedSubtitleSegmenter.segmentEstimated(
-                parsed.sentences,
+        if !parsed.words.isEmpty {
+            return TimedSubtitleSegmenter.segment(
+                parsed.words,
                 configuration: segmentationConfiguration
             )
         }

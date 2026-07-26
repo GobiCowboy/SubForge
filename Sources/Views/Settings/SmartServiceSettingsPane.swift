@@ -16,13 +16,9 @@ struct OfficialSmartServicePanel: View {
     @ObservedObject var service: SmartServiceStore
 
     @State private var selectedPlan: OfficialPurchasePlan = .standard
-    @State private var isSegmentationExpanded = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             valueSection
-            Divider()
-            segmentationSection
             Divider()
             purchaseSection
             privacyNotice
@@ -113,33 +109,6 @@ struct OfficialSmartServicePanel: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.top, 26)
-    }
-
-    private var segmentationSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text("字幕分段")
-                    .font(.system(size: 13, weight: .semibold))
-
-                Spacer(minLength: 0)
-
-                Text("每条最多 \(settings.effectiveMaxSubtitleLength(for: .official)) 字")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                Button(isSegmentationExpanded ? "收起" : "调整") {
-                    isSegmentationExpanded.toggle()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-
-            if isSegmentationExpanded {
-                SubtitleLengthSlider(settings: $settings, profile: .official)
-                    .padding(.top, 14)
-            }
-        }
-        .padding(.vertical, 14)
     }
 
     private func purchasePlanCard(_ plan: OfficialPurchasePlan) -> some View {

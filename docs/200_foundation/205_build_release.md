@@ -56,6 +56,8 @@
 - App Store release 脚本会自动查找 `SubForge_Mac_App_Store.provisionprofile`，优先路径包括项目目录、`Config/`、`~/Downloads/`、Xcode provisioning profile 目录
 - App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
+- 2026-07-26 已成功上传 TestFlight 构建：版本 `1.0.6`，Build `20260726201820`，Delivery UUID `14d38beb-65f2-4b2b-a5cd-090a9c04b8f4`。`1.0.5` 因预发布版本已关闭被 App Store Connect 拒绝，随后提升到 `1.0.6` 上传成功
+- 2026-07-26 已通过 Parallels “分发版”快照验证最新本地构建：宿主机与虚拟机主程序哈希一致，签名校验通过，应用未内置 FunASR 模型权重
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出
 - App Store `--upload` 必须与 `--signed` / `--package` 一样调用 `sign_app`；历史上漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会直接拒绝

@@ -155,14 +155,13 @@ struct SubtitleConfigurationTabs: View {
 
 struct SubtitleLengthSlider: View {
     @Binding var settings: AppSettings
-    let profile: SubtitleLengthProfile
 
     var body: some View {
         HStack(spacing: 12) {
             Slider(value: maxSubtitleLengthBinding, in: 10...50, step: 2)
                 .frame(maxWidth: .infinity)
 
-            Text("\(settings.effectiveMaxSubtitleLength(for: profile)) 字")
+            Text("\(settings.effectiveMaxSubtitleLength) 字")
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
@@ -171,8 +170,8 @@ struct SubtitleLengthSlider: View {
 
     private var maxSubtitleLengthBinding: Binding<Double> {
         Binding(
-            get: { Double(settings.effectiveMaxSubtitleLength(for: profile)) },
-            set: { settings.setMaxSubtitleLength(Int($0.rounded()), for: profile) }
+            get: { Double(settings.effectiveMaxSubtitleLength) },
+            set: { settings.maxSubtitleLength = AppSettings.clampSubtitleLength(Int($0.rounded())) }
         )
     }
 }

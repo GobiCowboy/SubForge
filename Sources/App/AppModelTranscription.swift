@@ -24,26 +24,14 @@ extension AppModel {
             )
         }
 
-        // 必须串行：先 await 杀掉旧 CLI，再开新任务。
-        // 以前 fire-and-forget cancel 会在新任务启动后才执行 pkill，把新 FunASR 进程误杀。
-        Task { @MainActor in
-            if let existing = self.pipelineTask {
-                existing.cancel()
-                self.pipelineTask = nil
-                await FunASRCLIRunner.shared.cancelActive()
-            }
-
-            let engine = self.settings.transcriptionEngine
-            if LocalEngineUsageHint.shouldPresent(for: engine) {
-                let proceed = await LocalEngineUsageHint.presentIfNeeded(for: engine)
-                guard proceed else { return }
-            }
-            self.beginTranscriptionPipeline(for: url)
-        }
+        requestHotwordsOrStart(for: url)
     }
 
-    func beginTranscriptionPipeline(for url: URL) {
+    func beginTranscriptionPipeline(for url: URL, runOptions: TranscriptionRunOptions) {
         var pipelineSettings = settings
+        pipelineSettings.maxSubtitleLength = runOptions.maxSubtitleLength
+        pipelineSettings.proofreadingPrompt = runOptions.proofreadingPrompt
+        pipelineSettings.retainedSubtitlePunctuation = runOptions.retainedPunctuation
         if pipelineSettings.transcriptionEngine != .officialSmart,
            !pipelineSettings.shouldRunProofreading {
             pipelineSettings.proofreadingEnabled = false
@@ -133,8 +121,9 @@ extension AppModel {
                 if engine == .officialSmart {
                     provider = OfficialSmartSubtitleProvider(
                         segmentationConfiguration: SubtitleSegmentationConfiguration(
-                            maxCharacters: transcriptionSettings.effectiveMaxSubtitleLength
-                        )
+                            maxCharacters: runOptions.maxSubtitleLength
+                        ),
+                        proofreadingPrompt: runOptions.composedProofreadingPrompt
                     ) { [weak self] update in
                         Task { @MainActor in
                             self?.handleOfficialSmartProgress(update)
@@ -156,15 +145,7 @@ extension AppModel {
                 if engine == .officialSmart {
                     await self.smartService.refreshWallet()
                 }
-                transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: true)
-                if engine == .officialSmart {
-                    // 校对阶段保留标点用于语义断句；字幕成品按产品规则不显示标点。
-                    transcribedSegments = transcribedSegments.map { segment in
-                        var normalized = segment
-                        normalized.text = SubtitleTextFormatting.removeSubtitlePunctuation(segment.text)
-                        return normalized
-                    }.filter { !$0.text.isEmpty }
-                }
+                transcribedSegments = self.normalizeSegments(transcribedSegments, stripTrailingPunctuation: false)
                 guard !Task.isCancelled else {
                     self.stopPipelineClock()
                     return
@@ -200,7 +181,7 @@ extension AppModel {
                             let corrected = try await proofreadingProvider.proofread(
                                 segments: transcribedSegments,
                                 batchSize: 60,
-                                prompt: proofSettings.proofreadingPrompt,
+                                prompt: runOptions.composedProofreadingPrompt,
                                 strictCorrections: proofSettings.proofreadingStrictCorrections
                             )
                             let normalizedCorrected = self.normalizeSegments(corrected, stripTrailingPunctuation: false)
@@ -233,6 +214,15 @@ extension AppModel {
                     self.stopPipelineClock()
                     self.pipelineTask = nil
                     return
+                }
+
+                finalSegments = finalSegments.compactMap { segment in
+                    var formatted = segment
+                    formatted.text = SubtitleTextFormatting.applyingPunctuationPolicy(
+                        segment.text,
+                        retained: runOptions.retainedPunctuation
+                    )
+                    return formatted.text.isEmpty ? nil : formatted
                 }
 
                 let totalSeconds = self.pipelineElapsedSeconds()

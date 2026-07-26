@@ -111,14 +111,23 @@ struct OfficialSmartServiceClient {
         try await request(path: "subtitle-smart/wallet", method: "GET", body: nil)
     }
 
-    func process(audioURL: URL, language: String) async throws -> [SubtitleSegment] {
+    func process(
+        audioURL: URL,
+        language: String,
+        proofreadingPrompt: String = ""
+    ) async throws -> [SubtitleSegment] {
         let cancellation = OfficialSmartCancellationContext(
             baseURL: profile.modelBaseURL,
             apiKey: apiKey,
             session: session
         )
         return try await withTaskCancellationHandler {
-            try await performProcess(audioURL: audioURL, language: language, cancellation: cancellation)
+            try await performProcess(
+                audioURL: audioURL,
+                language: language,
+                proofreadingPrompt: proofreadingPrompt,
+                cancellation: cancellation
+            )
         } onCancel: {
             Task { await cancellation.cancelIfNeeded() }
         }
@@ -127,6 +136,7 @@ struct OfficialSmartServiceClient {
     func performProcess(
         audioURL: URL,
         language: String,
+        proofreadingPrompt: String,
         cancellation: OfficialSmartCancellationContext
     ) async throws -> [SubtitleSegment] {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -159,10 +169,25 @@ struct OfficialSmartServiceClient {
         try await OSSMultipartUploader.upload(audioURL: audioURL, policy: upload.upload, session: session)
         try Task.checkCancellation()
         onProgress?(.init(phase: .transcribing, progress: 0.48))
-        let submitBody = try JSONSerialization.data(withJSONObject: ["ossUrl": "oss://\(upload.upload.objectKey)"])
+        let submitBody = try Self.makeSubmitBody(
+            ossURL: "oss://\(upload.upload.objectKey)",
+            proofreadingPrompt: proofreadingPrompt
+        )
         let _: SmartTaskResponse = try await request(
             path: "subtitle-smart/tasks/\(upload.taskId)/submit", method: "POST", body: submitBody
         )
         return try await poll(taskID: upload.taskId)
+    }
+
+    static func makeSubmitBody(
+        ossURL: String,
+        proofreadingPrompt: String
+    ) throws -> Data {
+        var payload = ["ossUrl": ossURL]
+        let trimmedPrompt = proofreadingPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPrompt.isEmpty {
+            payload["proofreadingPrompt"] = String(trimmedPrompt.prefix(4_000))
+        }
+        return try JSONSerialization.data(withJSONObject: payload)
     }
 }
