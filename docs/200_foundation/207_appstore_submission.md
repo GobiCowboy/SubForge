@@ -44,7 +44,7 @@ App Store 发布准备使用：
 ```bash
 APP_VERSION=1.0
 APP_BUILD=1
-TEAM_ID=4UNNXY925R
+TEAM_ID="<Apple Developer Team ID>"
 DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"
 DEVELOPMENT_PROVISIONING_PROFILE="/path/to/SubForge_Mac_Development.provisionprofile"
 APP_SIGN_IDENTITY="3rd Party Mac Developer Application: ..."
@@ -61,7 +61,7 @@ APP_STORE_PASSWORD="app-specific-password"
 - 本机 Sandbox 联调需要 `Apple Development` 证书，以及包含当前 Mac UDID 的 `Mac App Development` Profile
 - Mac App Store installer signing identity（脚本用 `security find-certificate` 查找，不会出现在 `security find-identity -p codesigning`）
 - Bundle ID: `com.jago.subforge`
-- Team ID: `4UNNXY925R`
+- Team ID: fill this locally from Apple Developer; do not commit it to Git
 - 上传时还需 `APP_STORE_USER` + `APP_STORE_PASSWORD`（app-specific password）
 
 注意区分证书用途：

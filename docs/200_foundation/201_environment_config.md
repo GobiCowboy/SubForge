@@ -53,7 +53,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `SubForge.entitlements` | App Store 主程序（含 App Sandbox） |
+| `SubForge.entitlements.template` | App Store 主程序模板；实际 `SubForge.entitlements` 仅在本机生成（含 App Sandbox） |
 | `SubForge.debug.entitlements` | 本地 ad-hoc 调试签名 |
 | `SubForge.inherit.entitlements` | App Store 嵌套 `whisper-cli`（sandbox + inherit） |
 | `SubForge.developer-id.entitlements` | 站外分发主程序与嵌套二进制（**无** Sandbox） |

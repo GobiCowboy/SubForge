@@ -3,6 +3,12 @@
 dist/
 SubForge.app/
 config.json
+config.local.*
+release.local.*
+.env
+.env.*
+/Secrets/
+/Private/
 /models/
 .codex/
 BAK/
@@ -13,8 +19,22 @@ tmp/
 # Local model weights are downloaded or bundled during release preparation.
 Resources/funasr/*.gguf
 
-# Developer-specific signing profiles must remain outside source control.
+# Developer-specific signing profiles and Apple distribution material must remain outside source control.
 Config/*.provisionprofile
+Config/*.mobileprovision
+Config/*.p8
+Config/*.p12
+Config/*.cer
+Config/*.pem
+Config/*.key
+Config/*private*
+Config/*secret*
+Config/SubForge.entitlements
+
+# Local release archives and installer packages.
+*.dmg
+*.pkg
+*.zip
 
 # FunASR runtime binaries (download via script/download_funasr_runtime.sh)
 vendor/funasr/llama-funasr-*

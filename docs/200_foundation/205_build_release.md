@@ -44,7 +44,7 @@
 - 当前真实运行入口已经统一到 `script/build_and_run.sh`
 - SwiftUI GUI 应用不再建议直接运行 `.build/.../SubForge` 裸可执行文件，统一通过 `dist/SubForge.app` 或脚本启动
 - 本地 Whisper 依赖 `whisper-cli` 与模型文件，云端能力依赖用户自行配置 Key
-- 签名准备文件已进入仓库：`Config/SubForge.entitlements`（App Store）、`Config/SubForge.developer-id.entitlements`（站外）、`Config/SubForge.debug.entitlements`、`Config/SubForge.inherit.entitlements`，以及 `Resources/PrivacyInfo.xcprivacy`
+- 签名准备文件已进入仓库：`Config/SubForge.entitlements.template`（App Store，Team ID 仅在本机生成）、`Config/SubForge.developer-id.entitlements`（站外）、`Config/SubForge.debug.entitlements`、`Config/SubForge.inherit.entitlements`，以及 `Resources/PrivacyInfo.xcprivacy`
 - App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问与 Apple Events entitlement；语音识别使用 `NSSpeechRecognitionUsageDescription`，不在签名 entitlement 中声明
 - 云端 ASR / 校对 API Key 必须写入 Keychain，普通偏好才写入 UserDefaults
 - 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限

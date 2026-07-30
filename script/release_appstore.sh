@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
-TEAM_ID="${TEAM_ID:-4UNNXY925R}"
+TEAM_ID="${TEAM_ID:-}"
 APP_VERSION="${APP_VERSION:-1.0.5}"
 # 必须比历史上传的 CFBundleVersion 更大；用 14 位时间戳避免 12 位比旧 14 位小
 APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
@@ -20,6 +20,7 @@ APP_NOTICES="$APP_RESOURCES/ThirdPartyNotices"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
+ENTITLEMENTS_TEMPLATE="$ROOT_DIR/Config/SubForge.entitlements.template"
 DEBUG_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.debug.entitlements"
 INHERIT_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.inherit.entitlements"
 PKG_PATH="$DIST_DIR/$APP_NAME.pkg"
@@ -44,7 +45,7 @@ Modes:
 Optional environment:
   APP_VERSION=1.0.5
   APP_BUILD=$(date +%Y%m%d%H%M%S)
-  TEAM_ID=$TEAM_ID
+  TEAM_ID="<Apple Developer Team ID>"
   DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"
   DEVELOPMENT_PROVISIONING_PROFILE="/path/to/SubForge_Mac_Development.provisionprofile"
   APP_SIGN_IDENTITY="Apple Distribution: ..."
@@ -67,6 +68,20 @@ if [ "$MODE" = "--sandbox" ]; then
 elif [ "$MODE" != "--unsigned" ]; then
   SIGNING_CHANNEL="app-store"
 fi
+
+require_team_id() {
+  if [ -z "$TEAM_ID" ]; then
+    echo "missing TEAM_ID; set it in the local shell environment" >&2
+    exit 1
+  fi
+}
+
+prepare_app_store_entitlements() {
+  require_team_id
+  require_file "$ENTITLEMENTS_TEMPLATE"
+  sed "s/__TEAM_ID__/$TEAM_ID/g" "$ENTITLEMENTS_TEMPLATE" > "$ENTITLEMENTS"
+  chmod 600 "$ENTITLEMENTS"
+}
 
 find_codesigning_identity() {
   local explicit="$1"
@@ -650,10 +665,14 @@ upload_app() {
 }
 
 verify_bundle() {
-  require_file "$ENTITLEMENTS"
   require_file "$DEBUG_ENTITLEMENTS"
   require_file "$INHERIT_ENTITLEMENTS"
-  plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  if [ "$MODE" = "--unsigned" ]; then
+    plutil -lint "$INFO_PLIST" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  else
+    require_file "$ENTITLEMENTS"
+    plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  fi
 
   if [ -f "$APP_RESOURCES/PrivacyInfo.xcprivacy" ]; then
     plutil -lint "$APP_RESOURCES/PrivacyInfo.xcprivacy"
@@ -684,6 +703,10 @@ verify_bundle() {
 }
 
 main() {
+  if [ "$MODE" != "--unsigned" ]; then
+    prepare_app_store_entitlements
+  fi
+
   build_app
   stage_bundle
 

@@ -6,8 +6,8 @@ set -euo pipefail
 
 APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
-TEAM_ID="${TEAM_ID:-4UNNXY925R}"
-APP_VERSION="${APP_VERSION:-1.0}"
+TEAM_ID="${TEAM_ID:-}"
+APP_VERSION="${APP_VERSION:-1.0.7}"
 APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-Apple-Notary}"
@@ -316,12 +316,18 @@ sign_nested_code() {
 
 sign_app() {
   local identity
-  identity="$(find_codesigning_identity "$SIGN_IDENTITY" \
-    "Developer ID Application: .*($TEAM_ID)")" || {
-      echo "missing Developer ID Application signing identity for team $TEAM_ID" >&2
+  if [ -n "$TEAM_ID" ]; then
+    identity="$(find_codesigning_identity "$SIGN_IDENTITY" \
+      "Developer ID Application: .*($TEAM_ID)")"
+  else
+    identity="$(find_codesigning_identity "$SIGN_IDENTITY" \
+      "Developer ID Application: .*")"
+  fi
+  if [ -z "$identity" ]; then
+      echo "missing Developer ID Application signing identity" >&2
       echo "Install a Developer ID Application certificate, or set SIGN_IDENTITY." >&2
       exit 1
-    }
+  fi
 
   echo "Signing with: $identity"
   sign_nested_code "$identity"
@@ -332,7 +338,7 @@ sign_app() {
 
 zip_app() {
   rm -f "$ZIP_PATH"
-  /usr/bin/ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP_PATH"
+  (cd "$DIST_DIR" && /usr/bin/zip -qry -X "$ZIP_PATH" "$APP_NAME.app")
 }
 
 notarize_app() {
@@ -345,7 +351,7 @@ notarize_app() {
 staple_app() {
   xcrun stapler staple "$APP_BUNDLE"
   rm -f "$ZIP_PATH"
-  /usr/bin/ditto -c -k --keepParent "$APP_BUNDLE" "$ZIP_PATH"
+  (cd "$DIST_DIR" && /usr/bin/zip -qry -X "$ZIP_PATH" "$APP_NAME.app")
 }
 
 verify_dist() {

@@ -1,6 +1,6 @@
 # SubForge
 
-**从 Git Release 下载：** https://github.com/GobiCowboy/SubForge/releases
+**从 GitHub Release 下载：** https://github.com/GobiCowboy/SubForge/releases
 
 SubForge 是一个面向 Final Cut Pro（FCP）的字幕工作流应用：可监听 FCP 上导出的音频，也能将生成的字幕 XML 文件自动传回 FCP 中（需要打开设置的相关配置）。重点是把 **监听 → 转写 → 编辑 → 导出** 这条路径做短、做稳、做清楚。
 
@@ -25,7 +25,7 @@ SubForge 是一个面向 Final Cut Pro（FCP）的字幕工作流应用：可监
 
 ## 下载与安装
 
-前往 [Git Release](https://github.com/GobiCowboy/SubForge/releases) 下载最新 `SubForge-x.y.z.zip`，解压后将 `SubForge.app` 拖入 `应用程序` 文件夹即可。
+前往 [GitHub Release](https://github.com/GobiCowboy/SubForge/releases) 下载最新 `SubForge-x.y.z.zip`，解压后将 `SubForge.app` 拖入“应用程序”文件夹即可。
 
 发布包已使用 **Developer ID Application** 证书签名并经 Apple **公证（Notarization）**，首次打开不会被 Gatekeeper 拦截。
 
@@ -81,6 +81,18 @@ bash script/download_funasr_runtime.sh
 ```
 
 产物位于 `dist/appstore/SubForge.app`。
+
+### GitHub Release 发布包
+
+GitHub Release 使用 macOS 站外分发路线，不需要 App Store provisioning profile，也不会把 App Store 注册信息或付费服务密钥放进仓库。发布前在本机准备 Developer ID 证书和 Notary keychain profile，然后运行：
+
+```bash
+APP_VERSION=1.0.7 ./script/release_developer_id.sh
+```
+
+最终上传 `dist/developer-id/SubForge-1.0.7.zip`。发布脚本会在本机完成签名、公证、贴票和 Gatekeeper 校验。
+
+App Store 专用的 Team ID、证书、provisioning profile 和上传凭据只通过本机环境变量或 Keychain 提供；`Config/SubForge.entitlements` 会由 `Config/SubForge.entitlements.template` 在本机生成，实际文件已加入 `.gitignore`。云端 API Key 和钱包凭证只保存在用户 Keychain，不写入源码。
 
 ### 打包并公证分发（macOS 站外分发）
 
