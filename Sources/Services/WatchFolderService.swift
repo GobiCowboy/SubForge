@@ -7,6 +7,7 @@ final class WatchFolderService {
     }
 
     private let scanInterval: TimeInterval = 0.5
+    private let fcpMetadataWaitTimeout: TimeInterval = 30
     private(set) var isWatching = false
     private(set) var statusMessage = "未启动"
     private(set) var processedCount = 0
@@ -19,6 +20,7 @@ final class WatchFolderService {
     private var watchStartedAt: Date?
     private var processedSnapshots: [String: FileSnapshot] = [:]
     private var seenSnapshots: [String: FileSnapshot] = [:]
+    private var pendingFCPMetadataSince: [String: Date] = [:]
 
     func start(watching directory: URL) {
         if isWatching, watchedURL?.standardizedFileURL == directory.standardizedFileURL {
@@ -39,6 +41,7 @@ final class WatchFolderService {
         watchStartedAt = Date()
         processedSnapshots = [:]
         seenSnapshots = [:]
+        pendingFCPMetadataSince = [:]
 
         let scheduledTimer = Timer.scheduledTimer(withTimeInterval: scanInterval, repeats: true) { [weak self] _ in
             self?.checkDirectory()
@@ -59,6 +62,7 @@ final class WatchFolderService {
         watchedURL = nil
         watchStartedAt = nil
         seenSnapshots = [:]
+        pendingFCPMetadataSince = [:]
         statusMessage = "未启动"
         AppLog.watcher.info("watch stopped")
         notifyStateChange()
@@ -87,13 +91,25 @@ final class WatchFolderService {
                 continue
             }
 
-            if isFromFinalCutPro(file) {
-                AppLog.watcher.info("watch confirmed FCP metadata file=\(file.lastPathComponent, privacy: .public)")
-            } else {
-                AppLog.watcher.info("watch accepted audio without FCP metadata file=\(file.lastPathComponent, privacy: .public)")
+            guard isFromFinalCutPro(file) else {
+                let now = Date()
+                let metadataWaitStartedAt = pendingFCPMetadataSince[key] ?? now
+                pendingFCPMetadataSince[key] = metadataWaitStartedAt
+
+                if now.timeIntervalSince(metadataWaitStartedAt) < fcpMetadataWaitTimeout {
+                    AppLog.watcher.debug(
+                        "watch waiting FCP metadata file=\(file.lastPathComponent, privacy: .public)"
+                    )
+                } else {
+                    AppLog.watcher.info("watch skipped non-FCP audio file=\(file.lastPathComponent, privacy: .public)")
+                    processedSnapshots[key] = snapshot
+                    pendingFCPMetadataSince.removeValue(forKey: key)
+                }
+                continue
             }
 
-            AppLog.watcher.info("watch detected FCP audio file=\(file.path, privacy: .public) size=\(snapshot.fileSize, privacy: .public)")
+            pendingFCPMetadataSince.removeValue(forKey: key)
+            AppLog.watcher.info("watch confirmed FCP audio file=\(file.path, privacy: .public) size=\(snapshot.fileSize, privacy: .public)")
             let accepted = onDetectedFCPAudio?(file) ?? false
             if accepted {
                 processedSnapshots[key] = snapshot

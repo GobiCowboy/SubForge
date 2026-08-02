@@ -114,6 +114,8 @@ stage_bundle() {
   <string>public.app-category.video</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>SubForgeSigningChannel</key>
+  <string>developer-id</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>SubForge 需要语音识别权限，将用户选择的音频转写为字幕。</string>
   <key>NSAppleEventsUsageDescription</key>

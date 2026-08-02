@@ -49,7 +49,10 @@ struct SettingsView: View {
 
                     switch selection {
                     case .general:
-                        GeneralSettingsPane(settings: settingsBinding)
+                        GeneralSettingsPane(
+                            settings: settingsBinding,
+                            onOpenUsageAndUpdates: { model.presentUsageAndUpdates() }
+                        )
                     case .subtitles:
                         SubtitleSettingsPane(settings: settingsBinding, service: model.smartService)
                     case .style:

@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "title": "SubForge 使用帮助",
+  "sections": [
+    {
+      "title": "快速开始",
+      "body": "打开 SubForge 后，导入音频或 SRT 文件即可开始。音频会进入转写流程，SRT 会直接进入字幕编辑工作台。",
+      "bullets": [
+        "先在设置中选择本地或云端字幕方案。",
+        "转写完成后检查字幕文本和时间。",
+        "使用 ⌘E 导出 SRT 或 FCPXML。"
+      ]
+    },
+    {
+      "title": "Final Cut Pro 工作流",
+      "body": "如果你从 Final Cut Pro 制作视频，可以在设置中开启目录监听，让 SubForge 自动接手新导出的音频。",
+      "bullets": [
+        "选择包含多个视频项目的创作总目录。",
+        "需要时开启人工复核。",
+        "确认导出设置后再传回 Final Cut Pro。"
+      ]
+    },
+    {
+      "title": "常见问题",
+      "body": "首次使用麦克风、语音识别或控制 Final Cut Pro 时，macOS 可能会请求系统权限。请按实际工作流允许对应权限。",
+      "bullets": []
+    }
+  ]
+}

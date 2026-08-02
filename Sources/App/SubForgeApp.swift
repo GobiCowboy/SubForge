@@ -5,11 +5,13 @@ import SwiftUI
 struct SubForgeApp: App {
     @NSApplicationDelegateAdaptor(SubForgeAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
+    @Environment(\.openWindow) private var openWindow
 
     @SceneBuilder
     var body: some Scene {
         mainWindow
         settingsWindow
+        usageAndUpdatesWindow
     }
 
     private var settingsWindow: some Scene {
@@ -18,6 +20,16 @@ struct SubForgeApp: App {
                 .environmentObject(model)
                 .frame(width: 900, height: 760)
         }
+    }
+
+    private var usageAndUpdatesWindow: some Scene {
+        Window("使用说明与更新", id: "usage-and-updates") {
+            UsageAndUpdatesView()
+                .environmentObject(model)
+                .environmentObject(model.versionContentService)
+        }
+        .defaultSize(width: 900, height: 680)
+        .windowResizability(.contentMinSize)
     }
 
     private var mainWindow: some Scene {
@@ -75,12 +87,34 @@ struct SubForgeApp: App {
             }
 
             CommandMenu("帮助") {
+                Button("使用帮助") {
+                    openUsageAndUpdates(.help)
+                }
+
+                Button("最新动态") {
+                    openUsageAndUpdates(.news)
+                }
+
+                Button("检查更新") {
+                    openUsageAndUpdates(.updates)
+                }
+
+                Divider()
+
                 Button("快捷键说明") {
                     model.presentShortcutGuide()
                 }
                 .keyboardShortcut("/", modifiers: [.command, .shift])
             }
         }
+    }
+
+    private func openUsageAndUpdates(_ section: UsageAndUpdatesSection) {
+        model.requestedUsageAndUpdatesSection = section
+        if section == .updates {
+            model.versionContentService.checkForUpdates()
+        }
+        openWindow(id: "usage-and-updates")
     }
 
 }

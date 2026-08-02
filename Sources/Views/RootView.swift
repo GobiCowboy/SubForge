@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -12,7 +13,8 @@ struct RootView: View {
             HStack(spacing: 0) {
                 ProjectSidebar(
                     onImport: { model.openImportPanel() },
-                    onOpenSettings: { model.presentSettings() }
+                    onOpenSettings: { model.presentSettings() },
+                    onOpenUsageAndUpdates: { model.presentUsageAndUpdates() }
                 )
 
                 Group {
@@ -46,9 +48,34 @@ struct RootView: View {
                 onCancel: { model.cancelHotwordPrompt(request) }
             )
         }
+        .sheet(
+            isPresented: Binding(
+                get: { model.versionContentService.pendingUpdate != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        model.versionContentService.dismissPendingUpdate()
+                    }
+                }
+            )
+        ) {
+            if let notice = model.versionContentService.pendingUpdate {
+                VersionUpdateNoticeView(
+                    notice: notice,
+                    onLater: { model.versionContentService.dismissPendingUpdate() },
+                    onOpen: {
+                        model.versionContentService.dismissPendingUpdate()
+                        model.presentUsageAndUpdates(section: .updates)
+                        openWindow(id: "usage-and-updates")
+                    }
+                )
+            }
+        }
         .onAppear {
             model.settingsWindowPresenter = {
                 openSettings()
+            }
+            model.usageAndUpdatesWindowPresenter = {
+                openWindow(id: "usage-and-updates")
             }
         }
         .background(MainWindowCloseBehavior().frame(width: 0, height: 0))

@@ -36,6 +36,7 @@
 - `export`
 - `watcher`
 - `settings`
+- `updates`
 
 ## 6. 本轮约束
 

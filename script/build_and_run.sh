@@ -27,7 +27,14 @@ usage() {
 }
 
 kill_existing() {
-  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    kill "$pid" >/dev/null 2>&1 || true
+  done < <(pgrep -f -- "$APP_BINARY" || true)
+}
+
+app_is_running() {
+  pgrep -f -- "$APP_BINARY" >/dev/null 2>&1
 }
 
 build_app() {
@@ -342,7 +349,7 @@ open_app() {
   # 给 SwiftUI 单实例 Window 留出状态恢复时间。只有确认没有任何
   # 主窗口时才模拟一次 ⌘N，避免和 macOS 的窗口恢复时机撞车。
   for _ in {1..20}; do
-    pgrep -x "$APP_NAME" >/dev/null 2>&1 && break
+    app_is_running && break
     sleep 0.1
   done
   window_count=0
@@ -376,12 +383,12 @@ stream_telemetry() {
 
 verify_launch() {
   for _ in {1..20}; do
-    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+    if app_is_running; then
       return 0
     fi
     sleep 0.5
   done
-  pgrep -x "$APP_NAME" >/dev/null
+  app_is_running
 }
 
 main() {

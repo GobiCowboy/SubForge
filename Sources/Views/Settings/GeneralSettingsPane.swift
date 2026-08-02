@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GeneralSettingsPane: View {
     @Binding var settings: AppSettings
+    let onOpenUsageAndUpdates: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -22,6 +23,22 @@ struct GeneralSettingsPane: View {
                 SettingsListRow(title: "菜单栏图标") {
                     Toggle("", isOn: $settings.showMenuBarIcon)
                         .labelsHidden()
+                }
+            }
+
+            SettingsSubsectionHeader(title: "帮助与更新")
+                .padding(.top, 10)
+
+            SettingsListSection {
+                SettingsListRow(
+                    title: "使用说明与更新",
+                    description: "查看使用帮助、最新动态和版本更新",
+                    controlWidth: nil
+                ) {
+                    Button("打开") {
+                        onOpenUsageAndUpdates()
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
 

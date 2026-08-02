@@ -18,6 +18,8 @@
 | Apple购买 | StoreKit 2 | Mac App Store数字权益使用Apple内购 |
 | 音频上传 | URLSession直传阿里临时OSS | 音频不经过业务服务器 |
 | 自动化能力 | 目录监听可选 | 服务进阶工作流，不影响基础使用 |
+| 版本内容分发 | 项目 `release-content/` 作为源文件，Astro_Blog 静态托管 | 内容可版本化、可校验、可缓存，运行时不依赖 GitHub |
+| 更新行为 | 检查更新后跳转正式下载页 | 不在 App 内替换安装包，区分 App Store 与 Developer ID 渠道 |
 
 ## 3. 引擎策略
 

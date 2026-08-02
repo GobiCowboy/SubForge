@@ -91,6 +91,7 @@ final class AppModel: ObservableObject {
     @Published var activeEditorSurface: EditorSurface = .table
     @Published var showInspector = true
     @Published var isShortcutGuidePresented = false
+    @Published var requestedUsageAndUpdatesSection: UsageAndUpdatesSection = .help
     @Published var hotwordPromptRequest: HotwordPromptRequest?
     @Published var toast: ToastMessage?
     @Published var isWatchingDirectory = false
@@ -111,6 +112,7 @@ final class AppModel: ObservableObject {
     let keyboardMonitor = EditorKeyboardMonitor()
     let watchFolderService = WatchFolderService()
     let menuBarController = MenuBarController()
+    let versionContentService = VersionContentService()
     var watchDirectoryAccess: SecurityScopedResourceAccess?
     var waveformTask: Task<Void, Never>?
     /// 整条流水线计时（准备 → 转写 → 校对），从点开始就走秒表。
@@ -120,6 +122,7 @@ final class AppModel: ObservableObject {
     var pipelinePhaseLabel = "准备中"
     var pipelineUsesLocalEngine = false
     var pipelineAudioDuration: TimeInterval = 0
+    var usageAndUpdatesWindowPresenter: (() -> Void)?
     @Published var editorFocusContext: EditorFocusContext = .none
 
     init() {
@@ -197,6 +200,8 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             await self.smartService.reconcilePurchasesAtLaunch()
         }
+
+        versionContentService.start()
     }
 
     func persistSettingsImmediately() {

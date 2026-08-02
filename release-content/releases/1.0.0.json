@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "title": "SubForge 首个稳定版本",
+  "publishedAt": "2026-07-04",
+  "highlights": [
+    "支持音频转写与 SRT 导入",
+    "支持字幕编辑、SRT 和 FCPXML 导出",
+    "支持本地识别与 Final Cut Pro 工作流"
+  ]
+}

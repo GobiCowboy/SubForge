@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "appID": "com.jago.subforge",
+  "latestVersion": "1.0.7",
+  "storeURL": "https://gobicowboy.cn/projects/subforge/",
+  "channels": {
+    "local": {
+      "latestVersion": "1.0.7",
+      "downloadURL": "https://gobicowboy.cn/projects/subforge/"
+    },
+    "developer-id": {
+      "latestVersion": "1.0.7",
+      "downloadURL": "https://gobicowboy.cn/projects/subforge/"
+    },
+    "app-store": {
+      "latestVersion": "1.0.5",
+      "downloadURL": "https://apps.apple.com/cn/mac/search?term=SubForge"
+    }
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "releaseURL": "releases/1.0.0.json",
+      "releaseSHA256": "sha256:306ffc6eabb1d63c26610dac13e92269d8ff4c02a428fb506936053e48653a31",
+      "helpVersion": "1.0.0",
+      "helpURL": "help/1.0.0.json",
+      "helpSHA256": "sha256:543bb4e7c4f34072bd03c262c9cded8093da13122c0157fb31dc51e33b875eed"
+    },
+    {
+      "version": "1.0.5",
+      "releaseURL": "releases/1.0.5.json",
+      "releaseSHA256": "sha256:8ad79967facafde440ed9c3d68b64224bdeba7c7138a1b6474443b233f78c707",
+      "helpVersion": "1.0.5",
+      "helpURL": "help/1.0.5.json",
+      "helpSHA256": "sha256:6917ca1b408f74a03a2fcfc1ce522b5e3057f0f83a799f1f3682eb6586a93ded"
+    },
+    {
+      "version": "1.0.6",
+      "releaseURL": "releases/1.0.6.json",
+      "releaseSHA256": "sha256:7b70fbc0f0396a3f2a56073cf165f1290d495cbab8808a4f71ff53489ce92f0e",
+      "helpVersion": "1.0.6",
+      "helpURL": "help/1.0.6.json",
+      "helpSHA256": "sha256:173bfb6867da7920edfa9f01f31a4f005ef099794c6ea49fc48335fc1f8f047f"
+    },
+    {
+      "version": "1.0.7",
+      "releaseURL": "releases/1.0.7.json",
+      "releaseSHA256": "sha256:8249e5679842b3c35934f3eb8533f2f80795d81f8775d885bc029aa598e9cdfa",
+      "helpVersion": "1.0.7",
+      "helpURL": "help/1.0.7.json",
+      "helpSHA256": "sha256:30beaa8ec09d73460372d213e7274865a4e037c855175420c5d3715345025aab"
+    }
+  ]
+}

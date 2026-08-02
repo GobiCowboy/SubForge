@@ -22,6 +22,9 @@
 - 站外 Developer ID 公证分发：`./script/release_developer_id.sh` → `dist/developer-id/SubForge-x.y.z.zip`
 - 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
 - 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
+- 版本内容源：`release-content/`
+- 正式内容地址：`https://gobicowboy.cn/projects/subforge/content/manifest.json`
+- 版本内容部署目标：`/Users/jago/Documents/docker/project/Astro_Blog/public/projects/subforge/content/`
 
 ## 3. 当前交付产物
 
@@ -61,6 +64,7 @@
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出
 - App Store `--upload` 必须与 `--signed` / `--package` 一样调用 `sign_app`；历史上漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会直接拒绝
+- `release-content/manifest.json` 的 `latestVersion` 必须在对应渠道实际上架后才更新；历史 release/help 文件不得删除；部署前必须重新计算并核对 SHA-256
 
 ## 6. 后续重做建议
 
