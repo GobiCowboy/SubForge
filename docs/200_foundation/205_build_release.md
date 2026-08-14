@@ -61,6 +61,7 @@
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
 - 2026-07-26 已成功上传 TestFlight 构建：版本 `1.0.6`，Build `20260726201820`，Delivery UUID `14d38beb-65f2-4b2b-a5cd-090a9c04b8f4`。`1.0.5` 因预发布版本已关闭被 App Store Connect 拒绝，随后提升到 `1.0.6` 上传成功
 - 2026-08-03 已成功上传 TestFlight 构建：版本 `1.0.8`，Build `20260803095411`，Delivery UUID `b0d3467d-1508-4163-92b6-c12635940702`
+- 2026-08-14 已成功上传 TestFlight 构建：版本 `1.0.9`，Build `20260814171019`，Delivery UUID `c0a66b0e-68d7-4779-9c83-cbb2c12fa0f8`；源码提交 `e5b5300`
 - 2026-07-26 已通过 Parallels “分发版”快照验证最新本地构建：宿主机与虚拟机主程序哈希一致，签名校验通过，应用未内置 FunASR 模型权重
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出

@@ -187,3 +187,11 @@ No account is required. No sample login credentials are needed.
 - Build：`20260803095411`
 - Delivery UUID：`b0d3467d-1508-4163-92b6-c12635940702`
 - 上传前完成 Swift 测试、App Store 签名、Installer 签名、bundle/entitlements/PrivacyInfo 校验；无内置 FunASR 模型权重。
+
+## 12. 2026-08-14 TestFlight 交付记录
+
+- 本版本为 `1.0.9`，包含 Final Cut Pro 11 兼容 FCPXML、帮助与反馈体验更新，以及官方智能字幕提交失败后的明确恢复提示。
+- Build：`20260814171019`
+- 源码提交：`e5b5300`
+- Delivery UUID：`c0a66b0e-68d7-4779-9c83-cbb2c12fa0f8`
+- 上传前通过后端51项测试、App 70项测试、类型检查、App Store应用签名、Installer签名、bundle/entitlements/PrivacyInfo校验；无内置FunASR模型权重。
