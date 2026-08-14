@@ -42,45 +42,55 @@ struct HelpSectionCard: View {
     let section: VersionHelpSection
 
     var body: some View {
+        let visualStyle = HelpSectionVisualStyle(rawValue: section.style)
+
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline, spacing: 9) {
+                if let icon = section.icon, !icon.isEmpty {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(visualStyle.iconColor)
+                }
                 Text(section.title)
                     .font(.system(size: 15, weight: .semibold))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.tertiary)
             }
 
-            Text(section.body)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+            if let blocks = section.blocks, !blocks.isEmpty {
+                HelpRichBlocks(blocks: blocks)
+            } else {
+                Text(section.body)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            if !section.bullets.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(section.bullets, id: \.self) { bullet in
-                        HStack(alignment: .firstTextBaseline, spacing: 9) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.tint)
-                            Text(bullet)
-                                .font(.system(size: 13))
-                                .foregroundStyle(.primary.opacity(0.8))
-                                .fixedSize(horizontal: false, vertical: true)
+                if !section.bullets.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(section.bullets, id: \.self) { bullet in
+                            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.tint)
+                                Text(bullet)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.primary.opacity(0.8))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
+                    .padding(.top, 3)
                 }
-                .padding(.top, 3)
             }
         }
-        .padding(.vertical, 16)
+        .padding(visualStyle == .feature ? 18 : 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.09))
-                .frame(height: 1)
-        }
+        .background(visualStyle.background, in: RoundedRectangle(cornerRadius: visualStyle == .feature ? 16 : 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: visualStyle == .feature ? 16 : 12, style: .continuous)
+                .strokeBorder(
+                    visualStyle == .feature ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.09),
+                    lineWidth: 1
+                )
+        )
     }
 }

@@ -4,6 +4,7 @@ enum UsageAndUpdatesSection: String, CaseIterable, Identifiable {
     case help = "使用帮助"
     case news = "最新动态"
     case updates = "检查更新"
+    case feedback = "意见反馈"
 
     var id: String { rawValue }
 
@@ -12,6 +13,7 @@ enum UsageAndUpdatesSection: String, CaseIterable, Identifiable {
         case .help: "questionmark.circle"
         case .news: "sparkles"
         case .updates: "arrow.down.circle"
+        case .feedback: "bubble.left.and.bubble.right"
         }
     }
 }
@@ -109,14 +111,32 @@ struct VersionHelpSection: Codable, Identifiable, Sendable {
     let title: String
     let body: String
     let bullets: [String]
+    let style: String?
+    let icon: String?
+    let blocks: [VersionHelpBlock]?
 
     var id: String { title }
 }
 
-struct VersionUpdateNotice: Equatable, Sendable {
+struct VersionHelpBlock: Codable, Sendable {
+    let type: String
+    let title: String?
+    let text: String?
+    let items: [String]?
+    let start: Int?
+    let tone: String?
+    let url: String?
+    let sha256: String?
+    let alt: String?
+    let caption: String?
+}
+
+struct VersionUpdateNotice: Equatable, Identifiable, Sendable {
     let latestVersion: String
     let title: String
     let highlights: [String]
+
+    var id: String { latestVersion }
 }
 
 enum VersionContentState: Equatable {

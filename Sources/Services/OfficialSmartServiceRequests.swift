@@ -100,21 +100,35 @@ extension OfficialSmartServiceClient {
         guard let http = response as? HTTPURLResponse else {
             throw OfficialSmartServiceError.invalidResponse
         }
-        if (500..<600).contains(http.statusCode) {
-            throw OfficialSmartServiceError.transientService(http.statusCode)
-        }
         guard (200..<300).contains(http.statusCode) else {
-            let code = (try? JSONDecoder().decode(SmartAPIError.self, from: data).error) ?? "HTTP_\(http.statusCode)"
-            switch code {
-            case "INSUFFICIENT_CREDITS": throw OfficialSmartServiceError.insufficientCredits
-            case "ACTIVE_TASK_EXISTS": throw OfficialSmartServiceError.activeTaskExists
-            default: throw OfficialSmartServiceError.taskFailed(code)
-            }
+            throw Self.mapHTTPError(statusCode: http.statusCode, data: data)
         }
         guard let decoded = try? JSONDecoder().decode(T.self, from: data) else {
             throw OfficialSmartServiceError.invalidResponse
         }
         return decoded
+    }
+
+    static func mapHTTPError(statusCode: Int, data: Data) -> OfficialSmartServiceError {
+        let response = try? JSONDecoder().decode(SmartAPIError.self, from: data)
+        let code = response?.error ?? "HTTP_\(statusCode)"
+        switch code {
+        case "INSUFFICIENT_CREDITS": return .insufficientCredits
+        case "ACTIVE_TASK_EXISTS": return .activeTaskExists
+        case "ASR_SUBMIT_TEMPORARILY_UNAVAILABLE":
+            return .upstreamTemporarilyUnavailable(
+                reservationReleased: response?.reservationReleased == true
+            )
+        case "ASR_SUBMIT_REJECTED":
+            return .upstreamSubmissionRejected(
+                reservationReleased: response?.reservationReleased == true
+            )
+        default:
+            if (500..<600).contains(statusCode) {
+                return .transientService(statusCode)
+            }
+            return .taskFailed(code)
+        }
     }
 
     static func providerLanguage(_ language: String) -> String {

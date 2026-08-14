@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var versionContentService: VersionContentService
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
 
@@ -48,27 +49,16 @@ struct RootView: View {
                 onCancel: { model.cancelHotwordPrompt(request) }
             )
         }
-        .sheet(
-            isPresented: Binding(
-                get: { model.versionContentService.pendingUpdate != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        model.versionContentService.dismissPendingUpdate()
-                    }
+        .sheet(item: $versionContentService.pendingUpdate) { notice in
+            VersionUpdateNoticeView(
+                notice: notice,
+                onLater: { versionContentService.dismissPendingUpdate() },
+                onOpen: {
+                    versionContentService.dismissPendingUpdate()
+                    model.presentUsageAndUpdates(section: .updates)
+                    openWindow(id: "usage-and-updates")
                 }
             )
-        ) {
-            if let notice = model.versionContentService.pendingUpdate {
-                VersionUpdateNoticeView(
-                    notice: notice,
-                    onLater: { model.versionContentService.dismissPendingUpdate() },
-                    onOpen: {
-                        model.versionContentService.dismissPendingUpdate()
-                        model.presentUsageAndUpdates(section: .updates)
-                        openWindow(id: "usage-and-updates")
-                    }
-                )
-            }
         }
         .onAppear {
             model.settingsWindowPresenter = {
@@ -76,6 +66,9 @@ struct RootView: View {
             }
             model.usageAndUpdatesWindowPresenter = {
                 openWindow(id: "usage-and-updates")
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                versionContentService.start()
             }
         }
         .background(MainWindowCloseBehavior().frame(width: 0, height: 0))

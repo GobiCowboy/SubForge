@@ -1,5 +1,5 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "title": "SubForge 使用帮助",
   "sections": [
     {
@@ -30,18 +30,17 @@
       "blocks": [
         {
           "type": "steps",
+          "start": 1,
           "items": [
-            "在 SubForge 开始页直接导入音频。",
-            "如果有专有名词，打开 AI 热词并输入本次视频需要注意的词。",
-            "等待自动转写完成，然后在工作台检查和修改字幕。",
-            "完成校对后导出字幕文件；字幕文件会自动导入到 Final Cut Pro。"
+            "在 SubForge 开始页直接导入音频。"
           ]
         },
         {
-          "type": "callout",
-          "tone": "info",
-          "title": "需要从 Final Cut Pro 自动接收？",
-          "text": "请使用下面的“正式使用”流程。监听目录是在 Final Cut Pro 导出音频时弹窗选择，不需要提前设置。"
+          "type": "steps",
+          "start": 2,
+          "items": [
+            "如果有专有名词，打开 AI 热词，并输入本次视频需要注意的人名、品牌名或专业术语。"
+          ]
         },
         {
           "type": "image",
@@ -49,12 +48,40 @@
           "sha256": "sha256:5511ae747a644534da4f2ef82d27aef9ec5d8c11ff5ae04d779c70474193ee3c",
           "alt": "SubForge AI 热词弹窗",
           "caption": "导入音频后，可以为当前视频填写人名、品牌名和专业术语。"
+        },
+        {
+          "type": "steps",
+          "start": 3,
+          "items": [
+            "等待自动转写完成，然后在工作台检查和修改字幕。"
+          ]
+        },
+        {
+          "type": "steps",
+          "start": 4,
+          "items": [
+            "完成校对后导出字幕文件。导出时 SubForge 会提示选择监听目录；选择视频创作总目录后，下次导出会自动监听，不必重复选择。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-auto-watch-confirmation.png",
+          "sha256": "sha256:9cd832cef1eae5b5e1f94dcc4fb27f38b083acf53ee00e9b32164675206b5480",
+          "alt": "SubForge 自动监听确认框",
+          "caption": "第一次导出时确认开启自动监听，并选择视频创作总目录；之后会自动监听该目录。"
+        },
+        {
+          "type": "steps",
+          "start": 5,
+          "items": [
+            "字幕文件会自动导入到 Final Cut Pro。打开字幕文件并复制，再粘贴到视频上。"
+          ]
         }
       ]
     },
     {
-      "title": "正式使用：打开设置页面",
-      "body": "如果你经常使用 SubForge 制作字幕，建议按照下面的流程设置一次，之后每个视频都可以重复使用。",
+      "title": "正式使用",
+      "body": "第一次使用时，先完成下面三项设置；之后每个视频从第 4 步开始即可。",
       "bullets": [],
       "style": "standard",
       "icon": "gearshape",
@@ -63,7 +90,7 @@
           "type": "steps",
           "start": 1,
           "items": [
-            "在 Final Cut Pro 中设置“导出音频”快捷方式。以后可以用这个快捷方式快速导出当前视频的音频。"
+            "在 Final Cut Pro右上角导出 的“目的位置”设置中，添加“导出文件”：格式选择“仅音频”，音频格式选择“MP3”，操作选择“仅存储”，然后将其改名字为导出音频。以后可以用快捷方式快速导出当前视频的音频。"
           ]
         },
         {
@@ -77,7 +104,7 @@
           "type": "steps",
           "start": 2,
           "items": [
-            "打开 SubForge 的设置页面，检查字幕方案，并按需要配置固定热词、标点和字幕样式。"
+            "打开 SubForge 设置的“自动化”页面，选择视频创作总目录作为监听目录。这个目录应是多个视频项目文件夹的上级目录，SubForge 会自动监听其中新导出的音频。"
           ]
         },
         {
@@ -91,21 +118,21 @@
           "type": "steps",
           "start": 3,
           "items": [
-            "回到 Final Cut Pro，使用刚刚设置的快捷方式导出音频。Final Cut Pro 会执行音频导出。"
+            "打开 SubForge 设置的“通用”页面，配置标点和热词：固定热词适合每个视频都会用到的词，AI 热词只针对当前视频；也可以选择要隐藏的标点。"
           ]
         },
         {
           "type": "image",
-          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-auto-watch-confirmation.png",
-          "sha256": "sha256:9cd832cef1eae5b5e1f94dcc4fb27f38b083acf53ee00e9b32164675206b5480",
-          "alt": "SubForge 自动监听确认框",
-          "caption": "第一次导出时，确认是否开启自动监听；开启后再选择当前视频的创作目录。"
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-hotword-settings.png",
+          "sha256": "sha256:4442d247c35f90e4daeb8a23c38428efd6dc8684289cb9363483bf63f345edd4",
+          "alt": "SubForge 标点和热词设置",
+          "caption": "在设置的通用页面中配置标点、AI 热词和固定热词。"
         },
         {
           "type": "steps",
           "start": 4,
           "items": [
-            "音频导出时，SubForge 会弹出监听目录选择框。请选择当前视频的创作目录；这一步是在导出时选择本次任务的监听目录，不是提前设置。"
+            "回到 Final Cut Pro，使用刚刚设置的快捷方式导出音频。第一次导出时，SubForge 会提示是否开启自动监听，并让你选择视频创作总目录。"
           ]
         },
         {
@@ -170,17 +197,6 @@
           "sha256": "sha256:2cab099e0e4dde9945e09d5208815925cae74ace9cb6a08039500ed26b0f40e6",
           "alt": "在 Final Cut Pro 中调整字幕样式",
           "caption": "先调整一条字幕的字体大小和 Y 轴位置，确认最终效果。"
-        },
-        {
-          "type": "text",
-          "text": "设置页面里的常用配置：固定热词适合每个视频都会出现的词，保存后不会每次弹窗；AI 热词只针对当前视频，每次处理时都会弹出。样式配置用于保存通用字幕样式，包含字体大小、X/Y/Z 位置、文字颜色和背景颜色。标点设置可以选择哪些标点在字幕中隐藏。"
-        },
-        {
-          "type": "image",
-          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-hotword-settings.png",
-          "sha256": "sha256:4442d247c35f90e4daeb8a23c38428efd6dc8684289cb9363483bf63f345edd4",
-          "alt": "SubForge 标点和热词设置",
-          "caption": "在设置的通用页面中配置标点、AI 热词和固定热词。"
         },
         {
           "type": "image",

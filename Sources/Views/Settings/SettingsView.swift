@@ -26,7 +26,9 @@ struct SettingsView: View {
         Binding(
             get: { model.settings },
             set: { newSettings in
-                model.settings = newSettings
+                var synchronizedSettings = newSettings
+                synchronizedSettings.synchronizeActiveSubtitleStyleConfiguration()
+                model.settings = synchronizedSettings
                 model.persistSettingsImmediately()
             }
         )
@@ -49,10 +51,7 @@ struct SettingsView: View {
 
                     switch selection {
                     case .general:
-                        GeneralSettingsPane(
-                            settings: settingsBinding,
-                            onOpenUsageAndUpdates: { model.presentUsageAndUpdates() }
-                        )
+                        GeneralSettingsPane(settings: settingsBinding)
                     case .subtitles:
                         SubtitleSettingsPane(settings: settingsBinding, service: model.smartService)
                     case .style:

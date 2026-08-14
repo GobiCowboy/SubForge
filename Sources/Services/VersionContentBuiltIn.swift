@@ -12,7 +12,10 @@ enum VersionContentBuiltIn {
                     "先在设置中选择官方、自定义或本地字幕方案。",
                     "转写完成后检查字幕文本和时间。",
                     "使用 ⌘E 导出 SRT 或 FCPXML。"
-                ]
+                ],
+                style: "feature",
+                icon: "wand.and.stars",
+                blocks: nil
             ),
             VersionHelpSection(
                 title: "Final Cut Pro 工作流",
@@ -21,12 +24,18 @@ enum VersionContentBuiltIn {
                     "监听默认关闭，需要用户主动开启。",
                     "可以开启人工复核，避免自动导出未经检查的字幕。",
                     "菜单栏可以快速显示 SubForge、开始或停止监听。"
-                ]
+                ],
+                style: "standard",
+                icon: "folder.badge.gear",
+                blocks: nil
             ),
             VersionHelpSection(
                 title: "常见问题",
                 body: "首次使用麦克风、语音识别或控制 Final Cut Pro 时，macOS 可能会请求系统权限，请按实际工作流允许对应权限。",
-                bullets: []
+                bullets: [],
+                style: "note",
+                icon: "questionmark.circle",
+                blocks: nil
             )
         ]
     )

@@ -201,7 +201,6 @@ final class AppModel: ObservableObject {
             await self.smartService.reconcilePurchasesAtLaunch()
         }
 
-        versionContentService.start()
     }
 
     func persistSettingsImmediately() {

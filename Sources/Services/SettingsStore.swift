@@ -84,6 +84,9 @@ enum SettingsStore {
     @discardableResult
     static func normalize(_ settings: inout AppSettings) -> Bool {
         var changed = false
+        if settings.prepareSubtitleStyleConfigurations() {
+            changed = true
+        }
         if (settings.subtitleRulesRevision ?? 0) < AppSettings.currentSubtitleRulesRevision {
             settings.maxSubtitleLength = 32
             settings.subtitleRulesRevision = AppSettings.currentSubtitleRulesRevision

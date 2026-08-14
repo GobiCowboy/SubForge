@@ -5,7 +5,7 @@ struct SubtitleStyle: Equatable, Codable {
     var canvasOrientation: SubtitleCanvasOrientation = .landscape
     var preset: SubtitleStylePreset = .whiteTextBlackOutline
     var fontFamily = "PingFang SC"
-    var fontSize: Double = 56
+    var fontSize: Double = 41
     var fontWeight: SubtitleFontWeight = .semibold
     var horizontalAlignment: SubtitleHorizontalAlignment = .center
     var fontColorHex = "#FFFFFF"
@@ -15,7 +15,7 @@ struct SubtitleStyle: Equatable, Codable {
     var offsetX: Double = 0
     var offsetY: Double = -28
     var positionX: Double = 0
-    var positionY: Double = -467
+    var positionY: Double = -500
     var positionZ: Double = 0
     var surfaceEnabled = false
     var surfaceColorHex = "#111111"
@@ -66,13 +66,22 @@ struct SubtitleStyle: Equatable, Codable {
 
     init() {}
 
+    init(orientation: SubtitleCanvasOrientation) {
+        self.init()
+        canvasOrientation = orientation
+        offsetY = orientation == .landscape ? -28 : -84
+        fontSize = orientation == .landscape ? 41 : 46
+        positionY = orientation == .landscape ? -500 : -450
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         canvasOrientation = try container.decodeIfPresent(SubtitleCanvasOrientation.self, forKey: .canvasOrientation) ?? .landscape
         preset = try container.decodeIfPresent(SubtitleStylePreset.self, forKey: .preset) ?? .whiteTextBlackOutline
         fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily) ?? "PingFang SC"
-        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? 56
+        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize)
+            ?? (canvasOrientation == .landscape ? 41 : 46)
         fontWeight = try container.decodeIfPresent(SubtitleFontWeight.self, forKey: .fontWeight) ?? .semibold
         horizontalAlignment = try container.decodeIfPresent(SubtitleHorizontalAlignment.self, forKey: .horizontalAlignment) ?? .center
         fontColorHex = try container.decodeIfPresent(String.self, forKey: .fontColorHex) ?? "#FFFFFF"
@@ -83,7 +92,7 @@ struct SubtitleStyle: Equatable, Codable {
         offsetY = try container.decodeIfPresent(Double.self, forKey: .offsetY) ?? -28
         positionX = try container.decodeIfPresent(Double.self, forKey: .positionX) ?? 0
         positionY = try container.decodeIfPresent(Double.self, forKey: .positionY)
-            ?? (canvasOrientation == .landscape ? -467 : -495)
+            ?? (canvasOrientation == .landscape ? -500 : -450)
         positionZ = try container.decodeIfPresent(Double.self, forKey: .positionZ) ?? 0
         surfaceEnabled = try container.decodeIfPresent(Bool.self, forKey: .surfaceEnabled) ?? false
         surfaceColorHex = try container.decodeIfPresent(String.self, forKey: .surfaceColorHex) ?? "#111111"

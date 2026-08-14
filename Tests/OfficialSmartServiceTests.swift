@@ -50,6 +50,18 @@ import Testing
     #expect(!OfficialSmartServiceClient.shouldRetryPolling(URLError(.badURL)))
 }
 
+@Test func officialSubmitFailureExplainsRecoveryThroughTheTopTaskRecord() {
+    let data = Data(
+        #"{"error":"ASR_SUBMIT_TEMPORARILY_UNAVAILABLE","retryable":true,"reservationReleased":true}"#.utf8
+    )
+    let error = OfficialSmartServiceClient.mapHTTPError(statusCode: 503, data: data)
+
+    #expect(
+        error.localizedDescription
+            == "上游语音服务暂时不可用，预留时长已退回。请稍后点击顶部任务记录重试。"
+    )
+}
+
 @Test func officialTaskStatusSeparatesASRAndProofreadingProgress() {
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "processing") == .transcribing)
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "proofreading") == .proofreading)

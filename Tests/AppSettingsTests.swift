@@ -64,6 +64,46 @@ import Testing
     )
 }
 
+@Test func subtitleStyleUsesRequestedOrientationDefaults() throws {
+    let landscape = SubtitleStyle()
+    #expect(landscape.canvasOrientation == .landscape)
+    #expect(landscape.fontSize == 41)
+    #expect(landscape.positionX == 0)
+    #expect(landscape.positionY == -500)
+    #expect(landscape.positionZ == 0)
+
+    let portrait = try JSONDecoder().decode(
+        SubtitleStyle.self,
+        from: Data(#"{"canvasOrientation":"竖屏"}"#.utf8)
+    )
+    #expect(portrait.fontSize == 46)
+    #expect(portrait.positionY == -450)
+}
+
+@Test func subtitleStylesAreStoredIndependentlyByOrientation() {
+    var settings = AppSettings()
+    settings.subtitleStyle.fontSize = 40
+    settings.subtitleStyle.positionY = -500
+    settings.synchronizeActiveSubtitleStyleConfiguration()
+
+    settings.switchSubtitleOrientation(to: .portrait)
+    #expect(settings.subtitleStyle.canvasOrientation == .portrait)
+    #expect(settings.subtitleStyle.fontSize == 46)
+    #expect(settings.subtitleStyle.positionY == -450)
+
+    settings.subtitleStyle.fontSize = 52
+    settings.subtitleStyle.positionY = -600
+    settings.synchronizeActiveSubtitleStyleConfiguration()
+
+    settings.switchSubtitleOrientation(to: .landscape)
+    #expect(settings.subtitleStyle.fontSize == 40)
+    #expect(settings.subtitleStyle.positionY == -500)
+
+    settings.switchSubtitleOrientation(to: .portrait)
+    #expect(settings.subtitleStyle.fontSize == 52)
+    #expect(settings.subtitleStyle.positionY == -600)
+}
+
 @Test func defaultExportSettingsMatchFinalCutWorkflow() {
     let settings = ExportSettings()
 

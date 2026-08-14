@@ -36,6 +36,14 @@ final class VersionContentCache {
         save(data, named: "\(kind)-\(safeHash(hash)).json")
     }
 
+    func imageData(hash: String) -> Data? {
+        data(named: "image-\(safeHash(hash)).data")
+    }
+
+    func saveImage(_ data: Data, hash: String) {
+        save(data, named: "image-\(safeHash(hash)).data")
+    }
+
     static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }

@@ -117,14 +117,7 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     private func applyOrientation(_ orientation: SubtitleCanvasOrientation) {
-        settings.subtitleStyle.canvasOrientation = orientation
-        settings.subtitleStyle.position = .bottom
-        settings.subtitleStyle.offsetX = 0
-        settings.subtitleStyle.offsetY = orientation == .landscape ? -28 : -84
-        settings.subtitleStyle.positionX = 0
-        settings.subtitleStyle.positionY = orientation == .landscape ? -467 : -495
-        settings.subtitleStyle.positionZ = 0
-        settings.subtitleStyle.fontSize = orientation == .landscape ? 56 : 35
+        settings.switchSubtitleOrientation(to: orientation)
     }
 
     private func applyPreset(_ preset: SubtitleStylePreset) {
@@ -135,7 +128,7 @@ struct SubtitleStyleSettingsPane: View {
         settings.subtitleStyle.offsetX = 0
         settings.subtitleStyle.offsetY = settings.subtitleStyle.canvasOrientation == .landscape ? -28 : -84
         settings.subtitleStyle.positionX = 0
-        settings.subtitleStyle.positionY = settings.subtitleStyle.canvasOrientation == .landscape ? -467 : -495
+        settings.subtitleStyle.positionY = settings.subtitleStyle.canvasOrientation == .landscape ? -500 : -450
         settings.subtitleStyle.positionZ = 0
         settings.subtitleStyle.lineSpacing = 0
         settings.subtitleStyle.characterSpacing = 0
@@ -231,14 +224,77 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     private func positionField(_ label: String, value: Binding<Double>) -> some View {
+        WholeNumberField(label: label, value: value)
+    }
+}
+
+private struct WholeNumberField: View {
+    let label: String
+    @Binding var value: Double
+    @State private var draft: String
+    @FocusState private var isFocused: Bool
+
+    init(label: String, value: Binding<Double>) {
+        self.label = label
+        self._value = value
+        self._draft = State(initialValue: Self.stringValue(value.wrappedValue))
+    }
+
+    var body: some View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-            TextField(label, value: value, format: .number.precision(.fractionLength(0)))
+
+            TextField(label, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .focused($isFocused)
+                .onChange(of: draft) { _, newValue in
+                    let sanitized = Self.sanitize(newValue)
+                    if sanitized != newValue {
+                        draft = sanitized
+                    }
+                    if let number = Int(sanitized) {
+                        value = Double(number)
+                    }
+                }
+                .onChange(of: isFocused) { _, focused in
+                    if !focused {
+                        commit()
+                    }
+                }
+                .onChange(of: value) { _, newValue in
+                    guard !isFocused else { return }
+                    let formatted = Self.stringValue(newValue)
+                    if draft != formatted {
+                        draft = formatted
+                    }
+                }
+                .onSubmit {
+                    commit()
+                }
                 .frame(width: 64)
         }
+    }
+
+    private func commit() {
+        let number = Int(draft) ?? Int(value.rounded())
+        value = Double(number)
+        draft = Self.stringValue(value)
+    }
+
+    private static func sanitize(_ input: String) -> String {
+        let isNegative = input.first == "-"
+        let digits = input.filter { $0.isNumber }
+        if isNegative {
+            return digits.isEmpty ? "-" : "-\(digits)"
+        }
+        return digits
+    }
+
+    private static func stringValue(_ value: Double) -> String {
+        String(Int(value.rounded()))
     }
 }

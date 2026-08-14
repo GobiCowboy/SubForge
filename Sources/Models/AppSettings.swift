@@ -56,8 +56,60 @@ struct AppSettings: Equatable, Codable {
     var proofreadingValidationState = SettingsValidationState()
 
     var subtitleStyle = SubtitleStyle()
+    /// 横屏与竖屏分别保存样式；旧配置解码后为空，由 SettingsStore 从旧的 active 样式迁移。
+    var landscapeSubtitleStyle: SubtitleStyle? = SubtitleStyle(orientation: .landscape)
+    var portraitSubtitleStyle: SubtitleStyle? = SubtitleStyle(orientation: .portrait)
     var exportSettings = ExportSettings()
     var watchSettings = WatchSettings()
+
+    mutating func prepareSubtitleStyleConfigurations() -> Bool {
+        var changed = false
+        let legacyStyle = subtitleStyle
+
+        if landscapeSubtitleStyle == nil {
+            landscapeSubtitleStyle = legacyStyle.canvasOrientation == .landscape
+                ? legacyStyle
+                : SubtitleStyle(orientation: .landscape)
+            changed = true
+        }
+
+        if portraitSubtitleStyle == nil {
+            portraitSubtitleStyle = legacyStyle.canvasOrientation == .portrait
+                ? legacyStyle
+                : SubtitleStyle(orientation: .portrait)
+            changed = true
+        }
+
+        synchronizeActiveSubtitleStyleConfiguration()
+        return changed
+    }
+
+    mutating func switchSubtitleOrientation(to orientation: SubtitleCanvasOrientation) {
+        _ = prepareSubtitleStyleConfigurations()
+        synchronizeActiveSubtitleStyleConfiguration()
+
+        guard subtitleStyle.canvasOrientation != orientation else { return }
+
+        let nextStyle: SubtitleStyle
+        switch orientation {
+        case .landscape:
+            nextStyle = landscapeSubtitleStyle ?? SubtitleStyle(orientation: .landscape)
+        case .portrait:
+            nextStyle = portraitSubtitleStyle ?? SubtitleStyle(orientation: .portrait)
+        }
+
+        subtitleStyle = nextStyle
+        subtitleStyle.canvasOrientation = orientation
+    }
+
+    mutating func synchronizeActiveSubtitleStyleConfiguration() {
+        switch subtitleStyle.canvasOrientation {
+        case .landscape:
+            landscapeSubtitleStyle = subtitleStyle
+        case .portrait:
+            portraitSubtitleStyle = subtitleStyle
+        }
+    }
 
     var effectiveASRURL: String {
         let trimmed = cloudASRURL.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -55,14 +55,6 @@ struct UsageAndUpdatesView: View {
             }
             .padding(.bottom, 26)
 
-            Text("内容中心")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .tracking(0.8)
-                .padding(.horizontal, 11)
-                .padding(.bottom, 8)
-
             ForEach(UsageAndUpdatesSection.allCases) { section in
                 navigationButton(for: section)
             }
@@ -113,6 +105,7 @@ struct UsageAndUpdatesView: View {
                 }
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .help(section.rawValue)
     }
 
@@ -141,11 +134,22 @@ struct UsageAndUpdatesView: View {
                 downloadURL: contentService.downloadURL,
                 onCheck: { contentService.checkForUpdates() },
                 onOpenDownload: { url in
-                    openURL(url)
-                    return .handled
+                    openUpdateURL(url)
                 }
             )
+        case .feedback:
+            FeedbackContentView(currentSection: selection)
         }
+    }
+
+    private func openUpdateURL(_ url: URL) -> OpenURLAction.Result {
+        if let appStoreURL = VersionContentRuntime.appStoreURL(for: url),
+           NSWorkspace.shared.open(appStoreURL) {
+            return .handled
+        }
+
+        openURL(url)
+        return .handled
     }
 
 }

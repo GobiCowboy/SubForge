@@ -180,3 +180,10 @@ No account is required. No sample login credentials are needed.
 - 设置项修改后立即自动保存，返回主页面但不关闭设置窗口时也能保留输入。
 - 上传命令：`APP_VERSION=1.0.6 ./script/release_appstore.sh --upload`
 - 上传前完成 `swift build`、App Store 签名、Installer 签名、bundle/entitlements/PrivacyInfo 校验；无内置 FunASR 模型权重。
+
+## 11. 2026-08-03 TestFlight 交付记录
+
+- 本版本为 `1.0.8`，包含新的帮助文档版本、自动监听确认截图、帮助层级调整和 App Store 更新跳转。
+- Build：`20260803095411`
+- Delivery UUID：`b0d3467d-1508-4163-92b6-c12635940702`
+- 上传前完成 Swift 测试、App Store 签名、Installer 签名、bundle/entitlements/PrivacyInfo 校验；无内置 FunASR 模型权重。

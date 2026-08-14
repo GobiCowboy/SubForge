@@ -21,6 +21,8 @@ enum OfficialSmartServiceError: LocalizedError {
     case invalidResponse
     case insufficientCredits
     case activeTaskExists
+    case upstreamTemporarilyUnavailable(reservationReleased: Bool)
+    case upstreamSubmissionRejected(reservationReleased: Bool)
     case transientService(Int)
     case uploadFailed(Int)
     case taskFailed(String)
@@ -38,7 +40,16 @@ enum OfficialSmartServiceError: LocalizedError {
         case .invalidResponse: "智能服务返回了无效数据"
         case .insufficientCredits: "智能字幕剩余时长不足，请先购买"
         case .activeTaskExists: "已有一个智能字幕任务在处理，请稍后再试"
-        case .transientService(let status): "智能字幕服务暂时不可用（HTTP \(status)）"
+        case .upstreamTemporarilyUnavailable(let reservationReleased):
+            reservationReleased
+                ? "上游语音服务暂时不可用，预留时长已退回。请稍后点击顶部任务记录重试。"
+                : "上游语音服务暂时不可用，请稍后点击顶部任务记录重试。"
+        case .upstreamSubmissionRejected(let reservationReleased):
+            reservationReleased
+                ? "上游语音服务未接受本次音频，预留时长已退回。请检查音频后点击顶部任务记录重试。"
+                : "上游语音服务未接受本次音频，请检查音频后点击顶部任务记录重试。"
+        case .transientService(let status):
+            "智能字幕服务暂时不可用，请稍后点击顶部任务记录重试（HTTP \(status)）。"
         case .uploadFailed(let status): "音频直传失败（HTTP \(status)）"
         case .taskFailed(let code): "智能字幕处理失败：\(code)"
         case .proofreadingNotApplied: "官方智能字幕未完成 AI 校对，请稍后重试"
@@ -56,6 +67,8 @@ struct OfficialSmartWallet: Decodable {
 
 struct SmartAPIError: Decodable {
     let error: String
+    let retryable: Bool?
+    let reservationReleased: Bool?
 }
 
 struct SmartUploadSession: Decodable {
