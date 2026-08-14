@@ -4,6 +4,8 @@ import Foundation
 import UniformTypeIdentifiers
 
 extension AppModel {
+    static let fcpxmlVersion = "1.13"
+
     func makeFCPXML(projectName: String, segments: [SubtitleSegment]) -> String {
         let style = settings.subtitleStyle
         let fps = max(settings.exportSettings.fps, 1)
@@ -20,7 +22,7 @@ extension AppModel {
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE fcpxml>
-        <fcpxml version="1.14">
+        <fcpxml version="\(Self.fcpxmlVersion)">
           <resources>
             <format id="r1" name="\(format.name)" frameDuration="1/\(fps)s" width="\(format.width)" height="\(format.height)" colorSpace="1-1-1 (Rec. 709)"/>
             <effect id="r2" name="自定" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>

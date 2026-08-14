@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import SubForge
 
+@MainActor
+@Test func fcpxmlUsesFinalCutPro11CompatibleVersion() {
+    #expect(AppModel.fcpxmlVersion == "1.13")
+}
+
 @Test func officialServiceEnablesOnlyChinaProfile() {
     let china = OfficialServiceConfiguration.profile(for: .china)
     #expect(china?.processingRegion == "china")
