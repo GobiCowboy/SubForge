@@ -6,7 +6,7 @@ APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 MIN_SYSTEM_VERSION="14.0"
 BUILD_CONFIGURATION="debug"
-APP_VERSION="${APP_VERSION:-1.0.8}"
+APP_VERSION="${APP_VERSION:-1.0.10}"
 APP_BUILD="${APP_BUILD:-1}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

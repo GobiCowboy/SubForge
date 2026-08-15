@@ -2,14 +2,14 @@
 
 ## 1. 当前结论
 
-SubForge 已具备 App Store 打包与上传链路；历史上已有成功上传构建 `1.0 (2026070403)`，并于 2026-07-26 成功上传 TestFlight 构建 `1.0.6 (20260726201820)`。
+SubForge 已具备 App Store 打包与上传链路；最近一次于 2026-08-15 成功上传 App Store Connect 构建 `1.0.10 (20260815085833)`。
 
 - `script/release_appstore.sh --unsigned`：生成 release app bundle，仅做结构检查，使用 ad-hoc 调试签名。
 - `script/release_appstore.sh --sandbox`：使用 Mac App Development Profile 和 Apple Development 证书签名并启动，直接连接真实 StoreKit Sandbox。
 - `script/release_appstore.sh --signed` / `--package` / `--upload`：都会调用 `sign_app`，使用 Mac App Store 分发证书正式签名。
 - 若缺少 app signing identity，上述正式签名模式会主动停止，这是预期保护。
 - 注意：`--upload` 必须走正式签名；漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会拒绝上传。
-- 最近一次上传：版本 `1.0.6`，Build `20260726201820`，Delivery UUID `14d38beb-65f2-4b2b-a5cd-090a9c04b8f4`；上传成功后等待 App Store Connect 处理。
+- 最近一次上传：版本 `1.0.10`，Build `20260815085833`，Delivery UUID `15780ed5-9222-47e6-bee7-42a19788ad0d`；上传成功后等待 App Store Connect 处理。
 
 ## 2. 构建入口
 
@@ -195,3 +195,12 @@ No account is required. No sample login credentials are needed.
 - 源码提交：`e5b5300`
 - Delivery UUID：`c0a66b0e-68d7-4779-9c83-cbb2c12fa0f8`
 - 上传前通过后端51项测试、App 70项测试、类型检查、App Store应用签名、Installer签名、bundle/entitlements/PrivacyInfo校验；无内置FunASR模型权重。
+
+## 13. 2026-08-15 App Store Connect 交付记录
+
+- 本版本为 `1.0.10`，修复 FCPXML 导入 Final Cut Pro 后偶发显示默认“标题”占位文字的问题。
+- Build：`20260815085833`
+- 源码提交：`44d9675`
+- Delivery UUID：`15780ed5-9222-47e6-bee7-42a19788ad0d`
+- `1.0.9` 已获批且预发布通道关闭，首次上传被 Apple 以 `90062 / 90186` 拒绝；提升到 `1.0.10` 后上传成功。
+- 上传前通过 App 75 项测试、Release 构建、FCPXML 1.13 DTD 校验、用户 Final Cut Pro 实际验收、App Store 应用签名、Installer 签名及 bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
