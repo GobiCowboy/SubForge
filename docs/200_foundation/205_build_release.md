@@ -56,6 +56,7 @@
 - Whisper 与 FunASR 模型权重默认不进入开发、App Store 或 Developer ID 包；FunASR 运行时仍随包提供，权重从设置页按需下载。开发验证可显式设置 `BUNDLE_FUNASR_MODELS=1`
 - 开发包和 Developer ID 包额外嵌入 `libggml-metal` 以启用 GPU；App Store 包保持 CPU 路径
 - App Store release 脚本默认使用时间戳 `APP_BUILD`，避免重复上传已存在的 `CFBundleVersion`
+- App Store `--upload` 会在构建、签名之前通过 Apple Lookup API 查询当前已上架版本（默认中国区）；当 `APP_VERSION` 不高于线上版本时主动终止，避免向已发布版本错误上传。可用 `APP_STORE_COUNTRY` 切换查询地区
 - App Store release 脚本会自动查找 `SubForge_Mac_App_Store.provisionprofile`，优先路径包括项目目录、`Config/`、`~/Downloads/`、Xcode provisioning profile 目录
 - App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`

@@ -164,7 +164,7 @@ No account is required. No sample login credentials are needed.
 - `./script/release_appstore.sh --unsigned`
 - `./script/release_appstore.sh --sandbox`（真实 StoreKit Sandbox，不使用 Xcode 本地 StoreKit 模拟）
 - 安装 Mac App Store 分发证书后运行 `./script/release_appstore.sh --package`
-- 需要直传 App Store Connect 时运行 `./script/release_appstore.sh --upload`（必须能找到分发证书与 Installer 证书；不要期望 ad-hoc 包可通过审核上传）
+- 需要直传 App Store Connect 时运行 `./script/release_appstore.sh --upload`（必须能找到分发证书与 Installer 证书；不要期望 ad-hoc 包可通过审核上传）；脚本会先通过 Apple Lookup API 校验当前已上架版本，若 `APP_VERSION` 不高于线上版本则在构建前终止
 - 在干净机器或新用户账户测试首次启动、文件选择、Apple Speech、导出 SRT、导出 FCPXML
 - 在安装 Final Cut Pro 的机器测试“导出到 FCP”
 - 在未安装 Final Cut Pro 的机器确认错误提示清楚
