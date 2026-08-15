@@ -1,0 +1,10 @@
+{
+  "version": "1.0.9",
+  "title": "Final Cut Pro 与智能字幕稳定性更新",
+  "publishedAt": "2026-08-15",
+  "highlights": [
+    "兼容 Final Cut Pro 11 的 FCPXML 导入格式",
+    "优化使用帮助、意见反馈与 App Store 更新体验",
+    "改进官方智能字幕提交失败后的提示与恢复路径"
+  ]
+}

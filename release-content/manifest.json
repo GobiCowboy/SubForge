@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
   "appID": "com.jago.subforge",
-  "latestVersion": "1.0.8",
-  "storeURL": "https://apps.apple.com/cn/mac/search?term=SubForge",
+  "latestVersion": "1.0.10",
+  "storeURL": "https://apps.apple.com/cn/app/subforge/id6786057836",
   "channels": {
     "local": {
-      "latestVersion": "1.0.8",
-      "downloadURL": "https://apps.apple.com/cn/mac/search?term=SubForge"
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     },
     "developer-id": {
-      "latestVersion": "1.0.8",
-      "downloadURL": "https://apps.apple.com/cn/mac/search?term=SubForge"
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     },
     "app-store": {
-      "latestVersion": "1.0.5",
-      "downloadURL": "https://apps.apple.com/cn/mac/search?term=SubForge"
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     }
   },
   "releases": [
@@ -57,6 +57,22 @@
       "helpVersion": "1.0.8",
       "helpURL": "help/1.0.8.json",
       "helpSHA256": "sha256:9ddaa76117a17bbe9a7235aa9658f7f67e75ceb62c63d16adb2e4ca773e4515b"
+    },
+    {
+      "version": "1.0.9",
+      "releaseURL": "releases/1.0.9.json",
+      "releaseSHA256": "sha256:4911080a35857f4bef903c9b7ee0cba39d63c33279f31af83e3ca0722220db8e",
+      "helpVersion": "1.0.9",
+      "helpURL": "help/1.0.9.json",
+      "helpSHA256": "sha256:9fe6e3e5911415e427e952557b926ba2d01474c79686b34ece7e74f4b4e0a7c9"
+    },
+    {
+      "version": "1.0.10",
+      "releaseURL": "releases/1.0.10.json",
+      "releaseSHA256": "sha256:f388719f97047165e6bb8cb238ab15983312b05bca842d7770286e1c7a172ea8",
+      "helpVersion": "1.0.10",
+      "helpURL": "help/1.0.10.json",
+      "helpSHA256": "sha256:848b337b63bc5e5bca2c82fe850bde78cc24662bff430bf3d21ea36a149a1426"
     }
   ]
 }

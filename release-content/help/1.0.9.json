@@ -1,0 +1,211 @@
+{
+  "version": "1.0.9",
+  "title": "SubForge 使用帮助",
+  "sections": [
+    {
+      "title": "SubForge 是怎么工作的",
+      "body": "SubForge 会监听你指定的视频创作目录，扫描 Final Cut Pro 导出的音频。发现新音频后，SubForge 会自动进行转写；转写完成后自动导出字幕文件，并将字幕文件自动导入到 Final Cut Pro 中。最后，你只需要在 Final Cut Pro 里复制字幕并粘贴到视频上。",
+      "bullets": [],
+      "style": "feature",
+      "icon": "waveform",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "你可以直接导入音频，也可以使用 Final Cut Pro 的快捷方式导出音频，让 SubForge 自动接收并处理。"
+        },
+        {
+          "type": "callout",
+          "tone": "success",
+          "title": "哪些步骤会自动完成？",
+          "text": "音频导出后，SubForge 会自动捕获音频、开始转写、导出字幕文件，并把字幕文件自动导入到 Final Cut Pro。"
+        }
+      ]
+    },
+    {
+      "title": "快速使用",
+      "body": "如果你只是想先处理一段音频，可以直接从 SubForge 导入，不必先设置监听目录。音频导入后会进入转写流程；如果视频中有专有名词、人名或品牌名，可以打开 AI 热词帮助识别。",
+      "bullets": [],
+      "style": "steps",
+      "icon": "bolt.fill",
+      "blocks": [
+        {
+          "type": "steps",
+          "start": 1,
+          "items": [
+            "在 SubForge 开始页直接导入音频。"
+          ]
+        },
+        {
+          "type": "steps",
+          "start": 2,
+          "items": [
+            "如果有专有名词，打开 AI 热词，并输入本次视频需要注意的人名、品牌名或专业术语。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-ai-hotwords.png",
+          "sha256": "sha256:5511ae747a644534da4f2ef82d27aef9ec5d8c11ff5ae04d779c70474193ee3c",
+          "alt": "SubForge AI 热词弹窗",
+          "caption": "导入音频后，可以为当前视频填写人名、品牌名和专业术语。"
+        },
+        {
+          "type": "steps",
+          "start": 3,
+          "items": [
+            "等待自动转写完成，然后在工作台检查和修改字幕。"
+          ]
+        },
+        {
+          "type": "steps",
+          "start": 4,
+          "items": [
+            "完成校对后导出字幕文件。导出时 SubForge 会提示选择监听目录；选择视频创作总目录后，下次导出会自动监听，不必重复选择。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-auto-watch-confirmation.png",
+          "sha256": "sha256:9cd832cef1eae5b5e1f94dcc4fb27f38b083acf53ee00e9b32164675206b5480",
+          "alt": "SubForge 自动监听确认框",
+          "caption": "第一次导出时确认开启自动监听，并选择视频创作总目录；之后会自动监听该目录。"
+        },
+        {
+          "type": "steps",
+          "start": 5,
+          "items": [
+            "字幕文件会自动导入到 Final Cut Pro。打开字幕文件并复制，再粘贴到视频上。"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "正式使用",
+      "body": "第一次使用时，先完成下面三项设置；之后每个视频从第 4 步开始即可。",
+      "bullets": [],
+      "style": "standard",
+      "icon": "gearshape",
+      "blocks": [
+        {
+          "type": "steps",
+          "start": 1,
+          "items": [
+            "在 Final Cut Pro右上角导出 的“目的位置”设置中，添加“导出文件”：格式选择“仅音频”，音频格式选择“MP3”，操作选择“仅存储”，然后将其改名字为导出音频。以后可以用快捷方式快速导出当前视频的音频。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-fcp-export-shortcut.png",
+          "sha256": "sha256:769c2245a55895131ffa1d4d20da6adc37d2e67fbf35a5e7fab1ee41e8db5df7",
+          "alt": "Final Cut Pro 导出音频快捷方式",
+          "caption": "在 Final Cut Pro 的命令设置中，为导出音频设置快捷方式。"
+        },
+        {
+          "type": "steps",
+          "start": 2,
+          "items": [
+            "打开 SubForge 设置的“自动化”页面，选择视频创作总目录作为监听目录。这个目录应是多个视频项目文件夹的上级目录，SubForge 会自动监听其中新导出的音频。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-watch-directory.png",
+          "sha256": "sha256:dd7d87b5b5c31f458247531ccebb78c9c6758f37a44f3088d4dce39128310f6d",
+          "alt": "SubForge 自动化目录监听设置",
+          "caption": "在设置的自动化页面中，可以查看视频创作总目录和自动监听状态。"
+        },
+        {
+          "type": "steps",
+          "start": 3,
+          "items": [
+            "打开 SubForge 设置的“通用”页面，配置标点和热词：固定热词适合每个视频都会用到的词，AI 热词只针对当前视频；也可以选择要隐藏的标点。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-hotword-settings.png",
+          "sha256": "sha256:4442d247c35f90e4daeb8a23c38428efd6dc8684289cb9363483bf63f345edd4",
+          "alt": "SubForge 标点和热词设置",
+          "caption": "在设置的通用页面中配置标点、AI 热词和固定热词。"
+        },
+        {
+          "type": "steps",
+          "start": 4,
+          "items": [
+            "回到 Final Cut Pro，使用刚刚设置的快捷方式导出音频。第一次导出时，SubForge 会提示是否开启自动监听，并让你选择视频创作总目录。"
+          ]
+        },
+        {
+          "type": "steps",
+          "start": 5,
+          "items": [
+            "音频导出完成后，SubForge 会自动捕获音频。如果启用了 AI 热词，会先显示 AI 热词窗口；没有启用时，会直接进入自动转写。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-auto-transcription.png",
+          "sha256": "sha256:7a485935b7d3667b8406788bbf74c4efde5ac2cd59bb5045f15c1cf66e901e00",
+          "alt": "SubForge 自动转写页面",
+          "caption": "音频被自动捕获后，SubForge 会进入转写流程。"
+        },
+        {
+          "type": "steps",
+          "start": 6,
+          "items": [
+            "转写完成后进行人工校对。校对工作台支持全快捷键操作，可以更快检查字幕文本、时间和分段。"
+          ]
+        },
+        {
+          "type": "steps",
+          "start": 7,
+          "items": [
+            "校对完成后导出字幕文件。SubForge 会自动将字幕文件导入到 Final Cut Pro，不需要再去文件夹里手动寻找。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-fcp-import.png",
+          "sha256": "sha256:1d91f3ad83cb6af580bf5406b41c306663d453b19fc2901eb4e28623696768c5",
+          "alt": "字幕自动进入 Final Cut Pro",
+          "caption": "导出字幕后，字幕文件会自动发送到 Final Cut Pro。"
+        },
+        {
+          "type": "steps",
+          "start": 8,
+          "items": [
+            "在 Final Cut Pro 中双击字幕文件并复制，再将字幕粘贴到视频上。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-fcp-copy-paste.png",
+          "sha256": "sha256:b68867b35e75b7003d82042f2b5ef8f7f12ec2b4b5ff22021ccb4fcb4183f06f",
+          "alt": "在 Final Cut Pro 中复制粘贴字幕",
+          "caption": "在 Final Cut Pro 中复制字幕，再粘贴到视频时间线。"
+        },
+        {
+          "type": "steps",
+          "start": 9,
+          "items": [
+            "先调整一条字幕的样式，重点确认字体大小和 Y 轴位置；确认效果后，把这两个值复制到 SubForge 设置里的样式配置，之后就会作为通用样式使用。"
+          ]
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-fcp-style.png",
+          "sha256": "sha256:2cab099e0e4dde9945e09d5208815925cae74ace9cb6a08039500ed26b0f40e6",
+          "alt": "在 Final Cut Pro 中调整字幕样式",
+          "caption": "先调整一条字幕的字体大小和 Y 轴位置，确认最终效果。"
+        },
+        {
+          "type": "image",
+          "url": "https://gobicowboy.cn/projects/subforge/content/media/subforge-help-style-settings.png",
+          "sha256": "sha256:f2e83b00ccec75e230f90f82e4692aaea9e809cca4efa6bd24239b294673eec1",
+          "alt": "SubForge 字幕样式设置",
+          "caption": "在样式页面中保存字号、X/Y/Z 位置和字幕预设。"
+        }
+      ]
+    }
+  ]
+}

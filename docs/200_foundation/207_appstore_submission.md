@@ -204,3 +204,4 @@ No account is required. No sample login credentials are needed.
 - Delivery UUID：`15780ed5-9222-47e6-bee7-42a19788ad0d`
 - `1.0.9` 已获批且预发布通道关闭，首次上传被 Apple 以 `90062 / 90186` 拒绝；提升到 `1.0.10` 后上传成功。
 - 上传前通过 App 75 项测试、Release 构建、FCPXML 1.13 DTD 校验、用户 Final Cut Pro 实际验收、App Store 应用签名、Installer 签名及 bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
+- `1.0.10` 于 2026-08-16 正式发布；Apple 官方 Lookup API 返回商店 ID `6786057836`，版本内容源已指向正式 App Store 页面。
