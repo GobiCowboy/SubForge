@@ -50,6 +50,7 @@
 - FCPXML 标题 Position 直接使用基本样式里的 X/Y/Z；横屏默认 `0 -467 0`，竖屏默认 `0 -495 0`
 - FCPXML 必须通过 Final Cut Pro DTD 校验：`resources` 只放资源项，`text-style-def` 跟随对应 `title` 并包含 `text-style`
 - FCPXML 必须输出一条连续主故事线：主 `spine` 放一个覆盖全时长的外层 `gap`，字幕和空白放在该 `gap` 内部的二级 `spine lane="1"`；字幕片段之间的真实空白用内部 `gap` 显式占位；零时长空白不能写成 FCPXML 元素，避免 Final Cut Pro 因 `duration="0s"` 拒绝导入
+- FCPXML 标题使用静态 Basic Title 模板；所有字幕和空白先统一换算为整数开始帧、结束帧，再以 `duration = endFrame - startFrame` 输出，禁止分别舍入 offset 与 duration，避免一帧重叠、空洞及默认“标题”占位文字泄漏
 
 ## 6. 验收标准
 

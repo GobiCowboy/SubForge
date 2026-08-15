@@ -10,8 +10,13 @@ extension AppModel {
         let style = settings.subtitleStyle
         let fps = max(settings.exportSettings.fps, 1)
         let format = fcpxmlFormat(for: style.canvasOrientation, fps: fps)
-        let totalSeconds = max(playbackDuration, segments.last?.end ?? 1)
-        let totalDuration = fcpxmlTime(totalSeconds, fps: fps, minimumFrames: 1)
+        let totalEndFrame = FCPXMLTimelinePlanner.totalEndFrame(
+            segments: segments,
+            requestedDuration: playbackDuration,
+            fps: fps
+        )
+        let totalSeconds = Double(totalEndFrame) / Double(fps)
+        let totalDuration = fcpxmlFrameTime(totalEndFrame, fps: fps)
         let storylineItems = makeFCPXMLStorylineItems(
             segments: segments,
             totalDuration: totalSeconds,
@@ -25,7 +30,7 @@ extension AppModel {
         <fcpxml version="\(Self.fcpxmlVersion)">
           <resources>
             <format id="r1" name="\(format.name)" frameDuration="1/\(fps)s" width="\(format.width)" height="\(format.height)" colorSpace="1-1-1 (Rec. 709)"/>
-            <effect id="r2" name="自定" uid=".../Titles.localized/Build In:Out.localized/Custom.localized/Custom.moti"/>
+            <effect id="r2" name="\(FCPXMLExportConfiguration.titleEffectName)" uid="\(FCPXMLExportConfiguration.titleEffectUID)"/>
           </resources>
           <library>
             <event name="SubForge Export">
@@ -52,79 +57,39 @@ extension AppModel {
         style: SubtitleStyle,
         fps: Int
     ) -> String {
-        let sortedSegments = segments.sorted { $0.start < $1.start }
-        var items: [String] = []
-        var cursor: Double = 0
-        var blankIndex = 1
-        var titleIndex = 1
-        let frameDuration = 1 / Double(fps)
-
-        for segment in sortedSegments {
-            let start = max(segment.start, cursor)
-            if start - cursor >= frameDuration / 2 {
-                items.append(makeFCPXMLGap(
-                    index: blankIndex,
-                    offset: cursor,
-                    duration: start - cursor,
+        FCPXMLTimelinePlanner.makeItems(
+            segments: segments,
+            totalDuration: totalDuration,
+            fps: fps
+        ).map { item in
+            switch item.kind {
+            case .gap(let index):
+                makeFCPXMLGap(item: item, index: index, fps: fps)
+            case .title(let index, let segment):
+                makeFCPXMLTitle(
+                    segment: segment,
+                    item: item,
+                    index: index,
+                    style: style,
                     fps: fps
-                ))
-                blankIndex += 1
-                cursor = start
+                )
             }
-
-            let end = max(segment.end, start)
-            let duration = max(end - start, frameDuration)
-            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if text.isEmpty {
-                items.append(makeFCPXMLGap(
-                    index: blankIndex,
-                    offset: start,
-                    duration: duration,
-                    fps: fps
-                ))
-                blankIndex += 1
-                cursor = max(cursor, end)
-                continue
-            }
-
-            items.append(makeFCPXMLTitle(
-                segment: segment,
-                index: titleIndex,
-                offset: start,
-                duration: duration,
-                style: style,
-                fps: fps
-            ))
-            titleIndex += 1
-            cursor = max(cursor, end)
-        }
-
-        if totalDuration - cursor >= frameDuration / 2 {
-            items.append(makeFCPXMLGap(
-                index: blankIndex,
-                offset: cursor,
-                duration: totalDuration - cursor,
-                fps: fps
-            ))
-        }
-
-        return items.joined(separator: "\n")
+        }.joined(separator: "\n")
     }
 
-    func makeFCPXMLGap(index: Int, offset: Double, duration: Double, fps: Int) -> String {
-        let safeDuration = max(duration, 0)
-        let name = "Blank \(formatFCPXMLTimestamp(offset))-\(formatFCPXMLTimestamp(offset + safeDuration))"
+    func makeFCPXMLGap(item: FCPXMLTimelineItem, index: Int, fps: Int) -> String {
+        let start = Double(item.startFrame) / Double(fps)
+        let end = Double(item.endFrame) / Double(fps)
+        let name = "Blank \(formatFCPXMLTimestamp(start))-\(formatFCPXMLTimestamp(end))"
         return """
-                        <gap name="\(escapeXML(name))" offset="\(fcpxmlTime(offset, fps: fps))" duration="\(fcpxmlTime(safeDuration, fps: fps))"/>
+                        <gap name="\(escapeXML(name))" offset="\(fcpxmlFrameTime(item.startFrame, fps: fps))" duration="\(fcpxmlFrameTime(item.durationFrames, fps: fps))"/>
         """
     }
 
     func makeFCPXMLTitle(
         segment: SubtitleSegment,
+        item: FCPXMLTimelineItem,
         index: Int,
-        offset: Double,
-        duration: Double,
         style: SubtitleStyle,
         fps: Int
     ) -> String {
@@ -134,12 +99,8 @@ extension AppModel {
         let styleAttributes = fcpxmlTextStyleAttributes(style)
 
         return """
-                        <title ref="r2" offset="\(fcpxmlTime(offset, fps: fps))" name="\(name)" duration="\(fcpxmlTime(duration, fps: fps, minimumFrames: 1))">
-                          <param name="位置" key="9999/10199/10201/1/100/101" value="\(position.x) \(position.y) \(position.z)"/>
-                          <param name="对齐" key="9999/10199/10201/2/354/1002961760/401" value="1 (居中)"/>
-                          <param name="对齐" key="9999/10199/10201/2/373" value="0 (左) 2 (下)"/>
-                          <param name="Out Sequencing" key="9999/10199/10201/4/10233/201/202" value="0 (到)"/>
-                          <param name="disableDRT" key="3733" value="1"/>
+                        <title ref="r2" offset="\(fcpxmlFrameTime(item.startFrame, fps: fps))" name="\(name)" start="\(FCPXMLExportConfiguration.titleSourceStart)" duration="\(fcpxmlFrameTime(item.durationFrames, fps: fps))">
+                          <param name="Position" key="\(FCPXMLExportConfiguration.titlePositionParameterKey)" value="\(position.x) \(position.y) \(position.z)"/>
                           <text>
                             <text-style ref="\(textStyleID)">\(escapeXML(segment.text))</text-style>
                           </text>
@@ -166,8 +127,7 @@ extension AppModel {
         }
     }
 
-    func fcpxmlTime(_ seconds: Double, fps: Int, minimumFrames: Int = 0) -> String {
-        let frames = max(Int(round(seconds * Double(fps))), minimumFrames)
+    func fcpxmlFrameTime(_ frames: Int, fps: Int) -> String {
         if frames == 0 {
             return "0s"
         }
