@@ -75,3 +75,46 @@
 - 重做时统一保留一个权威构建入口
 - 把开发运行、打包发布、测试验证的命令边界分开
 - 把本地转写依赖、测试资源和云端配置前置写进发布检查表
+
+## 7. 分支、合并与清理流程
+
+每次功能修复、发布准备或文档变更都可以使用独立短期分支；分支的目的只是隔离本次改动，合并完成后必须清理，避免仓库长期堆积已完成分支。
+
+### 7.1 开始前创建分支
+
+从远程 `master` 开始，先确认工作区没有无关改动，再创建任务分支：
+
+```bash
+git fetch origin master
+git status -sb
+git switch -c codex/<简短任务名> origin/master
+```
+
+只把本次任务相关的代码、测试和文档提交到该分支，提交遵循 Conventional Commits。不要把其他任务的未提交文件带入分支。
+
+### 7.2 合并前验证
+
+合并前必须完成：
+
+- 工作区干净，分支已推送到远程并创建 PR，目标为 `master`
+- 运行适用的 Swift 测试和发布前检查
+- 检查 PR 的完整文件差异，确认没有私有配置、构建产物或无关改动
+- 确认合并后的代码树包含本次分支的全部目标文件
+
+### 7.3 合并后验证与清理
+
+PR 合并后先刷新远程引用，再确认远程 `master` 与已合并分支的文件树一致；确认 PR 状态为 `MERGED` 且测试通过后，才删除分支：
+
+```bash
+git fetch origin
+git diff --exit-code origin/master origin/codex/<简短任务名>
+git switch master
+git reset --hard origin/master
+git branch -D codex/<简短任务名>
+git push origin --delete codex/<简短任务名>
+git remote prune origin
+```
+
+这里的 `git branch -D` 只允许在 PR 已合并、文件树已核对一致、工作区无未提交改动之后使用。若采用 squash merge，原分支提交不会成为 `master` 的祖先，但其文件树必须先核对一致；删除的是已合并的分支引用，不是代码内容。
+
+最终仓库默认只保留 `master` 和当前正在开发的任务分支；任务结束后不保留已合并的短期分支。
