@@ -22,7 +22,7 @@ struct SubtitleConfigurationStatus {
 
         switch tab {
         case .transcription:
-            validation = settings.transcriptionValidationState
+            validation = settings.activeTranscriptionValidationState
             isConfigured = isTranscriptionConfigured(settings)
         case .proofreading:
             validation = settings.proofreadingValidationState
@@ -43,8 +43,8 @@ struct SubtitleConfigurationStatus {
         return SubtitleConfigurationStatus(
             isConfigured: isConfigured,
             validationText: validation.passed ? "验证通过" : "验证失败",
-            validationIcon: validation.passed ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
-            validationColor: validation.passed ? .green : .orange
+            validationIcon: validation.passed ? "checkmark.shield.fill" : "xmark.circle.fill",
+            validationColor: validation.passed ? .green : .red
         )
     }
 
@@ -98,18 +98,16 @@ struct SubtitleConfigurationTabs: View {
     let settings: AppSettings
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 28) {
             ForEach(SubtitleConfigurationTab.allCases) { tab in
                 tabButton(tab)
             }
+            Spacer(minLength: 0)
         }
-        .padding(3)
-        .frame(maxWidth: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(SettingsVisualTokens.standardBorder, lineWidth: SettingsVisualTokens.borderWidth)
-        )
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 
     private func tabButton(_ tab: SubtitleConfigurationTab) -> some View {
@@ -119,51 +117,51 @@ struct SubtitleConfigurationTabs: View {
         return Button {
             selection = tab
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Text(tab.rawValue)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 16, weight: .semibold))
 
-                compactBadge(
-                    status.isConfigured ? "已配置" : "未配置",
-                    systemImage: status.isConfigured ? "checkmark.circle.fill" : "circle.dashed",
-                    color: status.isConfigured ? .accentColor : .secondary
-                )
-                compactBadge(
-                    status.validationText,
-                    systemImage: status.validationIcon,
-                    color: status.validationColor
-                )
+                Image(systemName: tabIcon(for: status))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(tabIconColor(for: status))
             }
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .padding(.horizontal, 12)
-            .background(
-                selected ? Color.accentColor.opacity(0.11) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
+            .foregroundStyle(selected ? Color.accentColor : .primary)
+            .frame(height: 42)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(selected ? Color.accentColor : Color.clear)
+                    .frame(height: 2)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusable(false)
     }
 
-    private func compactBadge(_ text: String, systemImage: String, color: Color) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(color)
-            .lineLimit(1)
+    private func tabIcon(for status: SubtitleConfigurationStatus) -> String {
+        if status.validationText == "验证失败" {
+            return "xmark.circle.fill"
+        }
+        return status.isConfigured ? "checkmark.circle.fill" : "checkmark.circle"
+    }
+
+    private func tabIconColor(for status: SubtitleConfigurationStatus) -> Color {
+        if status.validationText == "验证失败" {
+            return .red
+        }
+        return status.isConfigured ? .green : .secondary
     }
 }
 
 struct SubtitleLengthSlider: View {
     @Binding var settings: AppSettings
-    let profile: SubtitleLengthProfile
 
     var body: some View {
         HStack(spacing: 12) {
             Slider(value: maxSubtitleLengthBinding, in: 10...50, step: 2)
                 .frame(maxWidth: .infinity)
 
-            Text("\(settings.effectiveMaxSubtitleLength(for: profile)) 字")
+            Text("\(settings.effectiveMaxSubtitleLength) 字")
                 .font(.system(size: 13, weight: .semibold))
                 .monospacedDigit()
                 .frame(width: 44, alignment: .trailing)
@@ -172,8 +170,8 @@ struct SubtitleLengthSlider: View {
 
     private var maxSubtitleLengthBinding: Binding<Double> {
         Binding(
-            get: { Double(settings.effectiveMaxSubtitleLength(for: profile)) },
-            set: { settings.setMaxSubtitleLength(Int($0.rounded()), for: profile) }
+            get: { Double(settings.effectiveMaxSubtitleLength) },
+            set: { settings.maxSubtitleLength = AppSettings.clampSubtitleLength(Int($0.rounded())) }
         )
     }
 }

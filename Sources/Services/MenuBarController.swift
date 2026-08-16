@@ -71,6 +71,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        addItem("使用说明与更新", action: #selector(openUsageAndUpdates), systemImage: "questionmark.circle")
         addItem("设置...", action: #selector(openSettings), systemImage: "gearshape")
         addItem("退出 SubForge", action: #selector(quit), systemImage: "power")
     }
@@ -124,8 +125,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        model?.presentSettings()
+    }
+
+    @objc private func openUsageAndUpdates() {
+        model?.presentUsageAndUpdates()
     }
 
     @objc private func quit() {

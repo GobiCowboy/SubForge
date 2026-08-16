@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "appID": "com.jago.subforge",
+  "latestVersion": "1.0.10",
+  "storeURL": "https://apps.apple.com/cn/app/subforge/id6786057836",
+  "channels": {
+    "local": {
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
+    },
+    "developer-id": {
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
+    },
+    "app-store": {
+      "latestVersion": "1.0.10",
+      "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
+    }
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "releaseURL": "releases/1.0.0.json",
+      "releaseSHA256": "sha256:306ffc6eabb1d63c26610dac13e92269d8ff4c02a428fb506936053e48653a31",
+      "helpVersion": "1.0.0",
+      "helpURL": "help/1.0.0.json",
+      "helpSHA256": "sha256:4dcfd32ce5072fb8d1204ff2faf3de8059a067f982b1fbd79f7c52ad06bd0325"
+    },
+    {
+      "version": "1.0.5",
+      "releaseURL": "releases/1.0.5.json",
+      "releaseSHA256": "sha256:8ad79967facafde440ed9c3d68b64224bdeba7c7138a1b6474443b233f78c707",
+      "helpVersion": "1.0.5",
+      "helpURL": "help/1.0.5.json",
+      "helpSHA256": "sha256:6917ca1b408f74a03a2fcfc1ce522b5e3057f0f83a799f1f3682eb6586a93ded"
+    },
+    {
+      "version": "1.0.6",
+      "releaseURL": "releases/1.0.6.json",
+      "releaseSHA256": "sha256:7b70fbc0f0396a3f2a56073cf165f1290d495cbab8808a4f71ff53489ce92f0e",
+      "helpVersion": "1.0.6",
+      "helpURL": "help/1.0.6.json",
+      "helpSHA256": "sha256:173bfb6867da7920edfa9f01f31a4f005ef099794c6ea49fc48335fc1f8f047f"
+    },
+    {
+      "version": "1.0.7",
+      "releaseURL": "releases/1.0.7.json",
+      "releaseSHA256": "sha256:8249e5679842b3c35934f3eb8533f2f80795d81f8775d885bc029aa598e9cdfa",
+      "helpVersion": "1.0.7",
+      "helpURL": "help/1.0.7.json",
+      "helpSHA256": "sha256:ffe7569353482246a5bf849b74483e4f51660c7628607ea7a99a63466788d3fe"
+    },
+    {
+      "version": "1.0.8",
+      "releaseURL": "releases/1.0.8.json",
+      "releaseSHA256": "sha256:1ab2533b41aff07ada11895fb2b0eda50842f3b9bc4398ea6ac31fe328fdd8fd",
+      "helpVersion": "1.0.8",
+      "helpURL": "help/1.0.8.json",
+      "helpSHA256": "sha256:9ddaa76117a17bbe9a7235aa9658f7f67e75ceb62c63d16adb2e4ca773e4515b"
+    },
+    {
+      "version": "1.0.9",
+      "releaseURL": "releases/1.0.9.json",
+      "releaseSHA256": "sha256:4911080a35857f4bef903c9b7ee0cba39d63c33279f31af83e3ca0722220db8e",
+      "helpVersion": "1.0.9",
+      "helpURL": "help/1.0.9.json",
+      "helpSHA256": "sha256:9fe6e3e5911415e427e952557b926ba2d01474c79686b34ece7e74f4b4e0a7c9"
+    },
+    {
+      "version": "1.0.10",
+      "releaseURL": "releases/1.0.10.json",
+      "releaseSHA256": "sha256:f388719f97047165e6bb8cb238ab15983312b05bca842d7770286e1c7a172ea8",
+      "helpVersion": "1.0.10",
+      "helpURL": "help/1.0.10.json",
+      "helpSHA256": "sha256:848b337b63bc5e5bca2c82fe850bde78cc24662bff430bf3d21ea36a149a1426"
+    }
+  ]
+}

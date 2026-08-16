@@ -19,6 +19,7 @@
 | `dist/` | 构建产物暂存（`SubForge.app` / `appstore/` / `developer-id/`） |
 | `Tests/` | 单元测试（如 Whisper 词级时间戳） |
 | `Resources/` | 应用图标、隐私清单、可打包模型等资源 |
+| `release-content/` | 版本清单、历史发布记录和版本化使用帮助的唯一源文件 |
 
 ## 2. 文档目录规范
 
@@ -49,6 +50,7 @@
 - `Utilities/` 只放纯工具函数与解析能力
 - `Views/Home/`、`Views/Editor/`、`Views/Settings/` 按页面域拆分，不互相堆叠
 - `Views/Shared/` 只放跨页面复用的视图，不把单页私有视图误放进去
+- `release-content/` 只放可部署的产品内容源，不放工程设计文档或私有配置
 - 快捷键说明、Toast 这类会被编辑页和全局入口共同调用的视图，继续放在 `Views/Shared/`
 
 ## 6. 当前结构约束

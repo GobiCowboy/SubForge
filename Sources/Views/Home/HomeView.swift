@@ -2,9 +2,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct HomeView: View {
-    @EnvironmentObject private var model: AppModel
-    @State private var isDropTargeted = false
-    @State private var animateWatchStatus = false
+    @EnvironmentObject var model: AppModel
+    @State var isDropTargeted = false
+    @State var animateWatchStatus = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +28,7 @@ struct HomeView: View {
         }
     }
 
-    private var dropZone: some View {
+    var dropZone: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -87,7 +87,7 @@ struct HomeView: View {
         }
     }
 
-    private var recentProjectsCard: some View {
+    var recentProjectsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("最近文件")
@@ -162,7 +162,7 @@ struct HomeView: View {
         }
     }
 
-    private var footerBar: some View {
+    var footerBar: some View {
         HStack(spacing: 18) {
             Spacer()
 
@@ -183,7 +183,7 @@ struct HomeView: View {
         }
     }
 
-    private var proofreadingBadgeText: String {
+    var proofreadingBadgeText: String {
         if !model.settings.proofreadingEnabled {
             return "AI 校对关闭"
         }
@@ -193,7 +193,7 @@ struct HomeView: View {
         return model.settings.proofreadingEngine.rawValue
     }
 
-    private var proofreadingBadgeSymbol: String {
+    var proofreadingBadgeSymbol: String {
         if !model.settings.proofreadingEnabled {
             return "xmark.circle"
         }
@@ -203,7 +203,7 @@ struct HomeView: View {
         return "checkmark.circle.fill"
     }
 
-    private func badge(text: String, systemImage: String) -> some View {
+    func badge(text: String, systemImage: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
             Text(text)
@@ -211,7 +211,7 @@ struct HomeView: View {
         .foregroundStyle(.secondary)
     }
 
-    private var listenBadge: some View {
+    var listenBadge: some View {
         HStack(spacing: 6) {
             Text("监听")
                 .foregroundStyle(.secondary)
@@ -222,7 +222,7 @@ struct HomeView: View {
         }
     }
 
-    private func panelBackground(cornerRadius: CGFloat, fillOpacity: Double = 0) -> some View {
+    func panelBackground(cornerRadius: CGFloat, fillOpacity: Double = 0) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color(nsColor: .controlBackgroundColor).opacity(max(0.72, fillOpacity)))
             .overlay {
@@ -231,7 +231,7 @@ struct HomeView: View {
             }
     }
 
-    private func headerCell(_ title: String, width: CGFloat? = nil, alignment: Alignment) -> some View {
+    func headerCell(_ title: String, width: CGFloat? = nil, alignment: Alignment) -> some View {
         Text(title)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
@@ -240,87 +240,11 @@ struct HomeView: View {
             .padding(.vertical, 10)
     }
 
-    private func tableCell(_ title: String, width: CGFloat, alignment: Alignment = .leading) -> some View {
+    func tableCell(_ title: String, width: CGFloat, alignment: Alignment = .leading) -> some View {
         Text(title)
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .frame(width: width, alignment: alignment)
             .padding(.horizontal, 12)
-    }
-
-    private func handleProviders(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            let url: URL? = {
-                if let data = item as? Data {
-                    return URL(dataRepresentation: data, relativeTo: nil)
-                }
-                if let url = item as? URL {
-                    return url
-                }
-                if let path = item as? String {
-                    return URL(fileURLWithPath: path)
-                }
-                return nil
-            }()
-            guard let url else { return }
-
-            Task { @MainActor in
-                // 保留 drop 返回的原始 URL；importDocument 内 SecurityScopedResourceAccess 会 startAccessing。
-                // 不要 standardizedFileURL，否则可能丢掉 security-scoped 令牌，导致后续无法播放。
-                model.importDocument(at: url)
-            }
-        }
-        return true
-    }
-
-    private func iconName(for kind: String) -> String {
-        switch kind {
-        case "audio":
-            return "waveform"
-        default:
-            return "doc.text"
-        }
-    }
-
-    private var watchState: (color: Color, isAnimated: Bool) {
-        let watch = model.settings.watchSettings
-
-        guard !watch.directoryPath.isEmpty else {
-            return (.gray, false)
-        }
-
-        if model.isWatchingDirectory {
-            return (.green, true)
-        }
-
-        return (.blue, true)
-    }
-}
-
-private struct WatchStatusDot: View {
-    let color: Color
-    let isAnimated: Bool
-
-    @State private var glow = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(isAnimated ? 0.18 : 0.12))
-                .frame(width: 16, height: 16)
-                .scaleEffect(isAnimated && glow ? 1.35 : 1.0)
-                .opacity(isAnimated && glow ? 0.35 : 0.8)
-
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-        }
-        .onAppear {
-            guard isAnimated else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                glow = true
-            }
-        }
     }
 }

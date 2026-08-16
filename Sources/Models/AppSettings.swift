@@ -4,9 +4,23 @@ struct SettingsValidationState: Equatable, Codable {
     var hasValidated = false
     var passed = false
     var resultText = "还没有执行验证"
+
+    var statusText: String {
+        if !hasValidated { return "未验证" }
+        return passed ? "验证通过" : "验证失败"
+    }
+
+    var statusIcon: String {
+        if !hasValidated { return "clock" }
+        return passed ? "checkmark.circle.fill" : "xmark.circle.fill"
+    }
 }
 
 struct AppSettings: Equatable, Codable {
+    static let currentSubtitleRulesRevision = 1
+    static let defaultProofreadingPrompt = "只修正错别字、漏字、明显 ASR 错误和专有名词，不润色、不改写原意。"
+    static let legacyProofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。"
+
     var interfaceLanguage: InterfaceLanguage = .simplifiedChinese
     var showMenuBarIcon = true
 
@@ -19,13 +33,17 @@ struct AppSettings: Equatable, Codable {
     var cloudASRModel: String = CloudASRPreset.dashscope.defaultModel
     var language: String = "zh-CN"
     var sentenceSplitStrategy: SentenceSplitStrategy = .punctuation
-    /// 旧版公共设置，保留用于迁移未分方案的历史配置。
-    var maxSubtitleLength: Int? = 24
-    var officialMaxSubtitleLength: Int?
-    var customMaxSubtitleLength: Int?
-    var localMaxSubtitleLength: Int?
+    var maxSubtitleLength: Int? = 32
+    var subtitleRulesRevision: Int? = Self.currentSubtitleRulesRevision
+    var retainedSubtitlePunctuation: Set<SubtitlePunctuationGroup>? =
+        SubtitlePunctuationGroup.subtitleRecommended
+    var hotwordPromptPreference: HotwordPromptPreference? = .undecided
+    var fixedHotwordsEnabled: Bool? = false
+    var fixedHotwordsText: String? = ""
     var keepFillerWords = false
     var transcriptionValidationState = SettingsValidationState()
+    var customTranscriptionValidationState = SettingsValidationState()
+    var localTranscriptionValidationState = SettingsValidationState()
 
     var proofreadingEnabled = false
     var proofreadingEngine: ProofreadingEngine = .cloudLLM
@@ -33,13 +51,65 @@ struct AppSettings: Equatable, Codable {
     var cloudLLMURL: String = CloudLLMPreset.deepseek.defaultURL
     var cloudLLMKey: String = ""
     var cloudLLMModel: String = CloudLLMPreset.deepseek.defaultModel
-    var proofreadingPrompt = "只修正错别字、标点和明显断句问题，不改写说话人的语气。字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。"
+    var proofreadingPrompt = Self.defaultProofreadingPrompt
     var proofreadingStrictCorrections = true
     var proofreadingValidationState = SettingsValidationState()
 
     var subtitleStyle = SubtitleStyle()
+    /// 横屏与竖屏分别保存样式；旧配置解码后为空，由 SettingsStore 从旧的 active 样式迁移。
+    var landscapeSubtitleStyle: SubtitleStyle? = SubtitleStyle(orientation: .landscape)
+    var portraitSubtitleStyle: SubtitleStyle? = SubtitleStyle(orientation: .portrait)
     var exportSettings = ExportSettings()
     var watchSettings = WatchSettings()
+
+    mutating func prepareSubtitleStyleConfigurations() -> Bool {
+        var changed = false
+        let legacyStyle = subtitleStyle
+
+        if landscapeSubtitleStyle == nil {
+            landscapeSubtitleStyle = legacyStyle.canvasOrientation == .landscape
+                ? legacyStyle
+                : SubtitleStyle(orientation: .landscape)
+            changed = true
+        }
+
+        if portraitSubtitleStyle == nil {
+            portraitSubtitleStyle = legacyStyle.canvasOrientation == .portrait
+                ? legacyStyle
+                : SubtitleStyle(orientation: .portrait)
+            changed = true
+        }
+
+        synchronizeActiveSubtitleStyleConfiguration()
+        return changed
+    }
+
+    mutating func switchSubtitleOrientation(to orientation: SubtitleCanvasOrientation) {
+        _ = prepareSubtitleStyleConfigurations()
+        synchronizeActiveSubtitleStyleConfiguration()
+
+        guard subtitleStyle.canvasOrientation != orientation else { return }
+
+        let nextStyle: SubtitleStyle
+        switch orientation {
+        case .landscape:
+            nextStyle = landscapeSubtitleStyle ?? SubtitleStyle(orientation: .landscape)
+        case .portrait:
+            nextStyle = portraitSubtitleStyle ?? SubtitleStyle(orientation: .portrait)
+        }
+
+        subtitleStyle = nextStyle
+        subtitleStyle.canvasOrientation = orientation
+    }
+
+    mutating func synchronizeActiveSubtitleStyleConfiguration() {
+        switch subtitleStyle.canvasOrientation {
+        case .landscape:
+            landscapeSubtitleStyle = subtitleStyle
+        case .portrait:
+            portraitSubtitleStyle = subtitleStyle
+        }
+    }
 
     var effectiveASRURL: String {
         let trimmed = cloudASRURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -51,47 +121,60 @@ struct AppSettings: Equatable, Codable {
         return trimmed.isEmpty ? cloudASRPreset.defaultModel : trimmed
     }
 
-    var effectiveMaxSubtitleLength: Int {
-        effectiveMaxSubtitleLength(for: subtitleLengthProfile)
+    var activeTranscriptionValidationState: SettingsValidationState {
+        transcriptionValidationState(for: transcriptionEngine)
     }
 
-    var subtitleLengthProfile: SubtitleLengthProfile {
-        switch transcriptionEngine {
-        case .officialSmart:
-            .official
+    func transcriptionValidationState(for engine: TranscriptionEngine) -> SettingsValidationState {
+        switch engine {
         case .cloudASR:
-            .custom
+            return customTranscriptionValidationState
         case .funASRLocal, .whisperLocal, .appleSpeech:
-            .local
+            return localTranscriptionValidationState
+        case .officialSmart:
+            return transcriptionValidationState
         }
     }
 
-    func effectiveMaxSubtitleLength(for profile: SubtitleLengthProfile) -> Int {
-        let configured: Int?
-        switch profile {
-        case .official:
-            configured = officialMaxSubtitleLength
-        case .custom:
-            configured = customMaxSubtitleLength
-        case .local:
-            configured = localMaxSubtitleLength
-        }
-        return Self.clampSubtitleLength(configured ?? maxSubtitleLength ?? 24)
+    mutating func setActiveTranscriptionValidationState(_ state: SettingsValidationState) {
+        setTranscriptionValidationState(state, for: transcriptionEngine)
     }
 
-    mutating func setMaxSubtitleLength(_ value: Int, for profile: SubtitleLengthProfile) {
-        let clamped = Self.clampSubtitleLength(value)
-        switch profile {
-        case .official:
-            officialMaxSubtitleLength = clamped
-        case .custom:
-            customMaxSubtitleLength = clamped
-        case .local:
-            localMaxSubtitleLength = clamped
+    mutating func setTranscriptionValidationState(
+        _ newState: SettingsValidationState,
+        for engine: TranscriptionEngine
+    ) {
+        switch engine {
+        case .cloudASR:
+            customTranscriptionValidationState = newState
+        case .funASRLocal, .whisperLocal, .appleSpeech:
+            localTranscriptionValidationState = newState
+        case .officialSmart:
+            transcriptionValidationState = newState
         }
     }
 
-    private static func clampSubtitleLength(_ value: Int) -> Int {
+    var effectiveMaxSubtitleLength: Int {
+        Self.clampSubtitleLength(maxSubtitleLength ?? 32)
+    }
+
+    var effectiveRetainedSubtitlePunctuation: Set<SubtitlePunctuationGroup> {
+        retainedSubtitlePunctuation ?? SubtitlePunctuationGroup.subtitleRecommended
+    }
+
+    var effectiveHotwordPromptPreference: HotwordPromptPreference {
+        hotwordPromptPreference ?? .undecided
+    }
+
+    var effectiveFixedHotwordsEnabled: Bool {
+        fixedHotwordsEnabled ?? false
+    }
+
+    var effectiveFixedHotwordsText: String {
+        fixedHotwordsText ?? ""
+    }
+
+    static func clampSubtitleLength(_ value: Int) -> Int {
         min(max(value, 10), 50)
     }
 
@@ -130,12 +213,6 @@ struct AppSettings: Equatable, Codable {
     }
 }
 
-enum SubtitleLengthProfile {
-    case official
-    case custom
-    case local
-}
-
 enum InterfaceLanguage: String, CaseIterable, Codable, Identifiable {
     case simplifiedChinese = "简体中文"
     case english = "English"
@@ -146,237 +223,6 @@ enum InterfaceLanguage: String, CaseIterable, Codable, Identifiable {
 enum SentenceSplitStrategy: String, CaseIterable, Codable, Identifiable {
     case punctuation = "按标点"
     case duration = "按时长"
-
-    var id: String { rawValue }
-}
-
-struct ExportSettings: Equatable, Codable {
-    var format: ExportFormat = .srtAndFCPXML
-    var fps: Int = 30
-    var width: Int = 1920
-    var height: Int = 1080
-    var namingRule = "{project_name}_{date}"
-    var saveLocation: SaveLocation = .sameAsSource
-    var customOutputPath: String = ""
-    var customOutputBookmarkData: Data?
-    var overwriteExisting = false
-    var includeLog = true
-    var exportToFinalCutPro = false
-
-    enum CodingKeys: String, CodingKey {
-        case format
-        case fps
-        case width
-        case height
-        case namingRule
-        case saveLocation
-        case customOutputPath
-        case customOutputBookmarkData
-        case overwriteExisting
-        case includeLog
-        case exportToFinalCutPro
-    }
-
-    init() {}
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        format = try container.decodeIfPresent(ExportFormat.self, forKey: .format) ?? .srtAndFCPXML
-        fps = try container.decodeIfPresent(Int.self, forKey: .fps) ?? 30
-        width = try container.decodeIfPresent(Int.self, forKey: .width) ?? 1920
-        height = try container.decodeIfPresent(Int.self, forKey: .height) ?? 1080
-        namingRule = try container.decodeIfPresent(String.self, forKey: .namingRule) ?? "{project_name}_{date}"
-        saveLocation = try container.decodeIfPresent(SaveLocation.self, forKey: .saveLocation) ?? .sameAsSource
-        customOutputPath = try container.decodeIfPresent(String.self, forKey: .customOutputPath) ?? ""
-        customOutputBookmarkData = try container.decodeIfPresent(Data.self, forKey: .customOutputBookmarkData)
-        overwriteExisting = try container.decodeIfPresent(Bool.self, forKey: .overwriteExisting) ?? false
-        includeLog = try container.decodeIfPresent(Bool.self, forKey: .includeLog) ?? true
-        exportToFinalCutPro = try container.decodeIfPresent(Bool.self, forKey: .exportToFinalCutPro) ?? false
-    }
-}
-
-enum ExportFormat: String, CaseIterable, Codable, Identifiable {
-    case srt = "SRT"
-    case fcpxml = "FCPXML"
-    case srtAndFCPXML = "SRT + FCPXML"
-    case txt = "TXT"
-    case vtt = "VTT"
-
-    var id: String { rawValue }
-}
-
-enum SaveLocation: String, CaseIterable, Codable, Identifiable {
-    case sameAsSource = "与源文件同目录"
-    case customFolder = "自定义目录"
-
-    var id: String { rawValue }
-}
-
-struct WatchSettings: Equatable, Codable {
-    var directoryPath: String = ""
-    var directoryBookmarkData: Data?
-    var manualReviewBeforeExport = true
-    var autoStart = false
-    var newFileAction: WatchAction = .queue
-    var errorNotice: ErrorNotice = .systemNotification
-}
-
-enum WatchAction: String, CaseIterable, Codable, Identifiable {
-    case transcribeImmediately = "立即开始转写"
-    case queue = "先加入队列"
-    case reviewOnly = "仅提示人工处理"
-
-    var id: String { rawValue }
-}
-
-enum ErrorNotice: String, CaseIterable, Codable, Identifiable {
-    case systemNotification = "系统通知"
-    case modalAlert = "弹窗提醒"
-    case logOnly = "只写入日志"
-
-    var id: String { rawValue }
-}
-
-struct SubtitleStyle: Equatable, Codable {
-    var canvasOrientation: SubtitleCanvasOrientation = .landscape
-    var preset: SubtitleStylePreset = .whiteTextBlackOutline
-    var fontFamily = "PingFang SC"
-    var fontSize: Double = 56
-    var fontWeight: SubtitleFontWeight = .semibold
-    var horizontalAlignment: SubtitleHorizontalAlignment = .center
-    var fontColorHex = "#FFFFFF"
-    var lineSpacing: Double = 0
-    var characterSpacing: Double = 0
-    var position: SubtitlePosition = .bottom
-    var offsetX: Double = 0
-    var offsetY: Double = -28
-    var positionX: Double = 0
-    var positionY: Double = -467
-    var positionZ: Double = 0
-    var surfaceEnabled = false
-    var surfaceColorHex = "#111111"
-    var surfaceOpacity: Double = 0.72
-    var surfaceBlur: Double = 0
-    var outlineEnabled = true
-    var outlineColorHex = "#111111"
-    var outlineOpacity: Double = 1
-    var outlineBlur: Double = 0
-    var outlineWidth: Double = 2
-    var shadowEnabled = false
-    var shadowColorHex = "#000000"
-    var shadowOpacity: Double = 0.35
-    var shadowBlur: Double = 10
-    var shadowOffsetY: Double = 4
-
-    enum CodingKeys: String, CodingKey {
-        case canvasOrientation
-        case preset
-        case fontFamily
-        case fontSize
-        case fontWeight
-        case horizontalAlignment
-        case fontColorHex
-        case lineSpacing
-        case characterSpacing
-        case position
-        case offsetX
-        case offsetY
-        case positionX
-        case positionY
-        case positionZ
-        case surfaceEnabled
-        case surfaceColorHex
-        case surfaceOpacity
-        case surfaceBlur
-        case outlineEnabled
-        case outlineColorHex
-        case outlineOpacity
-        case outlineBlur
-        case outlineWidth
-        case shadowEnabled
-        case shadowColorHex
-        case shadowOpacity
-        case shadowBlur
-        case shadowOffsetY
-    }
-
-    init() {}
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        canvasOrientation = try container.decodeIfPresent(SubtitleCanvasOrientation.self, forKey: .canvasOrientation) ?? .landscape
-        preset = try container.decodeIfPresent(SubtitleStylePreset.self, forKey: .preset) ?? .whiteTextBlackOutline
-        fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily) ?? "PingFang SC"
-        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? 56
-        fontWeight = try container.decodeIfPresent(SubtitleFontWeight.self, forKey: .fontWeight) ?? .semibold
-        horizontalAlignment = try container.decodeIfPresent(SubtitleHorizontalAlignment.self, forKey: .horizontalAlignment) ?? .center
-        fontColorHex = try container.decodeIfPresent(String.self, forKey: .fontColorHex) ?? "#FFFFFF"
-        lineSpacing = try container.decodeIfPresent(Double.self, forKey: .lineSpacing) ?? 0
-        characterSpacing = try container.decodeIfPresent(Double.self, forKey: .characterSpacing) ?? 0
-        position = try container.decodeIfPresent(SubtitlePosition.self, forKey: .position) ?? .bottom
-        offsetX = try container.decodeIfPresent(Double.self, forKey: .offsetX) ?? 0
-        offsetY = try container.decodeIfPresent(Double.self, forKey: .offsetY) ?? -28
-        positionX = try container.decodeIfPresent(Double.self, forKey: .positionX) ?? 0
-        positionY = try container.decodeIfPresent(Double.self, forKey: .positionY)
-            ?? (canvasOrientation == .landscape ? -467 : -495)
-        positionZ = try container.decodeIfPresent(Double.self, forKey: .positionZ) ?? 0
-        surfaceEnabled = try container.decodeIfPresent(Bool.self, forKey: .surfaceEnabled) ?? false
-        surfaceColorHex = try container.decodeIfPresent(String.self, forKey: .surfaceColorHex) ?? "#111111"
-        surfaceOpacity = try container.decodeIfPresent(Double.self, forKey: .surfaceOpacity) ?? 0.72
-        surfaceBlur = try container.decodeIfPresent(Double.self, forKey: .surfaceBlur) ?? 0
-        outlineEnabled = try container.decodeIfPresent(Bool.self, forKey: .outlineEnabled) ?? true
-        outlineColorHex = try container.decodeIfPresent(String.self, forKey: .outlineColorHex) ?? "#111111"
-        outlineOpacity = try container.decodeIfPresent(Double.self, forKey: .outlineOpacity) ?? 1
-        outlineBlur = try container.decodeIfPresent(Double.self, forKey: .outlineBlur) ?? 0
-        outlineWidth = try container.decodeIfPresent(Double.self, forKey: .outlineWidth) ?? 2
-        shadowEnabled = try container.decodeIfPresent(Bool.self, forKey: .shadowEnabled) ?? false
-        shadowColorHex = try container.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? "#000000"
-        shadowOpacity = try container.decodeIfPresent(Double.self, forKey: .shadowOpacity) ?? 0.35
-        shadowBlur = try container.decodeIfPresent(Double.self, forKey: .shadowBlur) ?? 10
-        shadowOffsetY = try container.decodeIfPresent(Double.self, forKey: .shadowOffsetY) ?? 4
-    }
-}
-
-enum SubtitleFontWeight: String, CaseIterable, Codable, Identifiable {
-    case regular = "常规"
-    case medium = "中等"
-    case semibold = "半粗"
-    case bold = "加粗"
-
-    var id: String { rawValue }
-}
-
-enum SubtitlePosition: String, CaseIterable, Codable, Identifiable {
-    case top = "顶部"
-    case middle = "中部"
-    case bottom = "底部"
-
-    var id: String { rawValue }
-}
-
-enum SubtitleHorizontalAlignment: String, CaseIterable, Codable, Identifiable {
-    case leading = "左对齐"
-    case center = "居中"
-    case trailing = "右对齐"
-
-    var id: String { rawValue }
-}
-
-enum SubtitleCanvasOrientation: String, CaseIterable, Codable, Identifiable {
-    case landscape = "横屏"
-    case portrait = "竖屏"
-
-    var id: String { rawValue }
-}
-
-enum SubtitleStylePreset: String, CaseIterable, Codable, Identifiable {
-    case whiteTextBlackOutline = "内白外黑"
-    case blackTextWhiteOutline = "内黑外白"
-    case whiteTextDarkFill = "白字黑底"
-    case yellowTextBlackOutline = "黄字黑边"
-    case whiteTextBlueFill = "白字蓝底"
 
     var id: String { rawValue }
 }

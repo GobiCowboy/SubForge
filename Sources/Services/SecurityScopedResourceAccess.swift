@@ -4,6 +4,8 @@ final class SecurityScopedResourceAccess {
     let url: URL
     private let isAccessing: Bool
 
+    var hasAccess: Bool { isAccessing }
+
     init(url: URL) {
         self.url = url
         self.isAccessing = url.startAccessingSecurityScopedResource()

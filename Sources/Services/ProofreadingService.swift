@@ -101,8 +101,8 @@ final class CloudLLMProvider: ProofreadingProvider {
         }.joined(separator: "\n")
 
         let correctionRules = strictCorrections
-            ? "优先修正错别字、漏字、标点和显著识别错误，不做风格润色。"
-            : "优先修正错别字、漏字、标点和显著识别错误，可做极轻微顺句，但不能改写原意。"
+            ? "只修正错别字、漏字、明显 ASR 错误和专有名词，不润色、不改写原意。"
+            : "优先修正错别字、漏字、明显 ASR 错误和专有名词，可做极轻微顺句，但不能改写原意。"
 
         let composedPrompt = """
         你是字幕校对专家。
@@ -113,8 +113,9 @@ final class CloudLLMProvider: ProofreadingProvider {
         3. 每行保留原始序号，不跳号。
         4. 不允许合并、删除、拆分任意字幕行。
         5. 每一行都必须输出非空文本。
-        6. 字幕行末不补句号、逗号、顿号、分号或冒号；问号、叹号、省略号只有表达语气时才保留。
-        7. 只输出“序号 + 文本”，不要解释。
+        6. 根据上下文判断专有名词的同音、近音、拆分、连写、大小写、附加字母或数字及组合形式。
+        7. 如果明确指向标准术语，统一为标准写法；用户不需要提供错误变体。
+        8. 只输出“序号 + 文本”，不要解释。
 
         额外提示：
         \(prompt)
@@ -162,64 +163,24 @@ final class CloudLLMProvider: ProofreadingProvider {
             throw ProofreadingError.invalidResponse
         }
 
-        let correctedLines = parseResponse(content, expectedCount: segments.count)
+        let correctedLines = try ProofreadingResponseParser.parse(
+            content,
+            expectedCount: segments.count
+        )
         var results: [SubtitleSegment] = []
 
         for (index, segment) in segments.enumerated() {
             var corrected = segment
-            let normalizedText = normalizeSubtitlePunctuation(correctedLines[index])
-            corrected.text = normalizedText.isEmpty ? segment.text : normalizedText
+            corrected.text = correctedLines[index]
 
             results.append(corrected)
         }
 
         return results
     }
-
-    private func parseResponse(_ content: String, expectedCount: Int) -> [String] {
-        var result = [String](repeating: "", count: expectedCount)
-        let lines = content.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-        for line in lines where !line.isEmpty {
-            var matchedIndex: Int?
-            var text = line
-
-            if let range = line.range(of: #"^\d+[.、]\s*"#, options: .regularExpression) {
-                let numberString = line[line.startIndex..<range.upperBound]
-                    .trimmingCharacters(in: CharacterSet(charactersIn: ".、 "))
-                if let number = Int(numberString), number >= 1, number <= expectedCount {
-                    matchedIndex = number - 1
-                    text = String(line[range.upperBound...])
-                }
-            }
-
-            if matchedIndex == nil {
-                matchedIndex = result.firstIndex(of: "")
-            }
-
-            if let index = matchedIndex, index < expectedCount {
-                result[index] = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-
-        return result
-    }
-
-    private func normalizeSubtitlePunctuation(_ text: String) -> String {
-        var normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let removableLineEndPunctuation: Set<Character> = ["。", "．", ".", "，", ",", "、", "；", ";", "：", ":"]
-
-        while let last = normalized.last, removableLineEndPunctuation.contains(last) {
-            normalized.removeLast()
-            normalized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return normalized
-    }
 }
 
-enum ProofreadingError: LocalizedError {
+enum ProofreadingError: LocalizedError, Equatable {
     case notConfigured
     case apiError(String)
     case invalidResponse

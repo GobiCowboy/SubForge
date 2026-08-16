@@ -5,10 +5,11 @@ struct WatchSettingsPane: View {
     @Binding var settings: AppSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "目录监听") {
-                SettingsListSection {
-                    SettingsListRow(title: "监听目录") {
+        SettingsListSection {
+                    SettingsListRow(
+                        title: "视频创作总目录",
+                        description: "选择包含多个视频项目的上级目录；会监听其子目录中新导出的音频。"
+                    ) {
                         HStack(spacing: 8) {
                             TextField("请选择目录", text: $settings.watchSettings.directoryPath)
                                 .textFieldStyle(.roundedBorder)
@@ -56,8 +57,6 @@ struct WatchSettingsPane: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
-                }
-            }
         }
     }
 }

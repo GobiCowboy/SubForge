@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import SubForge
 
+@MainActor
+@Test func fcpxmlUsesFinalCutPro11CompatibleVersion() {
+    #expect(AppModel.fcpxmlVersion == "1.13")
+}
+
 @Test func officialServiceEnablesOnlyChinaProfile() {
     let china = OfficialServiceConfiguration.profile(for: .china)
     #expect(china?.processingRegion == "china")
@@ -45,10 +50,35 @@ import Testing
     #expect(!OfficialSmartServiceClient.shouldRetryPolling(URLError(.badURL)))
 }
 
+@Test func officialSubmitFailureExplainsRecoveryThroughTheTopTaskRecord() {
+    let data = Data(
+        #"{"error":"ASR_SUBMIT_TEMPORARILY_UNAVAILABLE","retryable":true,"reservationReleased":true}"#.utf8
+    )
+    let error = OfficialSmartServiceClient.mapHTTPError(statusCode: 503, data: data)
+
+    #expect(
+        error.localizedDescription
+            == "上游语音服务暂时不可用，预留时长已退回。请稍后点击顶部任务记录重试。"
+    )
+}
+
 @Test func officialTaskStatusSeparatesASRAndProofreadingProgress() {
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "processing") == .transcribing)
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "proofreading") == .proofreading)
     #expect(OfficialSmartServiceClient.progressPhase(forTaskStatus: "completed") == .finishing)
+}
+
+@Test func officialTaskSubmitBodyCarriesClientProofreadingPrompt() throws {
+    let data = try OfficialSmartServiceClient.makeSubmitBody(
+        ossURL: "oss://audio/task.mp3",
+        proofreadingPrompt: "统一使用 subForge"
+    )
+    let json = try #require(
+        JSONSerialization.jsonObject(with: data) as? [String: String]
+    )
+
+    #expect(json["ossUrl"] == "oss://audio/task.mp3")
+    #expect(json["proofreadingPrompt"] == "统一使用 subForge")
 }
 
 @MainActor
@@ -85,6 +115,67 @@ import Testing
     #expect(output.contains { $0.text == "Supercalifragilisticexpialidocious" })
     #expect(output.first?.start == 0)
     #expect(output.last.map { $0.end <= 12.01 } == true)
+}
+
+@Test func officialSmartResultsPreferRealWordTimestamps() {
+    let words = [
+        SubtitleWord(start: 0.30, end: 0.72, text: "我们"),
+        SubtitleWord(start: 0.76, end: 1.18, text: "正在"),
+        SubtitleWord(start: 1.30, end: 1.82, text: "测试"),
+        SubtitleWord(start: 2.04, end: 2.52, text: "准确的"),
+        SubtitleWord(start: 2.68, end: 3.12, text: "字幕"),
+        SubtitleWord(start: 3.26, end: 3.76, text: "时间"),
+        SubtitleWord(start: 3.92, end: 4.46, text: "切换功能")
+    ]
+    let input = [
+        SubtitleSegment(
+            start: 0,
+            end: 6,
+            text: words.map(\.text).joined(),
+            words: words
+        )
+    ]
+
+    let output = OfficialSmartSubtitleProvider.applySegmentation(
+        input,
+        configuration: SubtitleSegmentationConfiguration(maxCharacters: 10)
+    )
+
+    #expect(output.count > 1)
+    #expect(output.first?.start == 0.30)
+    #expect(output.last?.end == 4.46)
+    let realBoundaries = Set(words.flatMap { [$0.start, $0.end] })
+    #expect(output.allSatisfy { realBoundaries.contains($0.start) && realBoundaries.contains($0.end) })
+}
+
+@Test func officialSmartSegmentationKeepsProofreadTextOnWordBoundaries() {
+    let input = [
+        SubtitleSegment(
+            start: 0,
+            end: 5,
+            text: "这是校对后的字幕内容应该准确切换",
+            words: [
+                SubtitleWord(start: 0.20, end: 0.54, text: "这是"),
+                SubtitleWord(start: 0.62, end: 1.02, text: "交对"),
+                SubtitleWord(start: 1.10, end: 1.52, text: "后的"),
+                SubtitleWord(start: 1.68, end: 2.10, text: "字幕"),
+                SubtitleWord(start: 2.24, end: 2.72, text: "内容"),
+                SubtitleWord(start: 2.92, end: 3.38, text: "应该"),
+                SubtitleWord(start: 3.52, end: 3.98, text: "准确"),
+                SubtitleWord(start: 4.12, end: 4.58, text: "切换")
+            ]
+        )
+    ]
+
+    let output = OfficialSmartSubtitleProvider.applySegmentation(
+        input,
+        configuration: SubtitleSegmentationConfiguration(maxCharacters: 10)
+    )
+
+    #expect(output.map(\.text).joined() == "这是校对后的字幕内容应该准确切换")
+    #expect(!output.map(\.text).joined().contains("交对"))
+    #expect(output.first?.start == 0.20)
+    #expect(output.last?.end == 4.58)
 }
 
 @Test func officialWalletUsesSeparateLocalAndAppStoreKeychainServices() {

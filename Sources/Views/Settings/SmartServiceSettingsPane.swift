@@ -16,13 +16,9 @@ struct OfficialSmartServicePanel: View {
     @ObservedObject var service: SmartServiceStore
 
     @State private var selectedPlan: OfficialPurchasePlan = .standard
-    @State private var isSegmentationExpanded = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             valueSection
-            Divider()
-            segmentationSection
             Divider()
             purchaseSection
             privacyNotice
@@ -88,12 +84,21 @@ struct OfficialSmartServicePanel: View {
                 .controlSize(.regular)
                 .disabled(service.isPurchasing)
 
-                Button("刷新额度") {
+                Button {
                     Task { await service.refreshWallet() }
+                } label: {
+                    HStack(spacing: 7) {
+                        if service.isRefreshingWallet {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(service.isRefreshingWallet ? "查询中" : "刷新额度")
+                    }
+                    .frame(minWidth: 78)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(service.isLoading || service.isPurchasing)
+                .disabled(service.isRefreshingWallet || service.isPurchasing)
             }
             .padding(.top, 18)
 
@@ -104,33 +109,6 @@ struct OfficialSmartServicePanel: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.top, 26)
-    }
-
-    private var segmentationSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Text("字幕分段")
-                    .font(.system(size: 13, weight: .semibold))
-
-                Spacer(minLength: 0)
-
-                Text("每条最多 \(settings.effectiveMaxSubtitleLength(for: .official)) 字")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                Button(isSegmentationExpanded ? "收起" : "调整") {
-                    isSegmentationExpanded.toggle()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-
-            if isSegmentationExpanded {
-                SubtitleLengthSlider(settings: $settings, profile: .official)
-                    .padding(.top, 14)
-            }
-        }
-        .padding(.vertical, 14)
     }
 
     private func purchasePlanCard(_ plan: OfficialPurchasePlan) -> some View {
@@ -217,25 +195,29 @@ struct OfficialSmartServicePanel: View {
     }
 
     private var purchaseStatusText: String {
-        if service.isPurchasing { return service.statusMessage }
+        if service.isPurchasing || service.isRefreshingWallet { return service.statusMessage }
         return service.productCatalogMessage ?? service.statusMessage
     }
 
     private var purchaseStatusIcon: String {
-        if service.isPurchasing { return "hourglass" }
+        if service.isPurchasing || isQueryingBalance { return "hourglass" }
         if purchaseStatusIsError { return "exclamationmark.triangle.fill" }
         return "checkmark.circle.fill"
     }
 
     private var purchaseStatusColor: Color {
-        if service.isPurchasing { return .accentColor }
+        if service.isPurchasing || isQueryingBalance { return .accentColor }
         if purchaseStatusIsError { return .orange }
         return .secondary
     }
 
+    private var isQueryingBalance: Bool {
+        service.isLoading || service.isRefreshingWallet
+    }
+
     private var purchaseStatusIsError: Bool {
         if service.productCatalogMessage != nil { return true }
-        return ["错误", "失败", "无法", "不可用"].contains { service.statusMessage.contains($0) }
+        return ["错误", "失败", "无法", "不可用", "钥匙串", "凭证"].contains { service.statusMessage.contains($0) }
     }
 
 }

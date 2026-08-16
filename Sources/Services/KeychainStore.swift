@@ -13,9 +13,20 @@ enum KeychainStore {
     private static let cacheLock = NSLock()
     private static var cachedValues: [Account: String] = [:]
 
+    enum ReadResult: Equatable {
+        case value(String)
+        case notFound
+        case unavailable(OSStatus)
+    }
+
     static func read(_ account: Account) -> String? {
+        guard case .value(let value) = readResult(account) else { return nil }
+        return value
+    }
+
+    static func readResult(_ account: Account) -> ReadResult {
         if let cached = cachedValue(for: account) {
-            return cached
+            return .value(cached)
         }
 
         var query = nonInteractiveQuery(account)
@@ -24,17 +35,19 @@ enum KeychainStore {
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return nil }
+        if status == errSecItemNotFound { return .notFound }
         guard status == errSecSuccess, let data = item as? Data else {
             AppLog.settings.error(
                 "keychainReadFailed account=\(account.rawValue, privacy: .public) status=\(status, privacy: .public)"
             )
-            return nil
+            return .unavailable(status)
         }
 
-        guard let value = String(data: data, encoding: .utf8) else { return nil }
+        guard let value = String(data: data, encoding: .utf8) else {
+            return .unavailable(errSecDecode)
+        }
         cache(value, for: account)
-        return value
+        return .value(value)
     }
 
     @discardableResult

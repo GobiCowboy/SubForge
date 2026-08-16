@@ -9,6 +9,15 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var sidebarTitle: String {
+        switch self {
+        case .watch:
+            "自动化"
+        default:
+            rawValue
+        }
+    }
+
     var icon: String {
         switch self {
         case .general: "gearshape"

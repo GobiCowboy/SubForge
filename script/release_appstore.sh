@@ -3,8 +3,10 @@ set -euo pipefail
 
 APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
-TEAM_ID="${TEAM_ID:-4UNNXY925R}"
-APP_VERSION="${APP_VERSION:-1.0.4}"
+TEAM_ID="${TEAM_ID:-}"
+APP_VERSION="${APP_VERSION:-1.0.10}"
+# App Store Connect 不允许在已上架版本上继续添加新构建；上传前会用 Apple Lookup API 校验。
+APP_STORE_COUNTRY="${APP_STORE_COUNTRY:-cn}"
 # 必须比历史上传的 CFBundleVersion 更大；用 14 位时间戳避免 12 位比旧 14 位小
 APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
@@ -20,6 +22,7 @@ APP_NOTICES="$APP_RESOURCES/ThirdPartyNotices"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ENTITLEMENTS="$ROOT_DIR/Config/SubForge.entitlements"
+ENTITLEMENTS_TEMPLATE="$ROOT_DIR/Config/SubForge.entitlements.template"
 DEBUG_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.debug.entitlements"
 INHERIT_ENTITLEMENTS="$ROOT_DIR/Config/SubForge.inherit.entitlements"
 PKG_PATH="$DIST_DIR/$APP_NAME.pkg"
@@ -42,9 +45,9 @@ Modes:
   --upload    Build, sign, package, and upload the .pkg to App Store Connect.
 
 Optional environment:
-  APP_VERSION=1.0.4
+  APP_VERSION=1.0.10
   APP_BUILD=$(date +%Y%m%d%H%M%S)
-  TEAM_ID=$TEAM_ID
+  TEAM_ID="<Apple Developer Team ID>"
   DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"
   DEVELOPMENT_PROVISIONING_PROFILE="/path/to/SubForge_Mac_Development.provisionprofile"
   APP_SIGN_IDENTITY="Apple Distribution: ..."
@@ -67,6 +70,20 @@ if [ "$MODE" = "--sandbox" ]; then
 elif [ "$MODE" != "--unsigned" ]; then
   SIGNING_CHANNEL="app-store"
 fi
+
+require_team_id() {
+  if [ -z "$TEAM_ID" ]; then
+    echo "missing TEAM_ID; set it in the local shell environment" >&2
+    exit 1
+  fi
+}
+
+prepare_app_store_entitlements() {
+  require_team_id
+  require_file "$ENTITLEMENTS_TEMPLATE"
+  sed "s/__TEAM_ID__/$TEAM_ID/g" "$ENTITLEMENTS_TEMPLATE" > "$ENTITLEMENTS"
+  chmod 600 "$ENTITLEMENTS"
+}
 
 find_codesigning_identity() {
   local explicit="$1"
@@ -126,6 +143,81 @@ require_file() {
     echo "missing required file: $1" >&2
     exit 1
   fi
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+version_is_greater_than() {
+  local candidate="$1"
+  local released="$2"
+  local candidate_parts=()
+  local released_parts=()
+  local width
+  local i
+  local candidate_part
+  local released_part
+
+  [[ "$candidate" =~ ^[0-9]+(\.[0-9]+)*$ ]] || return 2
+  [[ "$released" =~ ^[0-9]+(\.[0-9]+)*$ ]] || return 2
+
+  IFS='.' read -r -a candidate_parts <<< "$candidate"
+  IFS='.' read -r -a released_parts <<< "$released"
+  width="${#candidate_parts[@]}"
+  if [ "${#released_parts[@]}" -gt "$width" ]; then
+    width="${#released_parts[@]}"
+  fi
+
+  for ((i = 0; i < width; i++)); do
+    candidate_part="${candidate_parts[i]:-0}"
+    released_part="${released_parts[i]:-0}"
+    if ((10#$candidate_part > 10#$released_part)); then
+      return 0
+    fi
+    if ((10#$candidate_part < 10#$released_part)); then
+      return 1
+    fi
+  done
+
+  return 1
+}
+
+check_latest_released_version() {
+  if [ "$MODE" != "--upload" ]; then
+    return
+  fi
+
+  require_command curl
+  require_command jq
+
+  local lookup_url
+  local lookup_json
+  local released_version
+  lookup_url="https://itunes.apple.com/lookup?bundleId=${BUNDLE_ID}&country=${APP_STORE_COUNTRY}"
+
+  if ! lookup_json="$(curl -fsSL --connect-timeout 10 --max-time 20 "$lookup_url")"; then
+    echo "unable to verify latest App Store version from Apple Lookup API; refusing upload" >&2
+    echo "lookup: $lookup_url" >&2
+    exit 1
+  fi
+
+  released_version="$(printf '%s' "$lookup_json" | jq -r '.results[0].version // empty')"
+  if [ -z "$released_version" ]; then
+    echo "Apple Lookup API returned no released version for $BUNDLE_ID; refusing upload" >&2
+    exit 1
+  fi
+
+  if ! version_is_greater_than "$APP_VERSION" "$released_version"; then
+    echo "APP_VERSION=$APP_VERSION is not newer than the latest released App Store version $released_version" >&2
+    echo "Set APP_VERSION to the next version before uploading (for example, $released_version -> 1.0.11)." >&2
+    exit 1
+  fi
+
+  echo "App Store version check passed: latest released=$released_version, upload target=$APP_VERSION"
 }
 
 build_app() {
@@ -650,10 +742,14 @@ upload_app() {
 }
 
 verify_bundle() {
-  require_file "$ENTITLEMENTS"
   require_file "$DEBUG_ENTITLEMENTS"
   require_file "$INHERIT_ENTITLEMENTS"
-  plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  if [ "$MODE" = "--unsigned" ]; then
+    plutil -lint "$INFO_PLIST" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  else
+    require_file "$ENTITLEMENTS"
+    plutil -lint "$INFO_PLIST" "$ENTITLEMENTS" "$DEBUG_ENTITLEMENTS" "$INHERIT_ENTITLEMENTS"
+  fi
 
   if [ -f "$APP_RESOURCES/PrivacyInfo.xcprivacy" ]; then
     plutil -lint "$APP_RESOURCES/PrivacyInfo.xcprivacy"
@@ -684,6 +780,12 @@ verify_bundle() {
 }
 
 main() {
+  check_latest_released_version
+
+  if [ "$MODE" != "--unsigned" ]; then
+    prepare_app_store_entitlements
+  fi
+
   build_app
   stage_bundle
 

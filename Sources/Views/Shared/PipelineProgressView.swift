@@ -77,6 +77,10 @@ struct PipelineProgressView: View {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
                 .frame(width: 20, height: 20)
+        case .failed:
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.red)
+                .frame(width: 20, height: 20)
         }
     }
 }

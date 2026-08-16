@@ -1,18 +1,18 @@
 import Foundation
 
 enum SubtitleSegmentationService {
-    private static let strongBreaks: Set<Character> = ["。", "！", "？", "!", "?", ";", "；"]
-    private static let softBreaks: Set<Character> = ["，", ",", "：", ":", "—", "–"]
-    private static let minChunkLength = 4
-    private static let minSoftBreakLength = 8
-    private static let preferredChunkLength = 24
-    private static let hardChunkLength = 42
-    private static let minDuration: TimeInterval = 0.9
-    private static let preferredDuration: TimeInterval = 3.6
-    private static let hardDuration: TimeInterval = 5.2
-    private static let mergeGap: TimeInterval = 0.35
-    private static let continuationDuration: TimeInterval = 12.0
-    private static let continuationLength = 220
+    static let strongBreaks: Set<Character> = ["。", "！", "？", "!", "?", ";", "；"]
+    static let softBreaks: Set<Character> = ["，", ",", "：", ":", "—", "–"]
+    static let minChunkLength = 4
+    static let minSoftBreakLength = 8
+    static let preferredChunkLength = 24
+    static let hardChunkLength = 42
+    static let minDuration: TimeInterval = 0.9
+    static let preferredDuration: TimeInterval = 3.6
+    static let hardDuration: TimeInterval = 5.2
+    static let mergeGap: TimeInterval = 0.35
+    static let continuationDuration: TimeInterval = 12.0
+    static let continuationLength = 220
 
     static func refine(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
         let normalized = segments.compactMap(normalize)
@@ -28,7 +28,7 @@ enum SubtitleSegmentationService {
             .compactMap(normalize)
     }
 
-    private static func normalize(_ segment: SubtitleSegment) -> SubtitleSegment? {
+    static func normalize(_ segment: SubtitleSegment) -> SubtitleSegment? {
         let trimmed = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -38,7 +38,7 @@ enum SubtitleSegmentationService {
         return normalized
     }
 
-    private static func splitIfNeeded(_ segment: SubtitleSegment) -> [SubtitleSegment] {
+    static func splitIfNeeded(_ segment: SubtitleSegment) -> [SubtitleSegment] {
         let duration = segment.end - segment.start
         let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -84,7 +84,7 @@ enum SubtitleSegmentationService {
         }
     }
 
-    private static func words(
+    static func words(
         in segment: SubtitleSegment,
         for part: String,
         startingAt characterOffset: Int?
@@ -107,7 +107,7 @@ enum SubtitleSegmentationService {
         }
     }
 
-    private static func chunkText(_ text: String) -> [String] {
+    static func chunkText(_ text: String) -> [String] {
         var rawParts: [String] = []
         var current = ""
 
@@ -149,7 +149,7 @@ enum SubtitleSegmentationService {
         return mergedTinyParts.isEmpty ? [text] : mergedTinyParts
     }
 
-    private static func mergeTinyTextParts(_ parts: [String]) -> [String] {
+    static func mergeTinyTextParts(_ parts: [String]) -> [String] {
         guard !parts.isEmpty else { return [] }
 
         var merged: [String] = []
@@ -169,152 +169,5 @@ enum SubtitleSegmentationService {
         }
 
         return merged
-    }
-
-    private static func mergeContinuationSegments(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
-        guard !segments.isEmpty else { return [] }
-
-        var merged: [SubtitleSegment] = []
-
-        for segment in segments {
-            guard let normalized = normalize(segment) else { continue }
-
-            if var last = merged.last,
-               shouldMergeContinuation(last: last, next: normalized) {
-                last.end = max(last.end, normalized.end)
-                last.text = joinedText(last.text, normalized.text)
-                last.words = mergedWords(last.words, normalized.words)
-                merged[merged.count - 1] = last
-                continue
-            }
-
-            merged.append(normalized)
-        }
-
-        return merged
-    }
-
-    private static func shouldMergeContinuation(last: SubtitleSegment, next: SubtitleSegment) -> Bool {
-        let gap = next.start - last.end
-        let combinedDuration = next.end - last.start
-        let combinedLength = last.text.count + next.text.count
-
-        guard gap <= mergeGap,
-              combinedDuration <= continuationDuration,
-              combinedLength <= continuationLength
-        else {
-            return false
-        }
-
-        if endsStrongly(last.text) {
-            return false
-        }
-
-        if endsSoftly(last.text), !isVeryShort(last) {
-            return false
-        }
-
-        return true
-    }
-
-    private static func mergeShortSegments(_ segments: [SubtitleSegment]) -> [SubtitleSegment] {
-        guard !segments.isEmpty else { return [] }
-
-        var merged: [SubtitleSegment] = []
-
-        for segment in segments {
-            guard var normalized = normalize(segment) else { continue }
-
-            if var last = merged.last,
-               shouldMerge(last: last, next: normalized) {
-                last.end = max(last.end, normalized.end)
-                last.text = joinedText(last.text, normalized.text)
-                last.words = mergedWords(last.words, normalized.words)
-                merged[merged.count - 1] = last
-                continue
-            }
-
-            if isVeryShort(normalized), merged.isEmpty == false {
-                var last = merged.removeLast()
-                last.end = max(last.end, normalized.end)
-                last.text = joinedText(last.text, normalized.text)
-                last.words = mergedWords(last.words, normalized.words)
-                merged.append(last)
-                continue
-            }
-
-            normalized.end = max(normalized.end, normalized.start + 0.1)
-            merged.append(normalized)
-        }
-
-        return merged
-    }
-
-    private static func shouldMerge(last: SubtitleSegment, next: SubtitleSegment) -> Bool {
-        let gap = next.start - last.end
-        let combinedDuration = next.end - last.start
-        let combinedLength = last.text.count + next.text.count
-
-        if gap > mergeGap || combinedDuration > hardDuration || combinedLength > hardChunkLength {
-            return false
-        }
-
-        if isVeryShort(next) || isVeryShort(last) {
-            return !endsStrongly(last.text) || combinedDuration <= preferredDuration
-        }
-
-        return false
-    }
-
-    private static func isVeryShort(_ segment: SubtitleSegment) -> Bool {
-        let duration = segment.end - segment.start
-        return duration < minDuration || segment.text.count < minChunkLength
-    }
-
-    private static func endsStrongly(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).last.map { strongBreaks.contains($0) } ?? false
-    }
-
-    private static func endsSoftly(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).last.map { softBreaks.contains($0) } ?? false
-    }
-
-    private static func containsBreak(in text: String) -> Bool {
-        text.contains { strongBreaks.contains($0) || softBreaks.contains($0) }
-    }
-
-    private static func joinedText(_ left: String, _ right: String) -> String {
-        let trimmedLeft = left.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedRight = right.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedLeft.isEmpty else { return trimmedRight }
-        guard !trimmedRight.isEmpty else { return trimmedLeft }
-
-        if shouldInsertSpaceBetween(trimmedLeft.last, trimmedRight.first) {
-            return "\(trimmedLeft) \(trimmedRight)"
-        }
-
-        return trimmedLeft + trimmedRight
-    }
-
-    private static func mergedWords(_ left: [SubtitleWord]?, _ right: [SubtitleWord]?) -> [SubtitleWord]? {
-        let merged = (left ?? []) + (right ?? [])
-        return merged.isEmpty ? nil : merged
-    }
-
-    private static func shouldInsertSpaceBetween(_ left: Character?, _ right: Character?) -> Bool {
-        guard let leftScalar = left?.unicodeScalars.last,
-              let rightScalar = right?.unicodeScalars.first
-        else {
-            return false
-        }
-
-        return leftScalar.isASCIIAlphaNumeric && rightScalar.isASCIIAlphaNumeric
-    }
-}
-
-private extension UnicodeScalar {
-    var isASCIIAlphaNumeric: Bool {
-        ("a"..."z").contains(self) || ("A"..."Z").contains(self) || ("0"..."9").contains(self)
     }
 }

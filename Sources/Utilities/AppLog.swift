@@ -12,4 +12,5 @@ enum AppLog {
     static let export = Logger(subsystem: subsystem, category: "export")
     static let watcher = Logger(subsystem: subsystem, category: "watcher")
     static let settings = Logger(subsystem: subsystem, category: "settings")
+    static let updates = Logger(subsystem: subsystem, category: "updates")
 }

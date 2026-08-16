@@ -32,9 +32,7 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            SettingsGroup(title: "基本样式") {
-                SettingsListSection {
+        SettingsListSection {
                     SettingsListRow(title: "画幅") {
                         HStack(spacing: 0) {
                             ForEach(SubtitleCanvasOrientation.allCases) { orientation in
@@ -95,8 +93,6 @@ struct SubtitleStyleSettingsPane: View {
                         }
                         .frame(width: SettingsListMetrics.controlWidth, alignment: .trailing)
                     }
-                }
-            }
         }
         .onAppear(perform: syncPresetFromCurrentStyle)
     }
@@ -121,14 +117,7 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     private func applyOrientation(_ orientation: SubtitleCanvasOrientation) {
-        settings.subtitleStyle.canvasOrientation = orientation
-        settings.subtitleStyle.position = .bottom
-        settings.subtitleStyle.offsetX = 0
-        settings.subtitleStyle.offsetY = orientation == .landscape ? -28 : -84
-        settings.subtitleStyle.positionX = 0
-        settings.subtitleStyle.positionY = orientation == .landscape ? -467 : -495
-        settings.subtitleStyle.positionZ = 0
-        settings.subtitleStyle.fontSize = orientation == .landscape ? 56 : 35
+        settings.switchSubtitleOrientation(to: orientation)
     }
 
     private func applyPreset(_ preset: SubtitleStylePreset) {
@@ -139,7 +128,7 @@ struct SubtitleStyleSettingsPane: View {
         settings.subtitleStyle.offsetX = 0
         settings.subtitleStyle.offsetY = settings.subtitleStyle.canvasOrientation == .landscape ? -28 : -84
         settings.subtitleStyle.positionX = 0
-        settings.subtitleStyle.positionY = settings.subtitleStyle.canvasOrientation == .landscape ? -467 : -495
+        settings.subtitleStyle.positionY = settings.subtitleStyle.canvasOrientation == .landscape ? -500 : -450
         settings.subtitleStyle.positionZ = 0
         settings.subtitleStyle.lineSpacing = 0
         settings.subtitleStyle.characterSpacing = 0
@@ -235,144 +224,77 @@ struct SubtitleStyleSettingsPane: View {
     }
 
     private func positionField(_ label: String, value: Binding<Double>) -> some View {
+        WholeNumberField(label: label, value: value)
+    }
+}
+
+private struct WholeNumberField: View {
+    let label: String
+    @Binding var value: Double
+    @State private var draft: String
+    @FocusState private var isFocused: Bool
+
+    init(label: String, value: Binding<Double>) {
+        self.label = label
+        self._value = value
+        self._draft = State(initialValue: Self.stringValue(value.wrappedValue))
+    }
+
+    var body: some View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-            TextField(label, value: value, format: .number.precision(.fractionLength(0)))
+
+            TextField(label, text: $draft)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
+                .multilineTextAlignment(.trailing)
+                .focused($isFocused)
+                .onChange(of: draft) { _, newValue in
+                    let sanitized = Self.sanitize(newValue)
+                    if sanitized != newValue {
+                        draft = sanitized
+                    }
+                    if let number = Int(sanitized) {
+                        value = Double(number)
+                    }
+                }
+                .onChange(of: isFocused) { _, focused in
+                    if !focused {
+                        commit()
+                    }
+                }
+                .onChange(of: value) { _, newValue in
+                    guard !isFocused else { return }
+                    let formatted = Self.stringValue(newValue)
+                    if draft != formatted {
+                        draft = formatted
+                    }
+                }
+                .onSubmit {
+                    commit()
+                }
                 .frame(width: 64)
         }
     }
-}
 
-private struct SubtitlePresetButton: View {
-    private struct TextOffset: Identifiable {
-        let id: Int
-        let size: CGSize
+    private func commit() {
+        let number = Int(draft) ?? Int(value.rounded())
+        value = Double(number)
+        draft = Self.stringValue(value)
     }
 
-    let preset: SubtitleStylePreset
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                presetSample
-
-                Text(preset.rawValue)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-            }
-            .frame(width: 92, height: 74)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color(nsColor: .windowBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? SettingsVisualTokens.selectedBorder : SettingsVisualTokens.choiceBorder,
-                        lineWidth: SettingsVisualTokens.borderWidth
-                    )
-            )
+    private static func sanitize(_ input: String) -> String {
+        let isNegative = input.first == "-"
+        let digits = input.filter { $0.isNumber }
+        if isNegative {
+            return digits.isEmpty ? "-" : "-\(digits)"
         }
-        .buttonStyle(.plain)
+        return digits
     }
 
-    private var presetSample: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-
-            if presetUsesFill {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(fillColor)
-                    .frame(width: 44, height: 30)
-            }
-
-            outlinedText
-        }
-        .frame(width: 54, height: 34)
-    }
-
-    private var outlinedText: some View {
-        ZStack {
-            if !presetUsesFill {
-                ForEach(outlineOffsets) { offset in
-                    Text("Aa")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(strokeColor)
-                        .offset(offset.size)
-                }
-            }
-
-            Text("Aa")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(textColor)
-        }
-    }
-
-    private var outlineOffsets: [TextOffset] {
-        [
-            CGSize(width: -1.2, height: 0),
-            CGSize(width: 1.2, height: 0),
-            CGSize(width: 0, height: -1.2),
-            CGSize(width: 0, height: 1.2),
-            CGSize(width: -1.2, height: -1.2),
-            CGSize(width: 1.2, height: -1.2),
-            CGSize(width: -1.2, height: 1.2),
-            CGSize(width: 1.2, height: 1.2)
-        ].enumerated().map { TextOffset(id: $0.offset, size: $0.element) }
-    }
-
-    private var textColor: Color {
-        switch preset {
-        case .whiteTextBlackOutline, .whiteTextDarkFill, .whiteTextBlueFill:
-            return .white
-        case .blackTextWhiteOutline:
-            return Color(hexLiteral: "#111111")
-        case .yellowTextBlackOutline:
-            return Color(hexLiteral: "#FFD84D")
-        }
-    }
-
-    private var strokeColor: Color {
-        switch preset {
-        case .whiteTextBlackOutline, .yellowTextBlackOutline:
-            return Color(hexLiteral: "#111111")
-        case .blackTextWhiteOutline:
-            return .white
-        case .whiteTextDarkFill, .whiteTextBlueFill:
-            return .clear
-        }
-    }
-
-    private var fillColor: Color {
-        switch preset {
-        case .whiteTextDarkFill:
-            return Color(hexLiteral: "#111111").opacity(0.82)
-        case .whiteTextBlueFill:
-            return Color(hexLiteral: "#1358D6").opacity(0.82)
-        default:
-            return .clear
-        }
-    }
-
-    private var presetUsesFill: Bool {
-        switch preset {
-        case .whiteTextDarkFill, .whiteTextBlueFill:
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-private extension Color {
-    init(hexLiteral: String) {
-        self = colorFromHex(hexLiteral)
+    private static func stringValue(_ value: Double) -> String {
+        String(Int(value.rounded()))
     }
 }

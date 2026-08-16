@@ -25,6 +25,7 @@
 4. 提交`oss://`地址并轮询Model API任务。
 5. 完成后把统一字幕片段交给现有编辑器和导出链路。
 6. 用户中途取消时调用任务取消接口；已预留但未结算的秒数由服务端返还，客户端不继续轮询或回填结果。
+7. 提交阶段若服务端确认上游暂时不可用且已返还预留秒数，客户端显示明确原因，并引导用户稍后点击顶部任务记录继续；页面不增加重复的重试或取消按钮。
 
 ## Apple购买
 
@@ -57,7 +58,8 @@
 - `SmartServiceStore`：StoreKit商品、pending Key入Keychain、`appAccountToken`购买、Billing轮询和钱包刷新。
 - TestFlight首装读取`AppTransaction.shared`失败时按StoreKit恢复路径调用`AppTransaction.refresh()`；打开智能服务设置页会再次尝试领取，失败时显示可见提示。
 - `OfficialSmartServiceClient`：中国区钱包、上传会话、任务提交与轮询；官方Key与BYOK Key分开。
+- `OfficialSmartServiceClient`会解析提交失败响应中的稳定错误码、`retryable`和`reservationReleased`，不会再把可恢复的上游503简化成只有HTTP状态的提示。
 - `OSSMultipartUploader`：将音频写入沙箱临时multipart文件后流式直传阿里HTTPS Host，请求完成后删除临时副本。
 - 智能服务设置Pane已接入剩余时长、官方区域、购买、刷新和设为当前引擎。
-- `swift build`通过；`swift test`共18项通过，其中3项固定中国区、语言映射和三端商品ID契约。
+- `swift build`通过；`swift test`共70项通过，包含提交阶段503、额度已返还和顶部任务记录恢复文案的回归测试。
 - 待联调：StoreKit Sandbox真实商品与Server Notification、阿里上传Policy、长音频直传、ASR、校对和实际秒数。

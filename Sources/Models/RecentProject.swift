@@ -8,6 +8,7 @@ struct RecentProject: Identifiable, Codable, Equatable {
     var durationLabel: String
     var modifiedLabel: String
     var subtitleCount: Int
+    var bookmarkData: Data?
 
     init(
         id: UUID = UUID(),
@@ -16,7 +17,8 @@ struct RecentProject: Identifiable, Codable, Equatable {
         kind: String,
         durationLabel: String,
         modifiedLabel: String,
-        subtitleCount: Int
+        subtitleCount: Int,
+        bookmarkData: Data? = nil
     ) {
         self.id = id
         self.name = name
@@ -25,6 +27,7 @@ struct RecentProject: Identifiable, Codable, Equatable {
         self.durationLabel = durationLabel
         self.modifiedLabel = modifiedLabel
         self.subtitleCount = subtitleCount
+        self.bookmarkData = bookmarkData
     }
 
     static let samples: [RecentProject] = [

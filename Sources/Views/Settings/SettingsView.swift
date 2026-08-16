@@ -3,24 +3,51 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selection: SettingsSection = .general
+    @AppStorage("subforge.localTranscriptionEngine")
+    private var storedLocalTranscriptionEngine = TranscriptionEngine.funASRLocal.rawValue
+
+    private var selectedSubtitlePlan: SubtitlePlan {
+        SubtitlePlan(engine: model.settings.transcriptionEngine)
+    }
+
+    private var storedLocalEngine: TranscriptionEngine {
+        guard let engine = TranscriptionEngine(rawValue: storedLocalTranscriptionEngine),
+              SubtitlePlan.localEngines.contains(engine) else {
+            return .funASRLocal
+        }
+        return engine
+    }
+
+    private var pageTitleDetail: String? {
+        selection == .subtitles ? selectedSubtitlePlan.title : nil
+    }
 
     private var settingsBinding: Binding<AppSettings> {
         Binding(
             get: { model.settings },
-            set: { model.settings = $0 }
+            set: { newSettings in
+                var synchronizedSettings = newSettings
+                synchronizedSettings.synchronizeActiveSubtitleStyleConfiguration()
+                model.settings = synchronizedSettings
+                model.persistSettingsImmediately()
+            }
         )
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            SettingsSidebar(selection: $selection)
+            SettingsSidebar(
+                selection: $selection,
+                selectedSubtitlePlan: selectedSubtitlePlan,
+                onSelectSubtitlePlan: selectSubtitlePlan
+            )
                 .frame(width: 240)
 
             Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    SettingsPageHeader(section: selection)
+                    SettingsPageHeader(title: selection.rawValue, detail: pageTitleDetail)
 
                     switch selection {
                     case .general:
@@ -43,6 +70,36 @@ struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .background(SettingsWindowChromeConfigurator())
+        .onAppear(perform: rememberLocalEngineIfNeeded)
+        .onChange(of: model.settings.transcriptionEngine) { _, engine in
+            guard SubtitlePlan.localEngines.contains(engine) else { return }
+            storedLocalTranscriptionEngine = engine.rawValue
+        }
+        .onChange(of: selection) { _, _ in
+            model.persistSettingsImmediately()
+        }
+        .onDisappear {
+            model.persistSettingsImmediately()
+        }
+    }
+
+    private func selectSubtitlePlan(_ plan: SubtitlePlan) {
+        rememberLocalEngineIfNeeded()
+        selection = .subtitles
+
+        switch plan {
+        case .official:
+            model.settings.transcriptionEngine = .officialSmart
+        case .custom:
+            model.settings.transcriptionEngine = .cloudASR
+        case .local:
+            model.settings.transcriptionEngine = storedLocalEngine
+        }
+    }
+
+    private func rememberLocalEngineIfNeeded() {
+        let engine = model.settings.transcriptionEngine
+        guard SubtitlePlan.localEngines.contains(engine) else { return }
+        storedLocalTranscriptionEngine = engine.rawValue
     }
 }

@@ -6,6 +6,7 @@ struct ProjectSidebar: View {
 
     let onImport: () -> Void
     let onOpenSettings: () -> Void
+    let onOpenUsageAndUpdates: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -24,9 +25,14 @@ struct ProjectSidebar: View {
 
             Divider()
 
+            usageAndUpdatesRow
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+
             settingsRow
             .padding(.horizontal, 14)
-            .padding(.vertical, 14)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
         }
         .frame(width: 280)
         .background(.regularMaterial)
@@ -214,6 +220,22 @@ struct ProjectSidebar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture(perform: onOpenSettings)
+    }
+
+    private var usageAndUpdatesRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "questionmark.circle")
+                .frame(width: 18)
+            Text("使用说明与更新")
+            Spacer()
+        }
+        .font(.system(size: 14, weight: .semibold))
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onOpenUsageAndUpdates)
     }
 
     private func iconName(for kind: String) -> String {

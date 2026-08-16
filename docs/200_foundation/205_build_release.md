@@ -22,6 +22,9 @@
 - 站外 Developer ID 公证分发：`./script/release_developer_id.sh` → `dist/developer-id/SubForge-x.y.z.zip`
 - 沙盒签名校验：`CODE_SIGN=1 ./script/build_and_run.sh --verify`
 - 使用真实证书签名：`CODE_SIGN_IDENTITY="Apple Distribution: <Name> (<Team ID>)" ./script/build_and_run.sh release`
+- 版本内容源：`release-content/`
+- 正式内容地址：`https://gobicowboy.cn/projects/subforge/content/manifest.json`
+- 版本内容部署目标：`/Users/jago/Documents/docker/project/Astro_Blog/public/projects/subforge/content/`
 
 ## 3. 当前交付产物
 
@@ -44,7 +47,7 @@
 - 当前真实运行入口已经统一到 `script/build_and_run.sh`
 - SwiftUI GUI 应用不再建议直接运行 `.build/.../SubForge` 裸可执行文件，统一通过 `dist/SubForge.app` 或脚本启动
 - 本地 Whisper 依赖 `whisper-cli` 与模型文件，云端能力依赖用户自行配置 Key
-- 签名准备文件已进入仓库：`Config/SubForge.entitlements`（App Store）、`Config/SubForge.developer-id.entitlements`（站外）、`Config/SubForge.debug.entitlements`、`Config/SubForge.inherit.entitlements`，以及 `Resources/PrivacyInfo.xcprivacy`
+- 签名准备文件已进入仓库：`Config/SubForge.entitlements.template`（App Store，Team ID 仅在本机生成）、`Config/SubForge.developer-id.entitlements`（站外）、`Config/SubForge.debug.entitlements`、`Config/SubForge.inherit.entitlements`，以及 `Resources/PrivacyInfo.xcprivacy`
 - App Store 版需要开启 App Sandbox、用户选择文件读写、网络访问与 Apple Events entitlement；语音识别使用 `NSSpeechRecognitionUsageDescription`，不在签名 entitlement 中声明
 - 云端 ASR / 校对 API Key 必须写入 Keychain，普通偏好才写入 UserDefaults
 - 监听目录与自定义导出目录必须通过 security-scoped bookmark 恢复沙盒访问权限
@@ -53,12 +56,19 @@
 - Whisper 与 FunASR 模型权重默认不进入开发、App Store 或 Developer ID 包；FunASR 运行时仍随包提供，权重从设置页按需下载。开发验证可显式设置 `BUNDLE_FUNASR_MODELS=1`
 - 开发包和 Developer ID 包额外嵌入 `libggml-metal` 以启用 GPU；App Store 包保持 CPU 路径
 - App Store release 脚本默认使用时间戳 `APP_BUILD`，避免重复上传已存在的 `CFBundleVersion`
+- App Store `--upload` 会在构建、签名之前通过 Apple Lookup API 查询当前已上架版本（默认中国区）；当 `APP_VERSION` 不高于线上版本时主动终止，避免向已发布版本错误上传。可用 `APP_STORE_COUNTRY` 切换查询地区
 - App Store release 脚本会自动查找 `SubForge_Mac_App_Store.provisionprofile`，优先路径包括项目目录、`Config/`、`~/Downloads/`、Xcode provisioning profile 目录
 - App Store release 脚本会自动查找 `Apple Distribution` 应用签名证书；Installer 证书通过 `security find-certificate` 查找，因为它不会出现在 `security find-identity -p codesigning` 里
 - 已验证上传成功的构建：`1.0 (2026070403)`，Delivery UUID `2815273a-d6cf-4a6a-a78c-031b3d67b09e`
+- 2026-07-26 已成功上传 TestFlight 构建：版本 `1.0.6`，Build `20260726201820`，Delivery UUID `14d38beb-65f2-4b2b-a5cd-090a9c04b8f4`。`1.0.5` 因预发布版本已关闭被 App Store Connect 拒绝，随后提升到 `1.0.6` 上传成功
+- 2026-08-03 已成功上传 TestFlight 构建：版本 `1.0.8`，Build `20260803095411`，Delivery UUID `b0d3467d-1508-4163-92b6-c12635940702`
+- 2026-08-14 已成功上传 TestFlight 构建：版本 `1.0.9`，Build `20260814171019`，Delivery UUID `c0a66b0e-68d7-4779-9c83-cbb2c12fa0f8`；源码提交 `e5b5300`
+- 2026-08-15 已成功上传 App Store Connect 构建：版本 `1.0.10`，Build `20260815085833`，Delivery UUID `15780ed5-9222-47e6-bee7-42a19788ad0d`；源码提交 `44d9675`。`1.0.9` 已获批且预发布通道关闭，首次上传被拒后按 Apple 要求提升版本；`1.0.10` 于 2026-08-16 正式发布，`release-content/` 已补齐 `1.0.9`、`1.0.10` 并将官方商店地址更新为 `id6786057836`
+- 2026-07-26 已通过 Parallels “分发版”快照验证最新本地构建：宿主机与虚拟机主程序哈希一致，签名校验通过，应用未内置 FunASR 模型权重
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出
 - App Store `--upload` 必须与 `--signed` / `--package` 一样调用 `sign_app`；历史上漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会直接拒绝
+- `release-content/manifest.json` 的 `latestVersion` 必须在对应渠道实际上架后才更新；历史 release/help 文件不得删除；部署前必须重新计算并核对 SHA-256
 
 ## 6. 后续重做建议
 
