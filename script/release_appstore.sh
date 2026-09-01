@@ -199,7 +199,7 @@ check_latest_released_version() {
   local released_version
   lookup_url="https://itunes.apple.com/lookup?bundleId=${BUNDLE_ID}&country=${APP_STORE_COUNTRY}"
 
-  if ! lookup_json="$(curl -fsSL --connect-timeout 10 --max-time 20 "$lookup_url")"; then
+  if ! lookup_json="$(curl --ipv4 -fsSL --connect-timeout 10 --max-time 20 "$lookup_url")"; then
     echo "unable to verify latest App Store version from Apple Lookup API; refusing upload" >&2
     echo "lookup: $lookup_url" >&2
     exit 1
