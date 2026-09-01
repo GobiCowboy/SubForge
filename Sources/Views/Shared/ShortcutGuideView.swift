@@ -88,23 +88,7 @@ private struct ShortcutKeyGroup: View {
     }
 }
 
-private struct ShortcutKeycap: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.24), lineWidth: 1)
-            )
-    }
-}
+private typealias ShortcutKeycap = KeyboardShortcutBadge
 
 struct ShortcutGuideSheet: View {
     @EnvironmentObject private var model: AppModel

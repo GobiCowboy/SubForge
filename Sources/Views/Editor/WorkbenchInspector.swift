@@ -68,27 +68,54 @@ extension WorkbenchView {
 
                     Divider()
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("编辑操作")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("编辑操作")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("分割：文本光标优先，播放头兜底")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("快捷键")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.tertiary)
+                        }
 
-                        Button("在前方插入") { model.insertSegment(before: true) }
-                            .buttonStyle(.bordered)
+                        VStack(spacing: 6) {
+                            EditorActionRow(title: "在前方插入", icon: "arrow.up", shortcut: "⇧⌘↑") {
+                                model.insertSegment(before: true)
+                            }
+                            .disabled(model.selectedSegment == nil)
 
-                        Button("在后方插入") { model.insertSegment(before: false) }
-                            .buttonStyle(.bordered)
+                            EditorActionRow(title: "在后方插入", icon: "arrow.down", shortcut: "⇧⌘↓") {
+                                model.insertSegment(before: false)
+                            }
+                            .disabled(model.selectedSegment == nil)
 
-                        Button("合并下一条") { model.mergeWithNext() }
-                            .buttonStyle(.bordered)
+                            EditorActionRow(title: "合并下一条", icon: "arrow.triangle.merge", shortcut: "⇧⌘M") {
+                                model.mergeWithNext()
+                            }
                             .disabled(model.selectedIndex == model.segments.indices.last)
 
-                        Button("分割当前字幕") { model.splitSelectedSubtitle() }
-                            .buttonStyle(.bordered)
+                            EditorActionRow(title: "分割当前字幕", icon: "scissors", shortcut: "⌘B", tint: .accentColor) {
+                                model.splitSelectedSubtitle()
+                            }
+                            .disabled(model.selectedSegment == nil)
 
-                        Button("删除字幕", role: .destructive) { model.deleteSelected() }
-                            .buttonStyle(.bordered)
+                            EditorActionRow(title: "删除字幕", icon: "trash", shortcut: "⌘⌫", tint: .red, isDestructive: true) {
+                                model.deleteSelected()
+                            }
+                            .disabled(model.selectedSegment == nil)
+                        }
                     }
+                    .padding(10)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
 
                     Divider()
 
@@ -240,5 +267,48 @@ extension WorkbenchView {
         case .none:
             return nil
         }
+    }
+}
+
+private struct EditorActionRow: View {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let title: String
+    let icon: String
+    let shortcut: String
+    var tint: Color = .secondary
+    var isDestructive = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isEnabled ? tint : .secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        (isEnabled ? tint : Color.secondary).opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
+
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isEnabled ? (isDestructive ? .red : .primary) : .secondary)
+
+                Spacer(minLength: 8)
+
+                KeyboardShortcutBadge(text: shortcut, compact: true)
+                    .opacity(isEnabled ? 1 : 0.55)
+            }
+            .padding(.horizontal, 9)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+            .background(
+                Color.primary.opacity(isEnabled ? 0.045 : 0.018),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .help("\(title)（\(shortcut)）")
     }
 }
