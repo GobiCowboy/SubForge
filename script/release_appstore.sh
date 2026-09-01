@@ -4,7 +4,7 @@ set -euo pipefail
 APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 TEAM_ID="${TEAM_ID:-}"
-APP_VERSION="${APP_VERSION:-1.0.10}"
+APP_VERSION="${APP_VERSION:-1.0.11}"
 # App Store Connect 不允许在已上架版本上继续添加新构建；上传前会用 Apple Lookup API 校验。
 APP_STORE_COUNTRY="${APP_STORE_COUNTRY:-cn}"
 # 必须比历史上传的 CFBundleVersion 更大；用 14 位时间戳避免 12 位比旧 14 位小
@@ -45,7 +45,7 @@ Modes:
   --upload    Build, sign, package, and upload the .pkg to App Store Connect.
 
 Optional environment:
-  APP_VERSION=1.0.10
+  APP_VERSION=1.0.11
   APP_BUILD=$(date +%Y%m%d%H%M%S)
   TEAM_ID="<Apple Developer Team ID>"
   DEVELOPMENT_SIGN_IDENTITY="<Apple Development certificate SHA-1>"

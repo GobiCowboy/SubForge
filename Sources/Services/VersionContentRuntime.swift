@@ -27,8 +27,8 @@ enum VersionContentRuntime {
     }
 
     static var appVersion: AppVersion {
-        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.10"
-        return AppVersion(value) ?? AppVersion("1.0.10")!
+        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.11"
+        return AppVersion(value) ?? AppVersion("1.0.11")!
     }
 
     static var distributionChannel: AppDistributionChannel {
