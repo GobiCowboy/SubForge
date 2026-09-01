@@ -154,17 +154,29 @@ struct EditableSubtitleRowView: View {
     }
 
     private var contentCell: some View {
-        TextField("输入字幕内容", text: $contentText, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .foregroundStyle(.primary)
-            .lineLimit(1...3)
+        SubtitleTextEditor(
+            text: $contentText,
+            isEditable: !model.isPlaying,
+            isFocused: focusedField == .content,
+            onFocusChange: { focused in
+                if focused {
+                    model.selectSegment(segment.id)
+                    model.beginEditingSelectedSubtitle(surface: .table)
+                }
+                focusedField = focused ? .content : nil
+            },
+            onSelectionChange: { range in
+                model.setSubtitleTextCaret(segmentID: segment.id, range: range)
+            },
+            onRequestSplit: {
+                model.selectSegment(segment.id)
+                model.splitSelectedSubtitle()
+            }
+        )
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 90, alignment: .leading)
             .background(cellBackground)
             .disabled(model.isPlaying)
-            .focused($focusedField, equals: .content)
             .onTapGesture {
                 model.selectSegment(segment.id)
                 if !model.isPlaying {
@@ -193,6 +205,10 @@ struct EditableSubtitleRowView: View {
             Button("合并下一条") {
                 model.selectSegment(segment.id)
                 model.mergeWithNext()
+            }
+            Button("分割当前字幕") {
+                model.selectSegment(segment.id)
+                model.splitSelectedSubtitle()
             }
             Divider()
             Button("删除当前字幕", role: .destructive) {

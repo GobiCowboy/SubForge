@@ -37,11 +37,28 @@ extension WorkbenchView {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
 
-                        TextEditor(text: Binding(
-                            get: { model.selectedSegment?.text ?? "" },
-                            set: { model.updateSelectedText($0) }
-                        ))
-                        .font(.system(size: 13))
+                        SubtitleTextEditor(
+                            text: Binding(
+                                get: { model.selectedSegment?.text ?? "" },
+                                set: { model.updateSelectedText($0) }
+                            ),
+                            isEditable: !model.isPlaying,
+                            isFocused: inspectorFocus == .text,
+                            onFocusChange: { focused in
+                                if focused {
+                                    model.beginEditingSelectedSubtitle(surface: .inspector)
+                                }
+                                inspectorFocus = focused ? .text : nil
+                            },
+                            onSelectionChange: { range in
+                                if let segmentID = model.selectedSegmentID {
+                                    model.setSubtitleTextCaret(segmentID: segmentID, range: range)
+                                }
+                            },
+                            onRequestSplit: {
+                                model.splitSelectedSubtitle()
+                            }
+                        )
                         .frame(minHeight: 140)
                         .padding(8)
                         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
@@ -65,6 +82,9 @@ extension WorkbenchView {
                         Button("合并下一条") { model.mergeWithNext() }
                             .buttonStyle(.bordered)
                             .disabled(model.selectedIndex == model.segments.indices.last)
+
+                        Button("分割当前字幕") { model.splitSelectedSubtitle() }
+                            .buttonStyle(.bordered)
 
                         Button("删除字幕", role: .destructive) { model.deleteSelected() }
                             .buttonStyle(.bordered)

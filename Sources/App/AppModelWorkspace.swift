@@ -108,6 +108,7 @@ extension AppModel {
         currentDocumentAccess = nil
         segments = []
         selectedSegmentID = nil
+        subtitleTextCaret = nil
         currentTime = 0
         playbackDuration = 0
         waveformSamples = []

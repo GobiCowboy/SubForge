@@ -32,3 +32,4 @@
 | I-025 | 智能服务设置页 | 已存在 | `SmartServiceSettingsPane`；余额、价格、购买、刷新和隐私路径 |
 | I-026 | 通用字幕规则设置 | 已存在 | `GeneralSubtitleProcessingSection`统一管理最大字数、默认推荐标点、逐视频热词、固定热词和AI校对提示词 |
 | I-027 | 热词工作流 | 已存在 | `AppModelHotwords` + `HotwordPromptSheet`负责逐视频热词；`TranscriptionRunOptions`合并已启用的固定热词并生成任务快照 |
+| I-028 | 字幕手动分割与光标桥接 | 已存在 | `SubtitleSplitService` 负责光标 / 播放头分割、词级时间保留和无词级时间估算；`SubtitleTextEditor` 通过 AppKit `NSTextView` 提供真实光标位置、右键分割入口和文本编辑绑定 |

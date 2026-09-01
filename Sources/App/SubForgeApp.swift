@@ -55,6 +55,36 @@ struct SubForgeApp: App {
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(model.segments.isEmpty)
 
+                Button("分割当前字幕") {
+                    model.splitSelectedSubtitle()
+                }
+                .keyboardShortcut("b", modifiers: .command)
+                .disabled(model.selectedSegment == nil)
+
+                Button("在前方插入") {
+                    model.insertSegment(before: true)
+                }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .shift])
+                .disabled(model.selectedSegment == nil)
+
+                Button("在后方插入") {
+                    model.insertSegment(before: false)
+                }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
+                .disabled(model.selectedSegment == nil)
+
+                Button("合并下一条") {
+                    model.mergeWithNext()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                .disabled(model.selectedIndex == model.segments.indices.last)
+
+                Button("删除当前字幕", role: .destructive) {
+                    model.deleteSelected()
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .disabled(model.selectedSegment == nil)
+
                 Divider()
 
                 Button("返回首页") {

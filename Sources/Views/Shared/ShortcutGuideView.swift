@@ -16,6 +16,10 @@ private let editorShortcutItems: [ShortcutGuideItem] = [
     .init(keys: ["⇧ Space"], description: "编辑状态下输入空格。中文输入法组词时，Space 会保留给输入法选词。"),
     .init(keys: ["Tab", "⇧ Tab"], description: "在开始时间、结束时间、字幕文本之间切换焦点。"),
     .init(keys: ["Esc"], description: "退出当前编辑状态。"),
+    .init(keys: ["⌘B"], description: "分割当前字幕。文本光标优先；没有有效光标时使用当前播放头。"),
+    .init(keys: ["⇧⌘↑", "⇧⌘↓"], description: "在当前字幕前方 / 后方插入空字幕。"),
+    .init(keys: ["⇧⌘M"], description: "合并当前字幕与下一条。"),
+    .init(keys: ["⌘⌫"], description: "删除当前字幕。"),
     .init(keys: ["J"], description: "后退 1 秒。"),
     .init(keys: ["K"], description: "暂停并复制当前时间戳。"),
     .init(keys: ["L"], description: "按当前速度播放，并在 0.5x 到 2.0x 之间循环调速。"),
@@ -23,7 +27,7 @@ private let editorShortcutItems: [ShortcutGuideItem] = [
 ]
 
 private let compactShortcutItems: [ShortcutGuideItem] = {
-    let primaryItems = Array(editorShortcutItems.prefix(5))
+    let primaryItems = Array(editorShortcutItems.prefix(6))
     guard let exportItem = editorShortcutItems.last else { return primaryItems }
     return primaryItems + [exportItem]
 }()
