@@ -118,6 +118,12 @@ enum SettingsStore {
             changed = true
         }
 
+        let normalizedFrameRate = ExportSettings.clampFrameRate(settings.exportSettings.fps)
+        if settings.exportSettings.fps != normalizedFrameRate {
+            settings.exportSettings.fps = normalizedFrameRate
+            changed = true
+        }
+
         if settings.proofreadingEngine == .appleLocal {
             settings.proofreadingEngine = .cloudLLM
         }
