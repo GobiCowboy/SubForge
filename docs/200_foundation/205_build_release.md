@@ -64,6 +64,7 @@
 - 2026-08-03 已成功上传 TestFlight 构建：版本 `1.0.8`，Build `20260803095411`，Delivery UUID `b0d3467d-1508-4163-92b6-c12635940702`
 - 2026-08-14 已成功上传 TestFlight 构建：版本 `1.0.9`，Build `20260814171019`，Delivery UUID `c0a66b0e-68d7-4779-9c83-cbb2c12fa0f8`；源码提交 `e5b5300`
 - 2026-08-15 已成功上传 App Store Connect 构建：版本 `1.0.10`，Build `20260815085833`，Delivery UUID `15780ed5-9222-47e6-bee7-42a19788ad0d`；源码提交 `44d9675`。`1.0.9` 已获批且预发布通道关闭，首次上传被拒后按 Apple 要求提升版本；`1.0.10` 于 2026-08-16 正式发布，`release-content/` 已补齐 `1.0.9`、`1.0.10` 并将官方商店地址更新为 `id6786057836`
+- 2026-09-01 已成功上传 App Store Connect 构建：版本 `1.0.11`，Build `20260901232611`，Delivery UUID `c0b4e8a8-d265-4244-a9a8-c191334d1145`；源码提交 `7b6fd7f`。本版本包含字幕分割、编辑快捷键、播放光标跟随和暂停后保留编辑光标；上传后等待 App Store Connect 处理，`manifest.json` 的正式 `latestVersion` 暂不提前更新
 - 2026-07-26 已通过 Parallels “分发版”快照验证最新本地构建：宿主机与虚拟机主程序哈希一致，签名校验通过，应用未内置 FunASR 模型权重
 - Developer ID 站外包使用 `Config/SubForge.developer-id.entitlements`（**不**启用 App Sandbox）；App Store 包使用 `Config/SubForge.entitlements`（启用 Sandbox）。两者不可混用
 - Developer ID 打包时 `Frameworks/` 内 `whisper-cli` 与 dylib 必须与主程序使用同一套 **非 sandbox** entitlements；不要用 `SubForge.inherit.entitlements`（sandbox+inherit），否则 whisper-cli 会以信号 5 退出

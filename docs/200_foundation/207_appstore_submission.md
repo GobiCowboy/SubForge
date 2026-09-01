@@ -205,3 +205,13 @@ No account is required. No sample login credentials are needed.
 - `1.0.9` 已获批且预发布通道关闭，首次上传被 Apple 以 `90062 / 90186` 拒绝；提升到 `1.0.10` 后上传成功。
 - 上传前通过 App 75 项测试、Release 构建、FCPXML 1.13 DTD 校验、用户 Final Cut Pro 实际验收、App Store 应用签名、Installer 签名及 bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
 - `1.0.10` 于 2026-08-16 正式发布；Apple 官方 Lookup API 返回商店 ID `6786057836`，版本内容源已指向正式 App Store 页面。
+
+## 14. 2026-09-01 App Store Connect 交付记录
+
+- 本版本为 `1.0.11`，包含字幕分割、编辑快捷键、播放光标跟随和暂停后保留编辑光标。
+- Build：`20260901232611`
+- 源码提交：`7b6fd7f`
+- Delivery UUID：`c0b4e8a8-d265-4244-a9a8-c191334d1145`
+- 上传前通过 Swift 86 项测试、Release 构建、Apple Distribution 签名、Mac App Store provisioning profile、Installer 签名、bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
+- `.pkg` SHA-256：`c3682b504b5723babdea6f430c48e2768f53649c3c017bbb03f577a72dea9f4b`
+- 上传成功后等待 App Store Connect 处理；处理完成并可供用户取得前，`release-content/manifest.json` 的正式 `latestVersion` 仍保持 `1.0.10`。
