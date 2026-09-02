@@ -8,7 +8,7 @@ extension AppModel {
 
     func makeFCPXML(projectName: String, segments: [SubtitleSegment]) -> String {
         let style = settings.subtitleStyle
-        let fps = max(settings.exportSettings.fps, 1)
+        let fps = ExportSettings.clampFrameRate(settings.exportSettings.fps)
         let format = fcpxmlFormat(for: style.canvasOrientation, fps: fps)
         let totalEndFrame = FCPXMLTimelinePlanner.totalEndFrame(
             segments: segments,

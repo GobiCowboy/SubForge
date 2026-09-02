@@ -1,40 +1,48 @@
-# Design QA
+# Sidebar Design QA
 
-- Source visual truth: `/Users/jago/.codex/generated_images/019f7960-d699-7582-906a-f8026ad2b06f/exec-4ac80e91-1886-4c8f-971a-819d05f15673.png`
-- Implementation screenshot: `/Users/jago/Documents/docker/project/SubForge/.codex/artifacts/settings-per-plan-official-final.png`
-- Viewport: macOS 设置窗口 900 × 792 pt（Retina 截图 1800 × 1584 px）；内容区对照裁切 1316 × 1408 px
-- State: 浅色模式；字幕页；官方方案；常用套餐已选择；余额 8 分 27 秒
-- Full-view comparison evidence: `/Users/jago/Documents/docker/project/SubForge/.codex/artifacts/settings-final-comparison.png`（方案一初版）；用户后续明确要求将顶部公共字数滑杆移入各方案配置，最终截图以上述实现截图为准
-- Focused region evidence:
-  - 标题、方案选择和字数滑杆：`/Users/jago/Documents/docker/project/SubForge/.codex/artifacts/settings-top-comparison.png`
-  - 余额、套餐和操作按钮：`/Users/jago/Documents/docker/project/SubForge/.codex/artifacts/settings-purchase-comparison.png`
+- Source visual truth: `/var/folders/0h/k8nffn9j7j334rfb7hy768c80000gn/T/TemporaryItems/NSIRD_screencaptureui_4GlyBZ/Screenshot 2026-09-01 at 16.14.50.png`
+- Additional toolbar references: `/var/folders/0h/k8nffn9j7j334rfb7hy768c80000gn/T/TemporaryItems/NSIRD_screencaptureui_AH4R1K/Screenshot 2026-09-01 at 16.34.33.png` and `/var/folders/0h/k8nffn9j7j334rfb7hy768c80000gn/T/TemporaryItems/NSIRD_screencaptureui_X2NiLD/Screenshot 2026-09-01 at 16.34.49.png`
+- Implementation screenshot: `/var/folders/0h/k8nffn9j7j334rfb7hy768c80000gn/T/com.openai.sky.CUAService/SubForge Screenshot 2026-09-01 at 4.53.25 PM.jpeg`
+- Shortcut guide implementation screenshot: `/var/folders/0h/k8nffn9j7j334rfb7hy768c80000gn/T/com.openai.sky.CUAService/SubForge Screenshot 2026-09-01 at 5.01.07 PM.jpeg`
+- Shortcut guide focus-state screenshot: `/var/folders/0h/k8nffn9j7j334rfb7hy768c800gn/T/com.openai.sky.CUAService/SubForge Screenshot 2026-09-01 at 5.07.45 PM.jpeg`
+- Normalized comparison: `/tmp/SubForge-design-comparison.png`
+- Viewport: native macOS window, `1226 × 768 px`; right inspector uses a `300 pt` logical width
+- Pixels and density: source `384 × 1298 px`; implementation full capture `1226 × 768 px`; both inspector regions normalized to `216 × 745 px` before comparison
+- State: light appearance, SRT imported, first subtitle selected, playback paused, inspector visible
 
 ## Findings
 
-没有需要阻塞交付的 P0、P1 或 P2 差异。
+- Latest playback-caret screenshot: `/var/folders/0h/k8nffn9j7j334rfbhy768c80000gn/T/com.openai.sky.CUAService/SubForge Screenshot 2026-09-01 at 10.47.03 PM.jpeg`; the active subtitle row shows the blue caret at the current text position while playback is running.
+- Playback follow: during SRT playback, the selected subtitle advanced with the current time, the list scrolled to keep it visible, and the playback caret moved continuously across the active subtitle text. In edit mode, the native text editor retains its blinking insertion caret.
+- Pause-to-edit: the pause transition captures the current subtitle and UTF-16 caret offset before stopping playback, then restores that offset after the native text editor becomes first responder; the text entry remains settable and accepts navigation keys instead of falling back to the end of the text.
 
-- 字体与排版：实现使用 macOS 系统字体，字号、字重和层级与视觉稿一致；页面标题略强于设计稿，这是为了与通用、样式、导出和目录监听页面共用同一标题组件。
-- 间距与布局：方案选择、能力列表、方案内字幕分段配置、余额和套餐保持清晰的垂直节奏；大卡片外框已经移除，分隔线承担主要层级。顶部公共字数滑杆按用户最新反馈移除。
-- 颜色与视觉 token：使用系统语义色和强调色；所有设置页容器统一引用 `SettingsVisualTokens`，以官方页边框深度为标准，同时保持深色模式适配能力。
-- 图片与图标：页面没有照片或插画资产；可见图标全部使用统一的 SF Symbols，没有占位图或自绘替代。
-- 文案与内容：设计稿中的核心文案全部保留；额外保留了实时服务状态和云端处理说明，它们属于现有功能反馈和隐私说明。
-- 可访问性与交互：侧栏切换、官方/自定义方案切换、配置状态和表单均可操作；切换到自定义再回到官方时没有出现钥匙串弹窗。
+- No actionable P0, P1, or P2 differences remain after applying the user's final typography, spacing, color, and toolbar adjustments.
+- Fonts and typography: the three section headings use one shared `16 pt` semibold token. Field labels, action names, project metadata, and the footer use one shared `12 pt` secondary token. Time values and shortcut symbols were also reduced by `2 pt` in the earlier pass. The final typography is intentionally smaller than the original reference because the user explicitly requested that adjustment.
+- Spacing and layout rhythm: section order, full-width separators, stacked time fields, compact text editor, five action rows, project metadata, and fixed bottom shortcut entry match the selected hierarchy. Internal section padding, field gaps, action-row gaps, and project-row gaps were reduced in the final pass.
+- Colors and visual tokens: system-adaptive semantic colors preserve the reference's neutral hierarchy. Split and delete now use the same black-and-white treatment as the other editor actions.
+- Image quality and assets: the target contains no raster assets. All icons use matching macOS SF Symbols and remain sharp at native density.
+- Copy and content: all labels and action names match the requested Chinese UI. Shortcut symbols are separated for readability.
+- Interaction and accessibility: the inspector text area is exposed as a settable text entry area; time fields are settable; action rows and the bottom shortcut guide remain native buttons with help labels.
+- Shortcut guide: the redundant “字幕编辑工作台” subtitle is removed. Each command now occupies a distinct row with `16 pt` vertical padding and a full-width divider; `14 pt` bold, primary-color keycaps make the shortcut column visibly stronger than the explanation. The “完成” action reuses the workbench's secondary header-button style.
+- Focus behavior: the shortcut guide's “完成” button keeps the default-action keyboard shortcut but disables the automatic focus-effect ring, so opening the page no longer adds a blue outline. Return was verified to close the sheet successfully.
 
 ## Comparison History
 
-1. 首次实现对照发现选中的购买套餐使用了浅蓝底，而设计稿只使用蓝色边框。已移除套餐填充色并重新构建、截图和对照。
-2. 修正后没有剩余的 P0、P1 或 P2 差异。
-3. 用户验收初版后要求公共字数滑杆不再占据页面顶部。已将其改为官方、自定义、本地三个方案各自独立的配置；这是经确认的设计变更，不计为视觉稿偏差。
+1. Initial implementation used larger `20 pt / 14 pt` heading and secondary typography. The hierarchy and section proportions passed structural comparison, but the user requested a uniform reduction.
+2. Final implementation reduced inspector heading, secondary text, time values, text editor content, shortcut labels, and action icons by `2 pt`. The post-fix normalized comparison is `/tmp/SubForge-design-comparison.png`.
+3. The inspector was compacted, the inactive preview pill was removed, and editor actions were normalized to black and white. The toolbar export and inspector buttons now share one exact `34 pt` height, `7 pt` radius, regular-weight typography, and matching horizontal padding; only their primary and secondary colors differ.
+4. The inspector's first section received an additional `8 pt` top inset, aligning the “当前字幕” baseline with the “隐藏右栏” button. All three inspector section headings were reduced from `18 pt` to `16 pt` while secondary text stayed unchanged.
+5. Editor shortcut badges were increased from `9 pt` to `11 pt`, and the inspector text editor content was increased from `11 pt` to `13 pt`. The final screenshot confirms the shortcut labels remain single-line and fit their rows without compression.
+6. The export and inspector-toggle button typography was reduced from `14 pt` to `12 pt`; both buttons retain the same fixed height and geometry.
+7. The complete shortcut guide was widened to `700 pt`, row spacing and column separation were increased, row dividers were added, and shortcut keycaps were enlarged and darkened. The final screenshot confirms `Tab / Shift + Tab` and the multi-modifier insert shortcuts remain legible and grouped correctly.
+8. The playback-to-edit transition was hardened so the initial caret captured at pause cannot be overwritten by the text view's default first-focus selection; the post-focus restoration was verified with a local playback smoke test.
+
+## Focused Region Evidence
+
+- The normalized side-by-side inspector comparison was used for the right inspector. The final full app screenshot was used for the toolbar focused region, confirming equal button heights, regular font weight, and removal of the preview pill.
 
 ## Follow-up Polish
 
-- P3：实现额外显示服务状态与隐私说明，因此购买区域比设计稿多一行辅助信息；这是为保留现有功能而接受的差异。
-
-## Interaction Verification
-
-- 已验证设置侧栏在通用、字幕和样式之间切换，标题规格保持一致。
-- 已验证官方与自定义方案切换，并确认配置状态位于“转写”和“AI 校对”标签内部。
-- 购买按钮未触发真实交易；本轮只验证布局、可见状态和按钮可用性。
-- 应用通过 `./script/build_and_run.sh run` 构建并启动；`swift test` 27 项测试通过。
+- P3: the source mock uses a slightly cooler fixed background. The implementation keeps semantic macOS colors so dark mode and system appearance continue to work.
 
 final result: passed

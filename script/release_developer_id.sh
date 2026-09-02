@@ -7,7 +7,7 @@ set -euo pipefail
 APP_NAME="SubForge"
 BUNDLE_ID="com.jago.subforge"
 TEAM_ID="${TEAM_ID:-}"
-APP_VERSION="${APP_VERSION:-1.0.7}"
+APP_VERSION="${APP_VERSION:-1.0.11}"
 APP_BUILD="${APP_BUILD:-$(date +%Y%m%d%H%M%S)}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-Apple-Notary}"

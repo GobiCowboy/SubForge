@@ -74,6 +74,22 @@ import Testing
     #expect(totalEndFrame == 270)
 }
 
+@Test func fcpxmlTimelineUsesConfigured25Fps() throws {
+    let items = FCPXMLTimelinePlanner.makeItems(
+        segments: [SubtitleSegment(start: 600, end: 601, text: "十分钟后的字幕")],
+        totalDuration: 601,
+        fps: 25
+    )
+
+    let title = try #require(items.first { item in
+        if case .title = item.kind { return true }
+        return false
+    })
+
+    #expect(title.startFrame == 15_000)
+    #expect(title.endFrame == 15_025)
+}
+
 @Test func fcpxmlUsesStaticBasicTitleTemplate() {
     #expect(FCPXMLExportConfiguration.titleEffectName == "基本标题")
     #expect(FCPXMLExportConfiguration.titleEffectUID.contains("Basic Title"))

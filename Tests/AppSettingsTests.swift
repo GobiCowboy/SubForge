@@ -108,6 +108,8 @@ import Testing
     let settings = ExportSettings()
 
     #expect(settings.format == .srtAndFCPXML)
+    #expect(settings.format.includesFCPXML)
+    #expect(settings.fps == 30)
     #expect(settings.exportToFinalCutPro)
     #expect(settings.saveLocation == .sameAsSource)
     #expect(settings.overwriteExisting)
@@ -120,6 +122,36 @@ import Testing
     #expect(settings.overwriteExisting)
     #expect(settings.sourceOutputPath.isEmpty)
     #expect(settings.sourceOutputBookmarkData == nil)
+}
+
+@Test func onlyFCPXMLFormatsExposeFrameRateSettings() {
+    #expect(ExportFormat.fcpxml.includesFCPXML)
+    #expect(ExportFormat.srtAndFCPXML.includesFCPXML)
+    #expect(!ExportFormat.srt.includesFCPXML)
+}
+
+@Test func frameRateSettingSupports25FpsAndClampsInvalidValues() throws {
+    var settings = ExportSettings()
+    settings.fps = 25
+
+    let encoded = try JSONEncoder().encode(settings)
+    let decoded = try JSONDecoder().decode(ExportSettings.self, from: encoded)
+    #expect(decoded.fps == 25)
+
+    let legacy = try JSONDecoder().decode(
+        ExportSettings.self,
+        from: Data(#"{"fps":0}"#.utf8)
+    )
+    #expect(legacy.fps == ExportSettings.minimumFrameRate)
+    #expect(ExportSettings.clampFrameRate(999) == ExportSettings.maximumFrameRate)
+}
+
+@Test func normalizeClampsPersistedFrameRate() {
+    var settings = AppSettings()
+    settings.exportSettings.fps = 0
+
+    #expect(SettingsStore.normalize(&settings))
+    #expect(settings.exportSettings.fps == ExportSettings.minimumFrameRate)
 }
 
 @Test func sourceExportDirectoryAuthorizationPersists() throws {

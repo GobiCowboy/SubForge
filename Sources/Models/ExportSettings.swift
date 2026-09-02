@@ -2,6 +2,10 @@ import CryptoKit
 import Foundation
 
 struct ExportSettings: Equatable, Codable {
+    static let frameRatePresets = [24, 25, 30, 50, 60]
+    static let minimumFrameRate = 1
+    static let maximumFrameRate = 240
+
     var format: ExportFormat = .srtAndFCPXML
     var fps: Int = 30
     var width: Int = 1920
@@ -34,11 +38,15 @@ struct ExportSettings: Equatable, Codable {
 
     init() {}
 
+    static func clampFrameRate(_ value: Int) -> Int {
+        min(max(value, minimumFrameRate), maximumFrameRate)
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         format = try container.decodeIfPresent(ExportFormat.self, forKey: .format) ?? .srtAndFCPXML
-        fps = try container.decodeIfPresent(Int.self, forKey: .fps) ?? 30
+        fps = Self.clampFrameRate(try container.decodeIfPresent(Int.self, forKey: .fps) ?? 30)
         width = try container.decodeIfPresent(Int.self, forKey: .width) ?? 1920
         height = try container.decodeIfPresent(Int.self, forKey: .height) ?? 1080
         namingRule = try container.decodeIfPresent(String.self, forKey: .namingRule) ?? "{project_name}_{date}"
@@ -61,6 +69,10 @@ enum ExportFormat: String, CaseIterable, Codable, Identifiable {
     case vtt = "VTT"
 
     var id: String { rawValue }
+
+    var includesFCPXML: Bool {
+        self == .fcpxml || self == .srtAndFCPXML
+    }
 }
 
 enum SaveLocation: String, CaseIterable, Codable, Identifiable {

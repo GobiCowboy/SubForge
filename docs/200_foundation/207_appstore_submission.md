@@ -2,14 +2,14 @@
 
 ## 1. 当前结论
 
-SubForge 已具备 App Store 打包与上传链路；最近一次于 2026-08-15 成功上传 App Store Connect 构建 `1.0.10 (20260815085833)`。
+SubForge 已具备 App Store 打包与上传链路；最近一次于 2026-09-01 成功上传并正式发布 App Store Connect 构建 `1.0.11 (20260901232611)`。
 
 - `script/release_appstore.sh --unsigned`：生成 release app bundle，仅做结构检查，使用 ad-hoc 调试签名。
 - `script/release_appstore.sh --sandbox`：使用 Mac App Development Profile 和 Apple Development 证书签名并启动，直接连接真实 StoreKit Sandbox。
 - `script/release_appstore.sh --signed` / `--package` / `--upload`：都会调用 `sign_app`，使用 Mac App Store 分发证书正式签名。
 - 若缺少 app signing identity，上述正式签名模式会主动停止，这是预期保护。
 - 注意：`--upload` 必须走正式签名；漏掉该分支时会落到 ad-hoc 签名，App Store Connect 会拒绝上传。
-- 最近一次上传：版本 `1.0.10`，Build `20260815085833`，Delivery UUID `15780ed5-9222-47e6-bee7-42a19788ad0d`；上传成功后等待 App Store Connect 处理。
+- 最近一次上传：版本 `1.0.11`，Build `20260901232611`，Delivery UUID `c0b4e8a8-d265-4244-a9a8-c191334d1145`；已通过 App Store Connect 审核并正式发布。
 
 ## 2. 构建入口
 
@@ -205,3 +205,13 @@ No account is required. No sample login credentials are needed.
 - `1.0.9` 已获批且预发布通道关闭，首次上传被 Apple 以 `90062 / 90186` 拒绝；提升到 `1.0.10` 后上传成功。
 - 上传前通过 App 75 项测试、Release 构建、FCPXML 1.13 DTD 校验、用户 Final Cut Pro 实际验收、App Store 应用签名、Installer 签名及 bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
 - `1.0.10` 于 2026-08-16 正式发布；Apple 官方 Lookup API 返回商店 ID `6786057836`，版本内容源已指向正式 App Store 页面。
+
+## 14. 2026-09-01 App Store Connect 交付记录
+
+- 本版本为 `1.0.11`，包含字幕分割、编辑快捷键、播放光标跟随和暂停后保留编辑光标。
+- Build：`20260901232611`
+- 源码提交：`7b6fd7f`
+- Delivery UUID：`c0b4e8a8-d265-4244-a9a8-c191334d1145`
+- 上传前通过 Swift 86 项测试、Release 构建、Apple Distribution 签名、Mac App Store provisioning profile、Installer 签名、bundle/entitlements/PrivacyInfo 校验；未内置 FunASR 模型权重。
+- `.pkg` SHA-256：`c3682b504b5723babdea6f430c48e2768f53649c3c017bbb03f577a72dea9f4b`
+- App Store Connect 已通过并正式发布；`release-content/manifest.json` 的正式 `latestVersion` 已更新为 `1.0.11`，各渠道下载地址继续指向 Mac App Store。

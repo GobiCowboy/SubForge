@@ -5,6 +5,9 @@ import UniformTypeIdentifiers
 
 extension AppModel {
     func selectSegment(_ segmentID: UUID) {
+        if selectedSegmentID != segmentID {
+            subtitleTextCaret = nil
+        }
         selectedSegmentID = segmentID
         if let segment = selectedSegment, !isEditingSubtitle {
             seek(to: segment.start)
@@ -51,6 +54,56 @@ extension AppModel {
 
     func setActiveEditorSurface(_ surface: EditorSurface) {
         activeEditorSurface = surface
+    }
+
+    func setSubtitleTextCaret(segmentID: UUID, range: NSRange) {
+        guard range.location != NSNotFound else { return }
+        subtitleTextCaret = SubtitleTextCaret(
+            segmentID: segmentID,
+            utf16Offset: range.location,
+            selectionLength: range.length
+        )
+    }
+
+    func splitSelectedSubtitle() {
+        guard !isPlaying else {
+            showToast("请先暂停播放，再分割字幕", level: .info)
+            return
+        }
+        guard let selectedIndex, segments.indices.contains(selectedIndex) else {
+            showToast("请先选择一条字幕", level: .info)
+            return
+        }
+
+        let segment = segments[selectedIndex]
+        do {
+            let result: SubtitleSplitResult
+            if let caret = subtitleTextCaret, caret.segmentID == segment.id {
+                guard caret.selectionLength == 0 else {
+                    showToast("请先收起文本选区，只保留一个分割光标", level: .info)
+                    return
+                }
+                result = try SubtitleSplitService.splitAtCaret(
+                    segment,
+                    utf16Offset: caret.utf16Offset
+                )
+            } else {
+                result = try SubtitleSplitService.splitAtPlayhead(segment, time: currentTime)
+            }
+
+            endEditingSubtitle()
+            segments[selectedIndex] = result.left
+            segments.insert(result.right, at: selectedIndex + 1)
+            selectedSegmentID = result.right.id
+            subtitleTextCaret = nil
+
+            let suffix = result.usesEstimatedTime ? "（时间按比例估算）" : ""
+            showToast("已分割当前字幕\(suffix)", level: .success)
+        } catch let error as SubtitleSplitError {
+            showToast(error.localizedDescription, level: .info)
+        } catch {
+            showToast("当前字幕无法分割", level: .error)
+        }
     }
 
     func selectPreviousSegment() {

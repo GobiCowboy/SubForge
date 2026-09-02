@@ -169,6 +169,7 @@ extension AppModel {
             currentDocumentURL = url
             segments = parsed
             selectedSegmentID = parsed.first?.id
+            subtitleTextCaret = nil
             playbackDuration = (parsed.last?.end ?? 0) + 1.5
             currentTime = 0
             waveformSamples = []

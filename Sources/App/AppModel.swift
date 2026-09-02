@@ -21,6 +21,12 @@ enum EditorSurface {
     case inspector
 }
 
+struct SubtitleTextCaret: Equatable {
+    let segmentID: UUID
+    let utf16Offset: Int
+    let selectionLength: Int
+}
+
 enum PipelineStage: String, CaseIterable, Identifiable {
     case prepare = "准备文件"
     case transcribe = "语音转写"
@@ -92,6 +98,7 @@ final class AppModel: ObservableObject {
     @Published var showInspector = true
     @Published var isShortcutGuidePresented = false
     @Published var requestedUsageAndUpdatesSection: UsageAndUpdatesSection = .help
+    @Published var subtitleTextCaret: SubtitleTextCaret?
     @Published var hotwordPromptRequest: HotwordPromptRequest?
     @Published var toast: ToastMessage?
     @Published var isWatchingDirectory = false
