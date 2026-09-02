@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
   "appID": "com.jago.subforge",
-  "latestVersion": "1.0.10",
+  "latestVersion": "1.0.11",
   "storeURL": "https://apps.apple.com/cn/app/subforge/id6786057836",
   "channels": {
     "local": {
-      "latestVersion": "1.0.10",
+      "latestVersion": "1.0.11",
       "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     },
     "developer-id": {
-      "latestVersion": "1.0.10",
+      "latestVersion": "1.0.11",
       "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     },
     "app-store": {
-      "latestVersion": "1.0.10",
+      "latestVersion": "1.0.11",
       "downloadURL": "https://apps.apple.com/cn/app/subforge/id6786057836"
     }
   },
